@@ -1,0 +1,12 @@
+const express = require('express')
+
+const router = express.Router()
+
+router.use('/auth', require('./authRoute'))
+router.use('/user',require('./userRoute'))
+router.use('/livestock',require('./livestockRoute'))
+router.use('/poultry',require('./poultryRoute'))
+router.use('/feed',require('./feedRoute'))
+router.use('/sell',require('./sellsRoute'))
+
+module.exports = router
