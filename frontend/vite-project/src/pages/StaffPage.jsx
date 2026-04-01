@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useContext,useEffect } from 'react';
 import { FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import MainLayout from '../layouts/MainLayout';
 import Card from '../components/ui/Card';
@@ -13,12 +13,14 @@ import Badge from '../components/ui/Badge';
 import { staffData } from '../data/dummyData';
 import { STAFF_ROLES } from '../utils/constants';
 import { validateForm, staffSchema } from '../utils/validation';
+import { AuthContext } from '../context/AuthContext';
+import axios from 'axios';
 
 /**
  * Staff Management Page
  */
 const StaffPage = () => {
-  const [staff, setStaff] = useState(staffData);
+  const [staff, setStaff] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,6 +35,7 @@ const StaffPage = () => {
     hireDate: '',
   });
   const [errors, setErrors] = useState({});
+  const {backendUrl} = useContext(AuthContext);
 
   const filteredStaff = staff.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -51,15 +54,30 @@ const StaffPage = () => {
   };
 
   const handleEdit = (item) => {
-    setFormData(item);
-    setEditingId(item.id);
+    setFormData({
+      name: item.name,
+      role: item.role,
+      salary: item.salary,
+      contact: item.contact?.toString() || '',
+      email: item.email,
+      hireDate: item.hireDate ? new Date(item.hireDate).toISOString().slice(0, 10) : '',
+    });
+    setEditingId(item._id || item.id);
     setErrors({});
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id) => {
-    setStaff((prev) => prev.filter((item) => item.id !== id));
-    setAlert({ type: 'success', message: 'Staff member deleted successfully!' });
+  const handleDelete = async (id) => {
+    try {
+      const response = await axios.delete(`${backendUrl}/api/staff/del/${id}`, { withCredentials: true });
+      if (response.data.success) {
+          setStaff((prev) => prev.filter((item) => item._id !== id));
+          setAlert({ type: 'success', message: 'Staff member deleted successfully!' });
+      }
+    } catch (error) {
+      console.log(error)
+      setAlert({ type: 'error', message: error.response?.data?.message || 'Failed to delete staff member. Please try again.' });
+    }
   };
 
   const handleChange = (e) => {
@@ -73,32 +91,68 @@ const StaffPage = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async(e) => {
     e.preventDefault();
-    
-    const { isValid, errors: validationErrors } = validateForm(formData, staffSchema);
+
+    const payload = {
+      ...formData,
+      contact: formData.contact?.toString() || '',
+    };
+
+    const { isValid, errors: validationErrors } = validateForm(payload, staffSchema);
     if (!isValid) {
       setErrors(validationErrors);
       return;
     }
-
-    if (editingId) {
-      setStaff((prev) =>
-        prev.map((item) => (item.id === editingId ? { ...item, ...formData } : item))
-      );
-      setAlert({ type: 'success', message: 'Staff member updated successfully!' });
-    } else {
-      const newStaff = {
-        id: Math.max(...staff.map((item) => item.id), 0) + 1,
-        ...formData,
-        status: 'active',
-      };
-      setStaff((prev) => [...prev, newStaff]);
-      setAlert({ type: 'success', message: 'Staff member added successfully!' });
+    try {
+      let response;
+      if (editingId) {
+        response = await axios.put(`${backendUrl}/api/staff/edit/${editingId}`, payload, { withCredentials: true });
+        if (response.data.success) {
+          setAlert({ type: 'success', message: response.data.message || 'Staff member updated successfully!' });
+          setFormData({ name: '', role: '', salary: '', contact: '', email: '', hireDate: '' });
+          setEditingId(null);
+          setIsModalOpen(false);
+          const fetchStaffs = await axios.get(`${backendUrl}/api/staff/list`, { withCredentials: true });
+          setStaff(fetchStaffs.data.data || []);
+        }
+      } else {
+        response = await axios.post(`${backendUrl}/api/staff/add-staff`, payload, { withCredentials: true });
+        if (response.data.success) {
+          setAlert({ type: 'success', message: response.data.message });
+          setFormData({ name: '', role: '', salary: '', contact: '', email: '', hireDate: '' });
+          setEditingId(null);
+          setIsModalOpen(false);
+          const fetchStaffs = await axios.get(`${backendUrl}/api/staff/list`, { withCredentials: true });
+          setStaff(fetchStaffs.data.data || []);
+        }
+      }
+    } catch (error) {
+      console.log(error)
+      setAlert({ type: 'error', message: error.response?.data?.message || 'An error occurred. Please try again.' });
     }
-
-    setIsModalOpen(false);
   };
+
+  useEffect(()=>{
+    const fetchStaffs = async()=>{
+      try {
+        const response = await axios.get(`${backendUrl}/api/staff/list`,{withCredentials:true})
+        if(response.data.success){
+          setStaff(response.data.data || []);
+        }
+      } catch (error) {
+        console.log(error)
+        setAlert({ type: 'error', message: error.response?.data?.message || 'Failed to fetch staff data. Please try again.' });
+      }
+    }
+    fetchStaffs()
+  },[backendUrl])
+
+  const formatCurrency = (amount) =>
+  new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN'
+  }).format(amount);
 
   const tableColumns = [
     { key: 'name', label: 'Name' },
@@ -112,7 +166,7 @@ const StaffPage = () => {
     },
     { key: 'email', label: 'Email' },
     { key: 'contact', label: 'Contact' },
-    { key: 'salary', label: 'Salary', render: (value) => `€${value.toLocaleString()}` },
+    { key: 'salary', label: 'Salary', render: (value) => formatCurrency(value) },
     { key: 'hireDate', label: 'Hire Date' },
   ];
 
@@ -139,7 +193,7 @@ const StaffPage = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <StatCard label="Total Staff" value={staff.length} />
           <StatCard label="Active Staff" value={activeStaff} />
-          <StatCard label="Monthly Payroll" value={`€${totalPayroll.toLocaleString()}`} />
+          <StatCard label="Monthly Payroll" value={formatCurrency(totalPayroll)} />
         </div>
 
         {/* Filters */}
@@ -179,7 +233,7 @@ const StaffPage = () => {
               <Button key="edit" variant="outline" size="sm" onClick={() => handleEdit(row)}>
                 <FiEdit2 size={14} />
               </Button>,
-              <Button key="delete" variant="danger" size="sm" onClick={() => handleDelete(row.id)}>
+              <Button key="delete" variant="danger" size="sm" onClick={() => handleDelete(row._id)}>
                 <FiTrash2 size={14} />
               </Button>,
             ]}

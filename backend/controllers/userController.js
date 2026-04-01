@@ -13,7 +13,13 @@ exports.userData = async(req,res)=>{
             email: user.email,
             isAccountVerified:user.isAccountVerified,
             role:user.role,
-            balance:user.balance
+            balance:user.balance,
+            farmName:user.farmName,
+            phone:user.phone,
+            country:user.country,
+            city:user.city,
+            address:user.address,
+            
         }})
     } catch (error) {
         console.log(error)

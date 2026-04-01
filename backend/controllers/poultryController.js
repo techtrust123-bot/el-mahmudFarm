@@ -19,7 +19,7 @@ exports.createPoultry = async (req, res) => {
 
         const birthDate = purchaseDate ? new Date(purchaseDate) : new Date()
         const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-        const feedStage = getFeedStage(ageInDays)
+        const feedStage = getFeedStage(ageInDays, type)
 
         const feed = await getFeedForStage(Feed, type, feedStage)
         if (!feed) {
@@ -74,7 +74,6 @@ exports.createPoultry = async (req, res) => {
                 }
             ]
         })
-
         await newPoultry.save()
         res.status(201).json({ success: true, message: 'Poultry created successfully...' })
     } catch (error) {
@@ -93,7 +92,7 @@ exports.getPoultry = async (req, res) => {
         const data = poultryList.map((bird) => {
             const birthDate = bird.birthDay || bird.purchaseDate || new Date()
             const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-            const currentFeedStage = getFeedStage(ageInDays)
+            const currentFeedStage = getFeedStage(ageInDays, bird.type)
             return {
                 ...bird.toObject(),
                 ageInDays,
@@ -123,7 +122,7 @@ exports.getPoultryById = async (req, res) => {
 const updatePoultryBatch = async (poultry) => {
     const birthDate = poultry.birthDay || poultry.purchaseDate || new Date()
     const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-    const currentFeedStage = getFeedStage(ageInDays)
+    const currentFeedStage = getFeedStage(ageInDays, poultry.type)
     const feed = await getFeedForStage(Feed, poultry.type, currentFeedStage)
     if (!feed) {
         return poultry
@@ -133,11 +132,12 @@ const updatePoultryBatch = async (poultry) => {
     if (!quantity || quantity <= 0) return poultry
 
     const poultryConsumePerkg = Number(feed.consumption) / quantity
+    const totalQuantity = quantity - (Number(poultry.mortality) || 0)
     const feedCostPerPoultry = Number(feed.feedPricePerkg) * poultryConsumePerkg
-    const totalFeedCost = feedCostPerPoultry * quantity
+    const totalFeedCost = feedCostPerPoultry * totalQuantity
     const totalCost = Number(poultry.purchasePrice) + totalFeedCost
     const costPerPoultry = totalCost / quantity
-    const totalCostPerPoultry = Number(poultry.purchasePrice) / quantity + feedCostPerPoultry
+    const totalCostPerPoultry = Number(poultry.purchasePrice) / totalQuantity + feedCostPerPoultry
 
     return await Poultry.findByIdAndUpdate(
         poultry._id,
@@ -154,6 +154,7 @@ const updatePoultryBatch = async (poultry) => {
             totalCost,
             costPerPoultry,
             totalCostPerPoultry,
+            quantity: totalQuantity,
         },
         { returnDocument: 'after' }
     )

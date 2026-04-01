@@ -10,6 +10,8 @@ exports.recordSales = async(req,res)=>{
         return res.status(400).json({success:false,message:"All input fields are required.."})
     }
     try {
+        let profit = 0;
+        let totalAmount = 0;
         let costPrice = 0;
         if(animalType === 'Poultry'){
             const poultry = await Poultry.findOne({batchId})
@@ -20,14 +22,18 @@ exports.recordSales = async(req,res)=>{
                 return res.status(400).json({ success: false, message: "Not enough poultry in this batch" });
             }
              costPrice = Number(poultry.costPerPoultry)
+             totalAmount = quantitySold * pricePerUnit;
+              profit = Number(pricePerUnit - costPrice) * quantitySold
         }else if(animalType === 'Livestock'){
             const livestock = await LiveStock.findOne({tagNumber})
             if(!livestock){
                 return res.status(404).json({success:false,message:"livestock  not found..."})
             }
+            const qtn = 1
+            totalAmount = Number(pricePerUnit) * qtn;
+            costPrice = Number(livestock.totalCost)
+            profit = Number(pricePerUnit - costPrice) * qtn
         }
-        const profit = Number(pricePerUnit - costPrice) * quantitySold
-        const totalAmount = quantitySold * pricePerUnit;
         const invoiceId = 'INV' + Date.now()
         const sells = await Sells.create({
             animalType,

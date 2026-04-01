@@ -6,7 +6,7 @@ import React from 'react';
 const Card = ({ 
   children, 
   className = '', 
-  padding = 'p-6',
+  padding = 'p-4',
   shadow = true,
   onClick = null
 }) => {
@@ -14,7 +14,7 @@ const Card = ({
     <div
       onClick={onClick}
       className={`
-        w-full
+        w-full min-w-0
         bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700
         ${shadow ? 'shadow-md hover:shadow-lg' : ''}
         ${padding}

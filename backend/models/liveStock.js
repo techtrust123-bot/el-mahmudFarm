@@ -54,6 +54,43 @@ const liveStockSchema = new mongoose.Schema({
         type:Number,
         default: 1
     },
+    birthDay:{
+        type:Date,
+        default:Date.now
+    },
+    ageInDays:{
+        type:Number,
+        default:0
+    },
+    ageInWeeks:{
+        type:Number,
+        default:0
+    },
+    feedStage:{
+        type:String,
+        enum:['Starter','Grower','Finisher'],
+        default:'Starter'
+    },
+    currentFeedType:{
+        type:String,
+    },
+    currentFeedName:{
+        type:String,
+    },
+    feedHistory: [
+        {
+            feedStage: String,
+            feedName: String,
+            feedType: String,
+            feedCategory: String,
+            livestockFeedConsumed: Number,
+            feedCostPerAnimal: Number,
+            totalFeedCost: Number,
+            totalCost: Number,
+            costPrice: Number,
+            timestamp: { type: Date, default: Date.now }
+        }
+    ]
    
 },{timestamps:true})
 

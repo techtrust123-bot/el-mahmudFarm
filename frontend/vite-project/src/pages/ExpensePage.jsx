@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect,useContext } from 'react';
 import { FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import MainLayout from '../layouts/MainLayout';
@@ -15,12 +15,14 @@ import Badge from '../components/ui/Badge';
 import { expenseData, monthlyChartData } from '../data/dummyData';
 import { EXPENSE_CATEGORIES } from '../utils/constants';
 import { validateForm, expenseSchema } from '../utils/validation';
+import { AuthContext } from '../context/AuthContext';
+import axios from 'axios';
 
 /**
  * Expense Management Page
  */
 const ExpensePage = () => {
-  const [expenses, setExpenses] = useState(expenseData);
+  const [expenses, setExpenses] = useState([]);
   const [filterCategory, setFilterCategory] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -37,7 +39,7 @@ const ExpensePage = () => {
   const filteredExpenses = expenses.filter((item) =>
     !filterCategory || item.category === filterCategory
   );
-
+  const {backendUrl} = useContext(AuthContext)
   const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
   const expensesByCategory = EXPENSE_CATEGORIES.map((cat) => ({
     name: cat.label,
@@ -56,53 +58,105 @@ const ExpensePage = () => {
   };
 
   const handleEdit = (item) => {
-    setFormData(item);
-    setEditingId(item.id);
+    setFormData({
+      title: item.title || '',
+      amount: item.amount || '',
+      category: item.category || '',
+      date: item.date ? item.date.toString().slice(0, 10) : '',
+      description: item.description || item.descriptions || '',
+    });
+    setEditingId(item._id || item.id);
     setErrors({});
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id) => {
-    setExpenses((prev) => prev.filter((item) => item.id !== id));
-    setAlert({ type: 'success', message: 'Expense deleted successfully!' });
+  const handleDelete = async(id) => {
+    try {
+      const response = await axios.delete(`${backendUrl}/api/expense/delete/${id}`,{withCredentials:true})
+      if(response.data.success){
+        setExpenses((prev) => prev.filter((item) => (item._id || item.id) !== id));
+        setAlert({ type: 'success', message: response.data.message || 'Expense deleted successfully!' });
+      }else{
+        setAlert({ type: 'error', message: response.data.message || 'Failed to delete expense.' });
+      }
+    } catch (error) {
+      console.log(error)
+      setAlert({ type: 'error', message: error.response?.data?.message || 'An error occurred while deleting expense.' });
+    }
+    
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    const parsedValue = name === 'amount' ? (value === '' ? '' : Number(value)) : value;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === 'amount' ? parseFloat(value) || '' : value,
+      [name]: parsedValue,
     }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: null }));
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async(e) => {
     e.preventDefault();
     
-    const { isValid, errors: validationErrors } = validateForm(formData, expenseSchema);
+    const payload = {
+      ...formData,
+      amount: formData.amount === '' ? formData.amount : Number(formData.amount),
+    };
+
+    const { isValid, errors: validationErrors } = validateForm(payload, expenseSchema);
     if (!isValid) {
       setErrors(validationErrors);
       return;
     }
-
-    if (editingId) {
-      setExpenses((prev) =>
-        prev.map((item) => (item.id === editingId ? { ...item, ...formData } : item))
-      );
-      setAlert({ type: 'success', message: 'Expense updated successfully!' });
-    } else {
-      const newExpense = {
-        id: Math.max(...expenses.map((item) => item.id), 0) + 1,
-        ...formData,
-      };
-      setExpenses((prev) => [...prev, newExpense]);
-      setAlert({ type: 'success', message: 'Expense recorded successfully!' });
+    try {
+      let response;
+      if (editingId) {
+        response = await axios.put(`${backendUrl}/api/expense/edit/${editingId}`, payload,{withCredentials:true})
+        setAlert({ type: 'success', message: response.data.message || 'Expense updated successfully!' });
+      }else{
+        response = await axios.post(`${backendUrl}/api/expense/add-expense`, payload,{withCredentials:true})
+        setAlert({ type: 'success', message: response.data.message || 'Expense added successfully!' });
+      }
+      if(response.data.success){
+        setAlert({ type: 'success', message: response.data.message || (editingId ? 'Expense updated successfully!' : 'Expense added successfully!') });
+        setFormData({ title: '', amount: '', category: '', date: '', description: '' });
+        setEditingId(null);
+        setIsModalOpen(false);
+        // Optionally, you can refetch expenses from the backend here to get the latest data
+        const fetchExpenses = await axios.get(`${backendUrl}/api/expense/list`,{withCredentials:true})
+        setExpenses(fetchExpenses.data.data || [])
+      }
+    } catch (error) {
+      console.log(error)
+      setAlert({ type: 'error', message: error.response?.data?.message });
+      return;
     }
+  }
 
-    setIsModalOpen(false);
-  };
+  useEffect(()=>{
+    const fetchExpenses = async()=>{
+      try {
+        const response = await axios.get(`${backendUrl}/api/expense/list`,{withCredentials:true})
+        if(response.data.success){
+          setExpenses(response.data.data || [])
+        }else{
+          setAlert({ type: 'error', message: response.data.message || 'Failed to fetch expenses.' });
+        }
+      } catch (error) {
+        setAlert({ type: 'error', message: 'An error occurred while fetching expenses.' });
+      }
+    }
+    fetchExpenses();
+  }, [backendUrl]);
+   
+  const formatCurrency = (amount) =>
+  new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN'
+  }).format(amount);
 
   const tableColumns = [
     { key: 'title', label: 'Title' },
@@ -120,7 +174,7 @@ const ExpensePage = () => {
         return <Badge variant="info">{cat?.label}</Badge>;
       },
     },
-    { key: 'amount', label: 'Amount', render: (value) => `€${value.toFixed(2)}` },
+    { key: 'amount', label: 'Amount', render: (value) => `${formatCurrency(value)}` },
     { key: 'date', label: 'Date' },
   ];
 
@@ -145,8 +199,8 @@ const ExpensePage = () => {
 
         {/* Statistics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          <StatCard label="Total Expenses" value={`€${totalExpenses.toFixed(2)}`} change="+8%" trend="up" />
-          <StatCard label="Monthly Average" value={`€${(totalExpenses / 12).toFixed(2)}`} />
+          <StatCard label="Total Expenses" value={`${formatCurrency(totalExpenses)}`} change="+8%" trend="up" />
+          <StatCard label="Monthly Average" value={`${formatCurrency(totalExpenses / 12)}`} />
           <StatCard label="Total Records" value={expenses.length} />
         </div>
 
@@ -164,7 +218,7 @@ const ExpensePage = () => {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, value }) => `${name}: €${value}`}
+                  label={({ name, value }) => `${name}: ${formatCurrency(value)}`}
                   outerRadius={100}
                   fill="#8884d8"
                   dataKey="value"
@@ -173,7 +227,7 @@ const ExpensePage = () => {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => `€${value.toFixed(2)}`} />
+                <Tooltip formatter={(value) => `${formatCurrency(value)}`} />
               </PieChart>
             </ResponsiveContainer>
           </Card>
@@ -188,7 +242,7 @@ const ExpensePage = () => {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
-                <Tooltip />
+                <Tooltip formatter={(value) => `${formatCurrency(value)}`} />
                 <Bar dataKey="expenses" fill="#ef4444" name="Expenses (€)" />
               </BarChart>
             </ResponsiveContainer>
@@ -214,7 +268,7 @@ const ExpensePage = () => {
               <Button key="edit" variant="outline" size="sm" onClick={() => handleEdit(row)}>
                 <FiEdit2 size={14} />
               </Button>,
-              <Button key="delete" variant="danger" size="sm" onClick={() => handleDelete(row.id)}>
+              <Button key="delete" variant="danger" size="sm" onClick={() => handleDelete(row._id)}>
                 <FiTrash2 size={14} />
               </Button>,
             ]}

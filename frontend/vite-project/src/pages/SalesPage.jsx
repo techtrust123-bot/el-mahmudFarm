@@ -11,8 +11,7 @@ import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
-import { ANIMAL_TYPES, VACCINATION_STATUS } from '../utils/constants';
-import { salesData, monthlyChartData } from '../data/dummyData';
+import { ANIMAL_TYPE } from '../utils/constants';
 import axios from 'axios'
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
@@ -34,6 +33,8 @@ const SalesPage = () => {
     date: '',
     animalType: '',
     quantity: '',
+    quantitySold: '',
+    buyerContact:'',
     unitPrice: '',
     customerName: '',
     status: '',
@@ -46,11 +47,25 @@ const SalesPage = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const totalRevenue = sales.reduce((sum, item) => sum + item.totalAmount, 0);
+  const totalRevenue = sales.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0);
   const completedSales = sales.filter((item) => item.status === 'completed').length;
   const pendingSales = sales.filter((item) => item.status === 'pending').length;
-  const profit = sales.reduce((sum, item) => sum + item.profit, 0);
-  const quantitySold = sales.reduce((sum,item)=>sum + item.quantitySold,0)
+  const profit = sales.reduce((sum, item) => sum + Number(item.profit || 0), 0);
+  const quantitySold = sales.reduce((sum,item)=>sum + Number(item.quantitySold || 0),0)
+
+  const monthlyRevenueData = Object.entries(
+    sales.reduce((acc, item) => {
+      const date = new Date(item.date)
+      if (Number.isNaN(date.getTime())) return acc
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      acc[monthKey] = (acc[monthKey] || 0) + Number(item.totalAmount || 0)
+      return acc
+    }, {})
+  )
+    .sort(([a], [b]) => new Date(`${a}-01`) - new Date(`${b}-01`))
+    .map(([month, revenue]) => ({ month, revenue }))
+
+  const latestMonthRevenue = monthlyRevenueData.length > 0 ? monthlyRevenueData[monthlyRevenueData.length - 1].revenue : 0
 
   const handleAddNew = () => {
     setFormData({
@@ -139,7 +154,7 @@ const SalesPage = () => {
       }
     }
     fetchSells()
-  },[])
+  },[backendUrl])
   const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-NG', {
     style: 'currency',
@@ -187,10 +202,11 @@ const SalesPage = () => {
         {/* Statistics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <StatCard label="Total Revenue" value={formatCurrency(totalRevenue)} change="+15%" trend="up" />
+          <StatCard label="Latest Month Revenue" value={formatCurrency(latestMonthRevenue)} />
+          <StatCard label="Profit" value={formatCurrency(profit)} />
+          <StatCard label="Total Quantity Sold" value={quantitySold} />
           <StatCard label="Completed Sales" value={completedSales} change="+3" trend="up" />
           <StatCard label="Pending Sales" value={pendingSales} />
-          <StatCard label="Profit" value={formatCurrency(profit)} />
-          <StatCard label="Total QuantitySold" value={quantitySold} />
         </div>
 
         {/* Revenue Chart */}
@@ -199,13 +215,13 @@ const SalesPage = () => {
             Monthly Revenue
           </h2>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={monthlyChartData}>
+            <BarChart data={monthlyRevenueData.length > 0 ? monthlyRevenueData : [{ month: 'No data', revenue: 0 }] }>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
               <YAxis />
-              <Tooltip />
+              <Tooltip formatter={(value) => formatCurrency(value)} />
               <Legend />
-              <Bar dataKey="sales" fill="#10b981" name={`Sales (${formatCurrency(1)})`} />
+              <Bar dataKey="revenue" fill="#10b981" name="Revenue" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -257,6 +273,15 @@ const SalesPage = () => {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
+             <Select
+              label="animalType"
+              type="text"
+              name="animalType"
+              options={ANIMAL_TYPE}
+              value={formData.animalType}
+              onChange={handleChange}
+              required
+            />
            {formData.animalType !== "Livestock" && (
               <Input
                 label="Batch ID"
@@ -296,15 +321,6 @@ const SalesPage = () => {
               type="date"
               name="date"
               value={formData.date}
-              onChange={handleChange}
-              required
-            />
-            <Select
-              label="animalType"
-              type="text"
-              name="animalType"
-              options={ANIMAL_TYPES}
-              value={formData.animalType}
               onChange={handleChange}
               required
             />

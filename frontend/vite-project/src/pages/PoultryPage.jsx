@@ -11,18 +11,15 @@ import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
 import Alert from '../components/ui/Alert';
 import { POULTRY_TYPES, VACCINATION_STATUS } from '../utils/constants';
-import { validateForm, poultrySchema } from '../utils/validation';
 import { AuthContext } from '../context/AuthContext';
 import axios from 'axios';
 import { useContext } from 'react';
-import { useNavigate,useParams } from 'react-router-dom';
 
 /**
  * Poultry Management Page
  */
 const PoultryPage = () => {
   const [poultry, setPoultry] = useState([]);
-  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,7 +47,7 @@ const PoultryPage = () => {
     return matchesSearch && matchesType;
   });
 
-const totalQuantity = poultry.reduce((sum, item) => sum + Number(item.quantity), 0);
+const totalQuantity = poultry.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
 const totalMortality = poultry.reduce((sum, item) => sum + Number(item.mortality || 0), 0);
 
@@ -59,6 +56,11 @@ const vaccinatedBatches = poultry.filter(
 ).length;
 
 const remainingBirds = totalQuantity - totalMortality;
+
+const starterFeed = poultry.filter(item => item.currentFeedStage === 'Starter').reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+const growerFeed = poultry.filter(item => item.currentFeedStage === 'Grower').reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+const finisherFeed = poultry.filter(item => item.currentFeedStage === 'Finisher').reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+const avgFeedConsumption = poultry.length > 0 ? (poultry.reduce((sum, item) => sum + Number(item.poultryConsumePerkg || 0), 0) / poultry.length).toFixed(2) : 0
 
 
   useEffect(() => {
@@ -104,7 +106,7 @@ const remainingBirds = totalQuantity - totalMortality;
         type: item.type,
         quantity: item.quantity,
         vaccinationStatus: item.vaccinationStatus,
-        purchaseDate: item.purchaseDate,
+        purchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : '',
         mortality: item.mortality || '',
         purchasePrice: item.purchasePrice || '',
       });
@@ -123,10 +125,10 @@ const remainingBirds = totalQuantity - totalMortality;
     try {
       await axios.delete(`${backendUrl}/api/poultry/${id}`, { withCredentials: true });
       setPoultry((prev) => prev.filter((item) => item._id !== id));
-      setAlert({ type: 'success', message: response.data.message });
+      setAlert({ type: 'success', message: 'Poultry deleted successfully!' });
     } catch (error) {
       console.log(error);
-      setAlert({ type: 'error', message: error.response?.data?.message });
+      setAlert({ type: 'error', message: error.response?.data?.message || 'Error deleting poultry' });
     }
   };
 
@@ -190,18 +192,18 @@ const remainingBirds = totalQuantity - totalMortality;
   }
 
   const tableColumns = [
-    { key: 'batchId', label: 'Batch ID' },
+    { key: 'batchId', label: 'BatchID' ,style: { fontSize: 'small' } },
     { key: 'type', label: 'Type', render: (value) => POULTRY_TYPES.find((t) => t.value === value)?.label },
     { key: 'quantity', label: 'Quantity' },
     { key: 'mortality', label: 'Mortality' },
-    { key: 'purchasePrice', label: 'Purchase Price' },
-    { key: 'currentFeedType', label: 'Current Feed Type' },
+    { key: 'purchasePrice', label: 'PurchasePrice' },
+    { key: 'currentFeedType', label: 'CurrentFeedType' },
     // { key: 'currentFeedName', label: 'Current Feed Name' },
-    { key: 'ageInDays', label: 'Age (Days)' },
-    { key: 'ageInWeeks', label: 'Age (Weeks)' },
-    { key: 'currentFeedStage', label: 'Feed Stage' },
+    { key: 'ageInDays', label: 'Days' },
+    { key: 'ageInWeeks', label: 'Weeks' },
+    { key: 'currentFeedStage', label: 'FeedStage' },
     // { key: 'totalCostPerPoultry', label: 'Total Cost Per Poultry' },
-    { key: 'costPerPoultry', label: 'Cost per Poultry' },
+    { key: 'costPerPoultry', label: 'CostPerPoultry' },
     {
       key: 'vaccinationStatus',
       label: 'Vaccination',
@@ -238,10 +240,17 @@ const remainingBirds = totalQuantity - totalMortality;
         )}
 
         {/* Statistics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard label="Total Poultry" value={remainingBirds.toLocaleString()} />
           <StatCard label="Total Mortality" value={totalMortality} />
           <StatCard label="Vaccinated Batches" value={vaccinatedBatches} />
+          <StatCard label="Avg Feed (kg)" value={avgFeedConsumption} />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <StatCard label="Starter Stage (qty)" value={starterFeed.toLocaleString()} />
+          <StatCard label="Grower Stage (qty)" value={growerFeed.toLocaleString()} />
+          <StatCard label="Finisher Stage (qty)" value={finisherFeed.toLocaleString()} />
         </div>
 
         {/* Filters */}
@@ -367,6 +376,34 @@ const remainingBirds = totalQuantity - totalMortality;
               required
             />
           </div>
+
+          {editingId && (
+            <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 p-4">
+              <h3 className="text-sm font-semibold text-green-900 dark:text-green-200 mb-3">Calculated Information</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {poultry.find(item => item._id === editingId)?.ageInDays && (
+                  <>
+                    <div>
+                      <p className="text-xs text-green-700 dark:text-green-300">Age (Days)</p>
+                      <p className="text-lg font-semibold text-green-900 dark:text-green-100">{poultry.find(item => item._id === editingId)?.ageInDays || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-green-700 dark:text-green-300">Age (Weeks)</p>
+                      <p className="text-lg font-semibold text-green-900 dark:text-green-100">{poultry.find(item => item._id === editingId)?.ageInWeeks || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-green-700 dark:text-green-300">Feed Stage</p>
+                      <Badge variant={
+                        poultry.find(item => item._id === editingId)?.currentFeedStage === 'Starter' ? 'success' :
+                        poultry.find(item => item._id === editingId)?.currentFeedStage === 'Grower' ? 'warning' :
+                        'error'
+                      }>{poultry.find(item => item._id === editingId)?.currentFeedStage || 'N/A'}</Badge>
+                    </div>
+                  </>
+                )}
+              </div>
+            </Card>
+          )}
 
           <div className="flex gap-3 justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>

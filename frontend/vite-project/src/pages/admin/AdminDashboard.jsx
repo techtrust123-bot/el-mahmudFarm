@@ -1,38 +1,144 @@
-import { useState } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { FiUsers, FiTrendingUp, FiCheckCircle, FiDollarSign } from 'react-icons/fi';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import axios from 'axios';
 import MainLayout from '../../components/layout/MainLayout';
 import Card from '../../components/ui/Card';
 import StatCard from '../../components/ui/StatCard';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import { AuthContext } from '../../context/AuthContext';
 
 /**
  * Admin Super Dashboard - Platform overview
  */
 const AdminDashboardPage = () => {
-  const revenueData = [
-    { month: 'Jan', subscriptions: 12000, marketplace: 4000 },
-    { month: 'Feb', subscriptions: 15000, marketplace: 5500 },
-    { month: 'Mar', subscriptions: 18000, marketplace: 6800 },
-    { month: 'Apr', subscriptions: 22000, marketplace: 8200 },
-    { month: 'May', subscriptions: 25000, marketplace: 9500 },
-    { month: 'Jun', subscriptions: 28000, marketplace: 11000 },
-  ];
+  const { backendUrl } = useContext(AuthContext);
+  const [users, setUsers] = useState([]);
+  const [sales, setSales] = useState([]);
+  const [revenueData, setRevenueData] = useState([]);
+  const [userGrowthData, setUserGrowthData] = useState([]);
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeFarms: 0,
+    totalRevenue: 0,
+    marketplaceSales: 0,
+  });
 
-  const users = [
-    { id: 1, name: 'Ahmed Hassan', email: 'ahmed@farm.com', role: 'Farmer', farms: 2, status: 'active', joinedDate: '2024-01-15' },
-    { id: 2, name: 'Nneka Okafor', email: 'nneka@poultry.com', role: 'Farmer', farms: 1, status: 'active', joinedDate: '2024-01-20' },
-    { id: 3, name: 'Dr. Sarah Johnson', email: 'sarah@vet.com', role: 'Veterinarian', farms: 0, status: 'active', joinedDate: '2024-02-01' },
-    { id: 4, name: 'Kofi Mensah', email: 'kofi@ranch.com', role: 'Farmer', farms: 3, status: 'inactive', joinedDate: '2024-01-10' },
-  ];
+  const formatCurrency = (amount) =>
+    new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: 'NGN',
+    }).format(amount);
 
-  const marketplaceListings = [
-    { id: 1, title: 'Jersey Cows', seller: 'Ahmed Hassan', price: '$3,500', status: 'approved', views: 234, created: '2024-02-15' },
-    { id: 2, title: 'Laying Hens', seller: 'Nneka Okafor', price: '$50/bird', status: 'pending', views: 0, created: '2024-02-20' },
-    { id: 3, title: 'Brahman Bulls', seller: 'Kofi Mensah', price: '$5,000', status: 'rejected', views: 456, created: '2024-02-10' },
-  ];
+  const getMonthLabel = (value) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleString('default', { month: 'short' });
+  };
+
+  const safeArray = (response) => {
+    if (!response || !response.data) return [];
+    if (Array.isArray(response.data)) return response.data;
+    if (Array.isArray(response.data.users)) return response.data.users;
+    if (Array.isArray(response.data.data)) return response.data.data;
+    if (Array.isArray(response.data.message)) return response.data.message;
+    return [];
+  };
+
+  const buildRevenueChart = (salesList) => {
+    const monthMap = new Map();
+    salesList.forEach((sale) => {
+      const month = getMonthLabel(sale.date || sale.createdAt || sale.updatedAt);
+      if (!month) return;
+      const revenue = Number(sale.totalAmount || sale.pricePerUnit || 0);
+      const entry = monthMap.get(month) || { month, revenue: 0, sales: 0 };
+      entry.revenue += revenue;
+      entry.sales += 1;
+      monthMap.set(month, entry);
+    });
+
+    const orderedMonths = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+
+    return orderedMonths
+      .map((month) => monthMap.get(month))
+      .filter(Boolean);
+  };
+
+  const buildUserGrowth = (userList) => {
+    const monthMap = new Map();
+    userList.forEach((user) => {
+      const month = getMonthLabel(user.createdAt || user.updatedAt);
+      if (!month) return;
+      const entry = monthMap.get(month) || { month, users: 0 };
+      entry.users += 1;
+      monthMap.set(month, entry);
+    });
+
+    const orderedMonths = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+
+    return orderedMonths
+      .map((month) => monthMap.get(month))
+      .filter(Boolean);
+  };
+
+  useEffect(() => {
+    const fetchAdminData = async () => {
+      try {
+        const baseUrl = backendUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+        const [usersResponse, salesResponse] = await Promise.all([
+          axios.get(`${baseUrl}/api/user/users`, { withCredentials: true }),
+          axios.get(`${baseUrl}/api/sell/list`, { withCredentials: true }),
+        ]);
+
+        const fetchedUsers = safeArray(usersResponse);
+        const fetchedSales = safeArray(salesResponse);
+
+        const totalRevenue = fetchedSales.reduce(
+          (sum, sale) => sum + Number(sale.totalAmount || sale.pricePerUnit || 0),
+          0
+        );
+
+        const activeFarmsCount = fetchedUsers.filter(
+          (user) => user.role && user.role !== 'admin'
+        ).length;
+
+        setUsers(fetchedUsers);
+        setSales(fetchedSales);
+        setStats({
+          totalUsers: fetchedUsers.length,
+          activeFarms: activeFarmsCount,
+          totalRevenue,
+          marketplaceSales: fetchedSales.length,
+        });
+        setRevenueData(buildRevenueChart(fetchedSales));
+        setUserGrowthData(buildUserGrowth(fetchedUsers));
+      } catch (error) {
+        console.error('Failed to load admin dashboard data', error);
+      }
+    };
+
+    if (backendUrl || import.meta.env.VITE_BACKEND_URL) {
+      fetchAdminData();
+    }
+  }, [backendUrl]);
+
+  const tableUsers = users.map((user) => ({
+    id: user._id || user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role || 'User',
+    farms: user.farmName ? 1 : 0,
+    status: user.isAccountVerified ? 'active' : 'inactive',
+    joinedDate: user.createdAt
+      ? new Date(user.createdAt).toLocaleDateString()
+      : user.createdAt || '-',
+  }));
 
   return (
     <MainLayout>
@@ -45,10 +151,10 @@ const AdminDashboardPage = () => {
 
         {/* Key Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard icon={FiUsers} label="Total Users" value="1,247" color="blue" change="+8%" trend="up" />
-          <StatCard icon={FiTrendingUp} label="Active Farms" value="456" color="green" change="+12%" trend="up" />
-          <StatCard icon={FiDollarSign} label="Total Revenue" value="$156,800" color="purple" change="+18%" trend="up" />
-          <StatCard icon={FiCheckCircle} label="Marketplace Sales" value="342" color="orange" change="+24%" trend="up" />
+          <StatCard icon={FiUsers} label="Total Users" value={stats.totalUsers} />
+          <StatCard icon={FiTrendingUp} label="Active Farms" value={stats.activeFarms} />
+          <StatCard icon={FiDollarSign} label="Total Revenue" value={formatCurrency(stats.totalRevenue)} />
+          <StatCard icon={FiCheckCircle} label="Marketplace Sales" value={stats.marketplaceSales} />
         </div>
 
         {/* Revenue Chart */}
@@ -59,10 +165,13 @@ const AdminDashboardPage = () => {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
               <YAxis />
-              <Tooltip formatter={(value) => `$${value}`} />
+              <Tooltip formatter={(value, name) => {
+                if (name === 'Revenue') return [formatCurrency(value), name];
+                return [value, name];
+              }} />
               <Legend />
-              <Bar dataKey="subscriptions" fill="#10b981" name="Subscriptions" />
-              <Bar dataKey="marketplace" fill="#f59e0b" name="Marketplace" />
+              <Bar dataKey="revenue" fill="#10b981" name="Revenue" />
+              <Bar dataKey="sales" fill="#f59e0b" name="Sales" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -71,12 +180,12 @@ const AdminDashboardPage = () => {
         <Card>
           <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">User Growth Trend</h3>
           <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={revenueData}>
+            <LineChart data={userGrowthData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
               <YAxis />
               <Tooltip />
-              <Line type="monotone" dataKey="subscriptions" stroke="#10b981" strokeWidth={2} name="Total Users Growth" />
+              <Line type="monotone" dataKey="users" stroke="#10b981" strokeWidth={2} name="User Signups" />
             </LineChart>
           </ResponsiveContainer>
         </Card>
@@ -100,15 +209,15 @@ const AdminDashboardPage = () => {
                 render: (val) => <Badge variant={val === 'active' ? 'success' : 'default'}>{val}</Badge>,
               },
             ]}
-            data={users}
+            data={tableUsers}
             actions={(row) => [
               <Button key="suspend" variant="danger" size="sm">Suspend</Button>,
               <Button key="view" variant="ghost" size="sm">View</Button>,
             ]}
           />
         </Card>
-
-        {/* Marketplace Moderation */}
+{/* 
+        Marketplace Moderation
         <Card>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Marketplace Listings</h3>
@@ -145,7 +254,7 @@ const AdminDashboardPage = () => {
               </Button>,
             ]}
           />
-        </Card>
+        </Card> */}
 
         {/* System Health */}
         <div className="grid md:grid-cols-2 gap-6">

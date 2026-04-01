@@ -11,11 +11,9 @@ import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
 import Alert from '../components/ui/Alert';
 import { LIVESTOCK_TYPES, HEALTH_STATUS } from '../utils/constants';
-import { validateForm, livestockSchema } from '../utils/validation';
 import axios from 'axios';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 
 
 /**
@@ -25,12 +23,10 @@ const LivestockPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterHealth, setFilterHealth] = useState('');
-  const [viewMode, setViewMode] = useState('table');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [alert, setAlert] = useState(null);
   const { backendUrl } = useContext(AuthContext);
-  const navigate = useNavigate();
   const [livestockList, setLivestockList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
@@ -58,6 +54,10 @@ const LivestockPage = () => {
   const totalCost = livestockList.reduce((sum,item)=> sum + Number(item.totalCost), 0)
   const totalSold = livestockList.filter(item => item.status === 'sold').length
   const totalAvailable = livestockList.filter(item => item.status === 'available').length
+  const avgFeedConsumption = livestockList.length > 0 ? (livestockList.reduce((sum, item) => sum + Number(item.livestockFeedConsumed || 0), 0) / livestockList.length).toFixed(2) : 0
+  const starterStage = livestockList.filter(item => item.feedStage === 'Starter').length
+  const growerStage = livestockList.filter(item => item.feedStage === 'Grower').length
+  const finisherStage = livestockList.filter(item => item.feedStage === 'Finisher').length
 
   const handleAddNew = () => {
     setFormData({
@@ -84,7 +84,7 @@ const LivestockPage = () => {
       age: item.age,
       weight: item.weight,
       healthStatus: item.healthStatus,
-      purchaseDate: item.purchaseDate,
+      purchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : '',
       purchasePrice: item.purchasePrice,
       type: item.type,
     });
@@ -165,14 +165,30 @@ const LivestockPage = () => {
       }
     }
     fetchLivestock()
-  },[])
+  },[backendUrl])
 
-  
+    const formatCurrency = (amount) =>
+    new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN'
+  }).format(amount);
   const tableColumns = [
     { key: 'tagNumber', label: 'Tag Number' },
     { key: 'type', label: 'Type', render: (value) => LIVESTOCK_TYPES.find((t) => t.value === value)?.label || value },
     { key: 'breed', label: 'Breed' },
-    { key: 'age', label: 'Age (years)' },
+    // { key: 'age', label: 'Age (years)' },
+    { key: 'ageInDays', label: 'Age (days)' },
+    { key: 'ageInWeeks', label: 'Age (weeks)' },
+    { key: 'feedStage', label: 'Feed Stage', render: (value) => {
+      const stageColors = {
+        'Starter': 'success',
+        'Grower': 'warning',
+        'Finisher': 'error',
+      }
+      return <Badge variant={stageColors[value] || 'default'}>{value}</Badge>
+    }},
+    // { key: 'currentFeedType', label: 'Current Feed Type' },
+    { key: 'currentFeedName', label: 'Current Feed Name' },
     { key: 'weight', label: 'Weight (kg)' },
     { key: 'purchasePrice', label: 'purchasePrice' },
     { key: 'livestockFeedConsumed', label: 'feedConsumed (kg)' },
@@ -216,11 +232,18 @@ const LivestockPage = () => {
           />
         )}
         {/* Statistics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
           <StatCard label="Total Livestocks" value={totalLivestocks} />
-          <StatCard label="Total LivestocksCost" value={totalCost} />
-          <StatCard label="Total Sold" value={totalSold} />
-          <StatCard label="Available Livestocks" value={totalAvailable} />
+          <StatCard label="Total Cost" value={`${formatCurrency(totalCost)}`} />
+          <StatCard label="Available" value={totalAvailable} />
+          <StatCard label="Sold" value={totalSold} />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+          <StatCard label="Avg Feed (kg)" value={avgFeedConsumption} />
+          <StatCard label="Starter Stage" value={starterStage} />
+          <StatCard label="Grower Stage" value={growerStage} />
+          <StatCard label="Finisher Stage" value={finisherStage} />
         </div>
         {/* Filters */}
         <Card className="p-4">
@@ -353,7 +376,6 @@ const LivestockPage = () => {
               error={errors.purchaseDate}
               required
             />
-          </div>
           <Select
             label="Health Status"
             name="healthStatus"
@@ -363,6 +385,35 @@ const LivestockPage = () => {
             error={errors.healthStatus}
             required
           />
+          </div>
+
+          {editingId && (
+            <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700 p-4">
+              <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-3">Calculated Information</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {livestockList.find(item => item._id === editingId)?.ageInDays && (
+                  <>
+                    <div>
+                      <p className="text-xs text-blue-700 dark:text-blue-300">Age (Days)</p>
+                      <p className="text-lg font-semibold text-blue-900 dark:text-blue-100">{livestockList.find(item => item._id === editingId)?.ageInDays || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-blue-700 dark:text-blue-300">Age (Weeks)</p>
+                      <p className="text-lg font-semibold text-blue-900 dark:text-blue-100">{livestockList.find(item => item._id === editingId)?.ageInWeeks || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-blue-700 dark:text-blue-300">Feed Stage</p>
+                      <Badge variant={
+                        livestockList.find(item => item._id === editingId)?.feedStage === 'Starter' ? 'success' :
+                        livestockList.find(item => item._id === editingId)?.feedStage === 'Grower' ? 'warning' :
+                        'error'
+                      }>{livestockList.find(item => item._id === editingId)?.feedStage || 'N/A'}</Badge>
+                    </div>
+                  </>
+                )}
+              </div>
+            </Card>
+          )}
 
           <div className="flex gap-3 justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>

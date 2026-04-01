@@ -16,36 +16,226 @@ import {
   FiShoppingCart,
   FiDollarSign,
   FiAlertCircle,
-  FiEdit2,
-  FiTrash2,
 } from 'react-icons/fi';
 import MainLayout from '../layouts/MainLayout';
 import Card from '../components/ui/Card';
 import StatCard from '../components/ui/StatCard';
 import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
-import Badge from '../components/ui/Badge';
-import {
-  dashboardStats,
-  monthlyChartData,
-  feedConsumptionData,
-  mortalityTrendData,
-  recentActivity,
-} from '../data/dummyData';
 import { AuthContext } from '../context/AuthContext';
+import axios from 'axios';
 
 /**
  * Dashboard Page - Main analytics and overview
  */
 const DashboardPage = () => {
-  const [stats, setStats] = useState(dashboardStats);
-  const{userData} = useContext(AuthContext)
+  const [stats, setStats] = useState({
+    totalAnimals: 0,
+    totalLivestock: 0,
+    totalPoultry: 0,
+    totalRevenue: 0,
+    totalExpenses: 0,
+    mortalityRate: 0,
+  });
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [feedTrend, setFeedTrend] = useState([]);
+  const [mortalityTrend, setMortalityTrend] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const { userData, backendUrl } = useContext(AuthContext);
 
   const activityColumns = [
     { key: 'title', label: 'Activity' },
     { key: 'description', label: 'Description' },
     { key: 'timestamp', label: 'Time' },
   ];
+
+    const formatCurrency = (amount) =>
+    new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: 'NGN'
+    }).format(amount);
+
+  const safeArray = (response) => {
+    if (!response || !response.data) return [];
+    if (Array.isArray(response.data.data)) return response.data.data;
+    if (Array.isArray(response.data.message)) return response.data.message;
+    return [];
+  };
+
+  const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const getMonthLabel = (dateString) => {
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleString('default', { month: 'short' });
+  };
+
+  const buildMonthlyData = (sales, expenses) => {
+    const map = new Map();
+
+    sales.forEach((sale) => {
+      const month = getMonthLabel(sale.date);
+      if (!month) return;
+      const value = Number(sale.totalAmount || sale.quantity * sale.unitPrice || 0);
+      const current = map.get(month) || { month, sales: 0, expenses: 0 };
+      current.sales += value;
+      map.set(month, current);
+    });
+
+    expenses.forEach((expense) => {
+      const month = getMonthLabel(expense.date);
+      if (!month) return;
+      const value = Number(expense.amount || 0);
+      const current = map.get(month) || { month, sales: 0, expenses: 0 };
+      current.expenses += value;
+      map.set(month, current);
+    });
+
+    return Array.from(map.values()).sort(
+      (a, b) => monthOrder.indexOf(a.month) - monthOrder.indexOf(b.month)
+    );
+  };
+
+  const buildFeedTrend = (feeds) => {
+    const map = new Map();
+    feeds.forEach((feed) => {
+      const date = new Date(feed.purchaseDate);
+      if (Number.isNaN(date.getTime())) return;
+      const key = date.toISOString().split('T')[0];
+      const current = map.get(key) || 0;
+      map.set(key, current + Number(feed.consumption || 0));
+    });
+    return Array.from(map.entries())
+      .map(([date, consumption]) => ({ date, consumption }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  const buildMortalityTrend = (poultry) => {
+    const map = new Map();
+    poultry.forEach((batch) => {
+      const date = new Date(batch.purchaseDate);
+      if (Number.isNaN(date.getTime())) return;
+      const week = `Week ${Math.ceil(date.getDate() / 7)}`;
+      const current = map.get(week) || { week, poultry: 0, livestock: 0 };
+      current.poultry += Number(batch.mortality || 0);
+      map.set(week, current);
+    });
+    if (map.size === 0) {
+      return [{ week: 'Week 1', poultry: 0, livestock: 0 }];
+    }
+    return Array.from(map.values());
+  };
+
+  const buildActivityFeed = (sales, expenses) => {
+    const activity = [];
+
+    sales.forEach((sale) => {
+      if (!sale.date) return;
+      activity.push({
+        id: `sale-${sale._id || sale.id || sale.invoiceId}`,
+        title: 'Sale Completed',
+        description: `${sale.product || 'Product'} sold for ${formatCurrency(Number(sale.totalAmount || sale.quantity * sale.unitPrice || 0))}`,
+        timestamp: new Date(sale.date).toLocaleString(),
+      });
+    });
+
+    expenses.forEach((expense) => {
+      if (!expense.date) return;
+      activity.push({
+        id: `expense-${expense._id || expense.id || expense.title}`,
+        title: 'Expense Recorded',
+        description: `${expense.title}: ${formatCurrency(Number(expense.amount || 0))}`,
+        timestamp: new Date(expense.date).toLocaleString(),
+      });
+    });
+
+    return activity
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, 6);
+  };
+
+  const getPeriodChange = (field) => {
+    if (monthlyData.length < 2) return null;
+    const sorted = [...monthlyData].sort((a, b) => monthOrder.indexOf(a.month) - monthOrder.indexOf(b.month));
+    const latest = sorted[sorted.length - 1];
+    const previous = sorted[sorted.length - 2];
+    const latestValue = Number(latest[field] || 0);
+    const previousValue = Number(previous[field] || 0);
+    const diff = latestValue - previousValue;
+    if (diff === 0) return null;
+    const trend = diff > 0 ? 'up' : 'down';
+    if (previousValue === 0) {
+      return {
+        change: `${diff > 0 ? '+' : '-'}${formatCurrency(Math.abs(diff))}`,
+        trend,
+      };
+    }
+    const percentage = ((Math.abs(diff) / previousValue) * 100).toFixed(2);
+    return {
+      change: `${diff > 0 ? '+' : '-'}${percentage}%`,
+      trend,
+    };
+  };
+
+  const calculateMortalityRate = (poultry) => {
+    const totalQuantity = poultry.reduce((sum, batch) => sum + Number(batch.quantity || 0), 0);
+    const totalMortality = poultry.reduce((sum, batch) => sum + Number(batch.mortality || 0), 0);
+    if (!totalQuantity) return 0;
+    return Number(((totalMortality / (totalQuantity + totalMortality)) * 100).toFixed(2));
+  };
+
+  useEffect(() => {
+    const fetchDashboardMetrics = async () => {
+      try {
+        const [poultryResponse, livestockResponse, salesResponse, expenseResponse, feedResponse] = await Promise.all([
+          axios.get(`${backendUrl}/api/poultry/list`, { withCredentials: true }),
+          axios.get(`${backendUrl}/api/livestock/list`, { withCredentials: true }),
+          axios.get(`${backendUrl}/api/sell/list`, { withCredentials: true }),
+          axios.get(`${backendUrl}/api/expense/list`, { withCredentials: true }),
+          axios.get(`${backendUrl}/api/feed/feed`, { withCredentials: true }),
+        ]);
+
+        const poultry = safeArray(poultryResponse);
+        const livestock = safeArray(livestockResponse);
+        const sales = safeArray(salesResponse);
+        const expenses = safeArray(expenseResponse);
+        const feeds = safeArray(feedResponse);
+
+        const totalPoultry = poultry.reduce((sum, batch) => sum + Number(batch.quantity || 0), 0);
+        const totalLivestock = livestock.reduce((sum, animal) => sum + (Number(animal.quantity) || 1), 0);
+        const totalAnimals = totalPoultry + totalLivestock;
+        const totalRevenue = sales.reduce(
+          (sum, sale) => sum + Number(sale.totalAmount || sale.quantity * sale.unitPrice || 0),
+          0
+        );
+        const totalExpenses = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+        const mortalityRate = calculateMortalityRate(poultry);
+
+        setStats((prev) => ({
+          ...prev,
+          totalAnimals,
+          totalLivestock,
+          totalPoultry,
+          totalRevenue,
+          totalExpenses,
+          mortalityRate,
+        }));
+        setMonthlyData(buildMonthlyData(sales, expenses));
+        setFeedTrend(buildFeedTrend(feeds));
+        setMortalityTrend(buildMortalityTrend(poultry));
+        setActivities(buildActivityFeed(sales, expenses));
+      } catch (error) {
+        console.error('Failed to load dashboard metrics', error);
+      }
+    };
+
+    if (backendUrl) {
+      fetchDashboardMetrics();
+    }
+  }, [backendUrl]);
+
+  const revenueTrend = getPeriodChange('sales');
+  const expenseTrend = getPeriodChange('expenses');
 
   return (
     <MainLayout>
@@ -62,43 +252,43 @@ const DashboardPage = () => {
           - 1 col on mobile
           - 2 cols on small
           - 3 cols on medium
-          - 5 cols on large and above
+          - 4 cols on large and above
         */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
           <StatCard
             icon={FiShoppingCart}
-            label="Total Livestock"
+            label="Total Animals"
             value={stats.totalAnimals}
-            change="+2"
-            trend="up"
           />
           <StatCard
             icon={FiTrendingUp}
+            label="Total Livestock"
+            value={stats.totalLivestock}
+          />
+          <StatCard
+            icon={FiDollarSign}
             label="Total Poultry"
             value={stats.totalPoultry}
-            change="+50"
-            trend="up"
           />
           <StatCard
             icon={FiDollarSign}
             label="Total Revenue"
-            value={`$${stats.totalRevenue.toLocaleString()}`}
-            change="+12%"
-            trend="up"
+            value={`${formatCurrency(stats.totalRevenue)}`}
+            change={revenueTrend?.change}
+            trend={revenueTrend?.trend}
           />
           <StatCard
             icon={FiAlertCircle}
             label="Total Expenses"
-            value={`$${stats.totalExpenses.toLocaleString()}`}
-            change="+5%"
-            trend="down"
+            value={`${formatCurrency(stats.totalExpenses)}`}
+            change={expenseTrend?.change}
+            trend={expenseTrend?.trend}
           />
           <StatCard
             icon={FiAlertCircle}
             label="Mortality Rate"
             value={`${stats.mortalityRate}%`}
-            change="-0.2%"
-            trend="down"
           />
         </div>
 
@@ -110,7 +300,7 @@ const DashboardPage = () => {
               Monthly Revenue & Expenses
             </h2>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={monthlyChartData}>
+              <BarChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" />
                 <XAxis dataKey="month" />
                 <YAxis />
@@ -128,7 +318,7 @@ const DashboardPage = () => {
               Weekly Feed Consumption
             </h2>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={feedConsumptionData}>
+              <LineChart data={feedTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" />
                 <XAxis dataKey="date" />
                 <YAxis />
@@ -152,7 +342,7 @@ const DashboardPage = () => {
               Mortality Trends
             </h2>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={mortalityTrendData}>
+                  <LineChart data={mortalityTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" />
                 <XAxis dataKey="week" />
                 <YAxis />
@@ -191,7 +381,7 @@ const DashboardPage = () => {
           </div>
           <Table
             columns={activityColumns}
-            data={recentActivity}
+            data={activities}
             actions={(row) => [
               <Button key="view" variant="ghost" size="sm">
                 View

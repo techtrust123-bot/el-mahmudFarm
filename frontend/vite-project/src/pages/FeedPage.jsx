@@ -15,8 +15,8 @@ import Alert from '../components/ui/Alert';
 import axios from 'axios';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import { FEED_TYPE, FEED_CATEGORY, POULTRY_TYPES } from '../utils/constants';
+import {  FEED_CATEGORY,ANIMAL_TYPES } from '../utils/constants';
+// import { FEED_TYPE, FEED_CATEGORY, POULTRY_TYPES,ANIMAL_TYPES } from '../utils/constants';
 
 /**
  * Feed Management Page
@@ -27,16 +27,15 @@ const FeedPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [alert, setAlert] = useState(null);
-  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     feedType: '',
-    poultryType: '',
+    animalType: '',
     feedCategory: '',
     quantity: '',
     cost: '',
     supplier: '',
     purchaseDate: '',
-    consumption: '',
+    averageDailyConsumption: '',
     feedPricePerkg: '',
     feedName:'',
   });
@@ -52,7 +51,7 @@ const FeedPage = () => {
 );
 
   const lowStockFeeds = feeds.filter((item) => {
-    const remaining = item.quantity - item.consumption;
+    const remaining = Number(item.quantity) || 0;
     return remaining < 100;
   });
 
@@ -80,13 +79,13 @@ const FeedPage = () => {
 // }));
 
   const handleAddNew = () => {
-    setFormData({ feedType: '', poultryType: '', feedCategory: '', quantity: '', cost: '', supplier: '', purchaseDate: '', consumption: '', feedPricePerkg: '', feedName:'' });
+    setFormData({ feedType: '', poultryType: '', feedCategory: '', quantity: '', cost: '', supplier: '', purchaseDate: '', averageDailyConsumption: '', feedPricePerkg: '', feedName:'' });
     setEditingId(null);
     setErrors({});
     setIsModalOpen(true);
   };
 
-  const parsePoultryType = (feedType) => {
+  const parseanimalType = (feedType) => {
     if (!feedType) return ''
     const match = feedType.match(/\b(broiler|layer|cow|goat|sheep|cattle|horse|ram|bool)\b/i)
     return match ? match[1].toLowerCase() : ''
@@ -108,13 +107,13 @@ const FeedPage = () => {
   const handleEdit = (item) => {
     setFormData({
       feedType: item.feedType || '',
-      poultryType: item.poultryType || parsePoultryType(item.feedType || ''),
+      animalType: item.poultryType || parsePoultryType(item.feedType || ''),
       feedCategory: item.feedCategory || parseFeedCategory(item.feedType || ''),
       quantity: item.quantity || '',
       cost: item.cost || '',
       supplier: item.supplier || '',
       purchaseDate: item.purchaseDate?.split('T')[0] || '',
-      consumption: item.consumption || '',
+      averageDailyConsumption: item.averageDailyConsumption || '',
       feedPricePerkg: item.feedPricePerkg || '',
       feedName: item.feedName || '',
     });
@@ -132,7 +131,7 @@ const FeedPage = () => {
         return;
       }
     } catch (error) {
-      setAlert({ type: 'error', message: response.data.message || 'Failed to delete feed' });
+      setAlert({ type: 'error', message: error.response?.data?.message || 'Failed to delete feed' });
     }
   };
 
@@ -141,12 +140,12 @@ const FeedPage = () => {
     setFormData((prev) => {
       const next = { ...prev, [name]: value };
       if (name === 'feedType') {
-        next.poultryType = parsePoultryType(value)
+        next.animalType = parseanimalType(value)
         next.feedCategory = parseFeedCategory(value)
       }
-      if (name === 'poultryType' || name === 'feedCategory') {
-        if (next.poultryType && next.feedCategory) {
-          next.feedType = composeFeedType(next.poultryType, next.feedCategory)
+      if (name === 'animalType' || name === 'feedCategory') {
+        if (next.animalType && next.feedCategory) {
+          next.feedType = composeFeedType(next.animalType, next.feedCategory)
         }
       }
       return next;
@@ -163,7 +162,7 @@ const FeedPage = () => {
       let response;
       const payload = {
         ...formData,
-        feedType: formData.poultryType && formData.feedCategory ? composeFeedType(formData.poultryType, formData.feedCategory) : formData.feedType,
+        feedType: formData.animalType && formData.feedCategory ? composeFeedType(formData.animalType, formData.feedCategory) : formData.feedType,
       }
       if (editingId) {
         response = await axios.put(`${backendUrl}/api/feed/edit/${editingId}`, payload, { withCredentials: true });
@@ -173,7 +172,7 @@ const FeedPage = () => {
       if (response?.data?.success) {
         setAlert({ type: 'success', message: response.data.message || (editingId ? 'Feed updated successfully!' : 'Feed added successfully!') });
         
-        setFormData({ feedType: '', poultryType: '', feedCategory: '', quantity: '', cost: '', supplier: '', purchaseDate: '', consumption: '', feedPricePerkg: '', feedName:'' });
+        setFormData({ feedType: '', poultryType: '', feedCategory: '', quantity: '', cost: '', supplier: '', purchaseDate: '', averageDailyConsumption: '', feedPricePerkg: '', feedName:'' });
         setIsModalOpen(false);
         // Refresh data
         const fetchResponse = await axios.get(backendUrl+'/api/feed/feed', { withCredentials: true });
@@ -196,7 +195,7 @@ const FeedPage = () => {
       }
     };
     fetchFeeds();
-  }, []);
+  }, [backendUrl]);
 
   const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-NG', {
@@ -206,17 +205,18 @@ const FeedPage = () => {
 
   const tableColumns = [
     { key: 'feedType', label: 'Feed Type' },
-    { key: 'poultryType', label: 'Poultry Type', render: (value, row) => value || parsePoultryType(row.feedType) },
+    { key: 'animalType', label: 'Animal Type', render: (value, row) => value || parseanimalType(row.feedType) },
     { key: 'feedCategory', label: 'Feed Category', render: (value, row) => value || parseFeedCategory(row.feedType) },
     { key: 'quantity', label: 'Quantity (kg)' },
+    { key: 'averageDailyConsumption', label: 'Avg Daily Consumption (kg)' },
     { key: 'consumption', label: 'Consumed (kg)' },
-    { key: 'feedPricePerkg', label: 'Price per kg (₦)' },
+    { key: 'feedPricePerkg', label: 'Price per kg (₦)', render: (value) => formatCurrency(Number(value || 0)) },
     {key:'feedName', label:'Feed Name'},
     {
       key: 'quantity',
       label: 'Remaining',
       render: (_, row) => {
-        const remaining = row.quantity - row.consumption;
+        const remaining = Number(row.quantity) || 0;
         const isLow = remaining < 100;
         return (
           <Badge variant={isLow ? 'error' : 'success'}>
@@ -250,7 +250,7 @@ const FeedPage = () => {
         )}
 
         {/* Statistics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-3 gap-4">
           <StatCard label="Total Feed (kg)" value={feeds.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()} />
           <StatCard label="Total Consumption (kg)" value={totalConsumption.toLocaleString()} />
           <StatCard label="Inventory Value" value={formatCurrency(Number(totalValue || 0).toFixed(2))} />
@@ -268,7 +268,7 @@ const FeedPage = () => {
         {/* Feed Consumption Chart */}
         <Card>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Weekly Consumption Trend
+            Daily Consumption Trend
           </h2>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={feedConsumptionTrend} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
@@ -316,23 +316,22 @@ const FeedPage = () => {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
-            <Select
+            <Input
             label="Feed Type"
             type="text"
             name="feedType"
-            options={FEED_TYPE}
             value={formData.feedType}
             onChange={handleChange}
             error={errors.feedType}
             required
           />
           <Select
-            label="Poultry Type"
-            name="poultryType"
-            options={POULTRY_TYPES}
-            value={formData.poultryType}
+            label="Animal Type"
+            name="animalType"
+            options={ANIMAL_TYPES}
+            value={formData.animalType}
             onChange={handleChange}
-            error={errors.poultryType}
+            error={errors.animalType}
           />
           
           <Select
@@ -343,8 +342,6 @@ const FeedPage = () => {
             onChange={handleChange}
             error={errors.feedCategory}
           />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
             <Input
               label="Quantity (kg)"
               type="number"
@@ -354,6 +351,8 @@ const FeedPage = () => {
               error={errors.quantity}
               required
             />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
             <Input
               label="Cost (₦)"
               type="number"
@@ -363,7 +362,6 @@ const FeedPage = () => {
               error={errors.cost}
               required
             />
-          </div>
           <Input
             label="Supplier"
             type="text"
@@ -373,14 +371,15 @@ const FeedPage = () => {
             error={errors.supplier}
             required
           />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
             <Input
-              label="Consumption (kg)"
+              label="Average Daily Consumption (kg)"
               type="number"
-              name="consumption"
-              value={formData.consumption}
+              name="averageDailyConsumption"
+              value={formData.averageDailyConsumption}
               onChange={handleChange}
-              error={errors.consumption}
+              error={errors.averageDailyConsumption}
               required
             />
             <Input

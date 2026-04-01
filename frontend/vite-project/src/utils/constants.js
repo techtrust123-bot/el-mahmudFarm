@@ -11,7 +11,7 @@ export const LIVESTOCK_TYPES = [
   { value: 'cattle', label: 'cattle' },
   { value: 'horse', label: 'horse' },
 ];
-export const ANIMAL_TYPES = [
+export const ANIMAL_TYPE = [
   { value: 'Poultry', label: 'Poultry' },
   { value: 'Livestock', label: 'Livestock' },
   { value: 'Egg', label: 'Egg' },
@@ -54,13 +54,9 @@ export const STAFF_ROLES = [
   { value: 'worker', label: 'Worker' },
   { value: 'supervisor', label: 'Supervisor' },
 ];
-export const FEED_TYPE =[
-  { value: 'broiler(super starter)', label: 'broiler(super starter)' },
-  { value: 'broiler(starter)', label: 'broiler(starter)' },
-  { value: 'broiler(finisher)', label: 'broiler(finisher)' },
-  { value: 'layer(chick mash)', label: 'layer(chick mash)' },
-  { value: 'layer(grower mash)', label: 'layer(grower mash)' },
-  { value: 'layer(layer mash)', label: 'layer(layer mash)' },
+export const ANIMAL_TYPES =[
+  { value: 'broiler', label: 'broiler' },
+  { value: 'layer', label: 'layer' },
   { value: 'cow', label: 'cow' },
   { value: 'goat', label: 'goat' },
   { value: 'sheep', label: 'sheep' },
@@ -72,6 +68,12 @@ export const FEED_CATEGORY = [
   { value: 'Starter', label: 'Starter' },
   { value: 'Grower', label: 'Grower' },
   { value: 'Finisher', label: 'Finisher' },
+  { value: 'roughage', label: 'Roughage' },
+  { value: 'concentrate', label: 'Concentrate' },
+  { value: 'protein', label: 'Protein' },
+  { value: 'minerals', label: 'Minerals' },
+  { value: 'vitamins', label: 'Vitamins' },
+  { value: 'by-products', label: 'By-Products' },
 ]
 
 export const COLORS = {

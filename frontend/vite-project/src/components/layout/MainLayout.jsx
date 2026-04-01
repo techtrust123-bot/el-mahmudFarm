@@ -14,12 +14,12 @@ const MainLayout = ({ children }) => {
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className="flex flex-col flex-1 md:ml-64">
+      <div className="flex flex-col flex-1 md:ml-64 min-w-0">
         {/* Navbar */}
         <Navbar toggleSidebar={() => setSidebarOpen(!sidebarOpen)} sidebarOpen={sidebarOpen} />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto pt-16">
+        <main className="flex-1 overflow-auto pt-16 min-w-0">
           <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
             {children}
           </div>

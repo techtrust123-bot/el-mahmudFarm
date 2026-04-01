@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useContext,useEffect } from 'react';
 import { FiSave, FiMoon, FiSun } from 'react-icons/fi';
 import MainLayout from '../layouts/MainLayout';
 import Card from '../components/ui/Card';
@@ -7,6 +7,7 @@ import Input from '../components/ui/Input';
 import Textarea from '../components/ui/Textarea';
 import Alert from '../components/ui/Alert';
 import { useTheme } from '../context/ThemeContext';
+import { AuthContext } from '../context/AuthContext';
 
 /**
  * Settings Page
@@ -14,23 +15,24 @@ import { useTheme } from '../context/ThemeContext';
 const SettingsPage = () => {
   const { isDark, toggleTheme } = useTheme();
   const [alert, setAlert] = useState(null);
+  const {userData} = useContext(AuthContext)
   const [farmData, setFarmData] = useState({
-    farmName: 'Green Valley Farm',
-    owner: 'John Doe',
-    email: 'john@greenvalley.com',
-    phone: '+1234567890',
-    address: '123 Farm Road, Agriculture Valley',
-    city: 'Springfield',
-    country: 'United States',
-    postalCode: '12345',
+    farmName: userData?.farmName || 'Green Valley Farm',
+    owner: userData?.name || 'John Doe',
+    email: userData?.email || 'john@greenvalley.com',
+    phone: userData?.phone || '+1234567890',
+    address: userData?.address || '123 Farm Road, Agriculture Valley',
+    city: userData?.city || 'Springfield',
+    country: userData?.country || 'United States',
+    postalCode: userData?.postalCode || '12345',
     description: 'A modern livestock and poultry farm',
   });
 
   const [profileData, setProfileData] = useState({
-    fullName: 'John Doe',
-    email: 'john@greenvalley.com',
-    phone: '+1234567890',
-    position: 'Farm Manager',
+    fullName: userData?.name || 'John Doe',
+    email: userData?.email || 'john@greenvalley.com',
+    phone: userData?.phone || '+1234567890',
+    position: userData?.position || 'Farm Manager',
   });
 
   const [isSaving, setIsSaving] = useState(false);

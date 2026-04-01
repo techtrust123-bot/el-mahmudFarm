@@ -6,9 +6,13 @@ const feedSchema = new mongoose.Schema({
         required:true,
         unique:true
     },
-    poultryType:{
+    animalType:{
         type:String,
         enum:['broiler','layer','cattle','cow','sheep','goat','horse','ram','bool'],
+    },
+    poultryType:{
+        type:String,
+        trim:true,
     },
     feedCategory:{
         type:String,
@@ -33,6 +37,14 @@ const feedSchema = new mongoose.Schema({
     consumption:{
         type:Number,
         default:0
+    },
+    averageDailyConsumption:{
+        type:Number,
+        default:0
+    },
+    lastConsumptionUpdate:{
+        type:Date,
+        default:Date.now
     },
     feedPricePerkg:{
         type:Number

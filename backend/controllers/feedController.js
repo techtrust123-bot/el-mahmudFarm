@@ -9,8 +9,8 @@ const {
 } = require('../utils/feedStageHelper')
 
 exports.addFeed = async(req,res)=>{
-    const {feedType,quantity,cost,purchaseDate,supplier,consumption,feedName} = req.body
-    if(!feedType || !quantity || !cost || !purchaseDate || !supplier || !feedName ){
+    const {feedType,quantity,cost,purchaseDate,supplier,feedName,averageDailyConsumption} = req.body
+    if(!feedType || !quantity || !cost || !purchaseDate || !supplier || !feedName || averageDailyConsumption === undefined ){
         return res.status(400).json({message:"Input fields are required..."})
     }
     try {
@@ -22,34 +22,78 @@ exports.addFeed = async(req,res)=>{
         const feedPricePerkg = totalCost / qtn;
         const parsed = parseFeedType(feedType)
         const newFeed = new Feed({
-            feedType,
-            poultryType: parsed.poultryType,
+            feedType,            animalType: parsed.animalType,            poultryType: parsed.poultryType,
             feedCategory: parsed.feedCategory,
             quantity,
             cost,
             purchaseDate,
             supplier,
-            consumption,
+            consumption: 0,
+            averageDailyConsumption: Number(averageDailyConsumption),
+            lastConsumptionUpdate: new Date(purchaseDate),
             feedPricePerkg,
             feedName,
         })
         await newFeed.save()
         await recalculatePoultry(newFeed)
         await recalculateLivestock(newFeed)
-        res.status(201).json({success:true,message:"Feed Added Successfull"})
+        res.status(201).json({success:true,message:"Feed Added Successfully"})
     } catch (error) {
         console.log(error.message)
         res.status(500).json({success:false,message:error.message})
     }
 }
 
+const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
+
+const updateFeedConsumption = async (feed) => {
+    const now = new Date()
+    const lastUpdate = feed.lastConsumptionUpdate ? new Date(feed.lastConsumptionUpdate) : feed.purchaseDate ? new Date(feed.purchaseDate) : startOfDay(new Date())
+    const startToday = startOfDay(now)
+    const startLast = startOfDay(lastUpdate)
+    const diffDays = Math.floor((startToday - startLast) / (1000 * 60 * 60 * 24))
+    if (diffDays <= 0) return feed
+
+    const daily = Number(feed.averageDailyConsumption) || 0
+    if (daily <= 0) {
+        feed.lastConsumptionUpdate = startToday
+        const updatedFeed = await Feed.findByIdAndUpdate(feed._id, { lastConsumptionUpdate: startToday }, { returnDocument: 'after' })
+        await recalculatePoultry(updatedFeed)
+        await recalculateLivestock(updatedFeed)
+        return updatedFeed
+    }
+
+    const available = Number(feed.quantity) || 0
+    const totalDecrease = daily * diffDays
+    const actualDecrease = Math.min(totalDecrease, available)
+    const updatedQuantity = available - actualDecrease
+    const updatedConsumption = Number(feed.consumption || 0) + actualDecrease
+
+    const updatedFeed = await Feed.findByIdAndUpdate(
+        feed._id,
+        {
+            quantity: updatedQuantity,
+            consumption: updatedConsumption,
+            lastConsumptionUpdate: startToday,
+        },
+        { returnDocument: 'after' }
+    )
+
+    await recalculatePoultry(updatedFeed)
+    await recalculateLivestock(updatedFeed)
+
+    return updatedFeed
+}
+
 exports.getFeed = async(req,res)=>{
     try {
-        const feed = await Feed.find()
-        if(!feed){
+        const feeds = await Feed.find()
+        if(!feeds || feeds.length === 0){
             return res.status(404).json({success:false,message:"Feed not found..."})
         }
-        res.status(200).json({success:true,message:feed})
+
+        const updatedFeeds = await Promise.all(feeds.map(updateFeedConsumption))
+        res.status(200).json({success:true,message:updatedFeeds,data:updatedFeeds})
     } catch (error) {
         console.log(error.message)
         res.status(500).json({message:error.message})
@@ -63,7 +107,8 @@ exports.getById = async(req,res)=>{
         if(!feed){
          return  res.status(404).json({success:false,message:"Feed not found..."})
         }
-        res.status(200).json({success:true,message:feed})
+        const updatedFeed = await updateFeedConsumption(feed)
+        res.status(200).json({success:true,message:updatedFeed,data:updatedFeed})
     } catch (error) {
         console.log(error.message)
         res.status(500).json({success:false,message:error.message})
@@ -71,38 +116,38 @@ exports.getById = async(req,res)=>{
 }
 const recalculatePoultry = async (feed) => {
   try {
-    const poultryType = feed.poultryType || parseFeedType(feed.feedType).poultryType
-    if (!poultryType) return
+    const animalType = feed.animalType || feed.poultryType || parseFeedType(feed.feedType).animalType
+    const feedStage = feed.feedCategory || parseFeedType(feed.feedType).feedCategory
+    if (!animalType || !feedStage) return
 
-    const poultryList = await Poultry.find({ type: poultryType })
-    const operations = []
+    const poultryList = await Poultry.find({ type: animalType, currentFeedStage: feedStage })
+    const totalQuantity = poultryList.reduce((sum, bird) => sum + Number(bird.quantity || 0), 0)
+    if (!totalQuantity) return
 
-    for (const bird of poultryList) {
+    const totalConsumption = Number(feed.consumption || 0)
+    const poultryConsumePerkg = totalConsumption / totalQuantity
+    const feedCostPerPoultry = Number(feed.feedPricePerkg) * poultryConsumePerkg
+
+    const operations = poultryList.map((bird) => {
+      const quantity = Number(bird.quantity)
+      if (!quantity || quantity <= 0) return null
+
       const birthDate = bird.birthDay || bird.purchaseDate || new Date()
       const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-      const feedStage = getFeedStage(ageInDays)
-      const matchedFeed = await getFeedForStage(Feed, poultryType, feedStage)
-      if (!matchedFeed) continue
-
-      const quantity = Number(bird.quantity)
-      if (!quantity || quantity <= 0) continue
-
-      const poultryConsumePerkg = Number(matchedFeed.consumption) / quantity
-      const feedCostPerPoultry = Number(matchedFeed.feedPricePerkg) * poultryConsumePerkg
       const totalFeedCost = feedCostPerPoultry * quantity
       const totalCost = Number(bird.purchasePrice) + totalFeedCost
       const costPerPoultry = totalCost / quantity
       const totalCostPerPoultry = Number(bird.purchasePrice) / quantity + feedCostPerPoultry
 
-      operations.push({
+      return {
         updateOne: {
           filter: { _id: bird._id },
           update: {
             ageInDays,
             ageInWeeks,
             currentFeedStage: feedStage,
-            currentFeedType: matchedFeed.feedType,
-            currentFeedName: matchedFeed.feedName,
+            currentFeedType: feed.feedType,
+            currentFeedName: feed.feedName,
             feedStage,
             poultryConsumePerkg,
             feedCostPerPoultry,
@@ -112,8 +157,8 @@ const recalculatePoultry = async (feed) => {
             totalCostPerPoultry,
           }
         }
-      })
-    }
+      }
+    }).filter(Boolean)
 
     if (operations.length > 0) {
       await Poultry.bulkWrite(operations)
@@ -125,15 +170,20 @@ const recalculatePoultry = async (feed) => {
 
 const recalculateLivestock = async(feed)=>{
     try {
-        const livestock = await LiveStock.find({type:feed.feedType})
+        const livestockType = feed.animalType || feed.poultryType || parseFeedType(feed.feedType).animalType
+        const feedStage = feed.feedCategory || parseFeedType(feed.feedType).feedCategory
+        const livestock = await LiveStock.find({ type: livestockType, feedStage: feedStage })
+        const totalQuantity = livestock.reduce((sum, animal) => sum + Number(animal.quantity || 0), 0)
+        if (!totalQuantity) return
+
+        const totalConsumption = Number(feed.consumption || 0)
+        const livestockFeedConsumed = totalConsumption / totalQuantity
+
         const operations = livestock.map((animal)=>{
             const quantity = Number(animal.quantity);
             if(!quantity || quantity <=0)return null;
 
-            const livestockFeedConsumed = feed.consumption / quantity
-
             const costPrice = Number(feed.feedPricePerkg) * livestockFeedConsumed
-
             const totalCost = Number(animal.purchasePrice) + costPrice
 
             return{
@@ -165,16 +215,16 @@ exports.edit = async(req,res)=>{
         const parsed = parseFeedType(req.body.feedType || existingFeed.feedType)
         const updatedData = {
             ...req.body,
-            poultryType: parsed.poultryType,
-            feedCategory: parsed.feedCategory,
+        animalType: parsed.animalType,
         }
-
         const updatedFeed = await Feed.findByIdAndUpdate(id, updatedData, { returnDocument:'after' })
-        await recalculatePoultry(updatedFeed)
-        await recalculateLivestock(updatedFeed)
-        const typeToQuery = updatedFeed.poultryType || parseFeedType(updatedFeed.feedType).poultryType
+        const currentFeed = await updateFeedConsumption(updatedFeed)
+        await recalculatePoultry(currentFeed)
+        await recalculateLivestock(currentFeed)
+        const typeToQuery = currentFeed.poultryType || parseFeedType(currentFeed.feedType).poultryType
         const updatedPoultry = await Poultry.find({ type: typeToQuery })
         res.status(200).json({ success:true,data:updatedPoultry, message:"Feed update successful..." })
+        
     } catch (error) {
          console.log(error.message)
         res.status(500).json({success:false,message:error.message})
