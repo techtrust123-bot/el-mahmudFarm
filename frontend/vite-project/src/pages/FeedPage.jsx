@@ -35,7 +35,8 @@ const FeedPage = () => {
     cost: '',
     supplier: '',
     purchaseDate: '',
-    averageDailyConsumption: '',
+    totalPoultryFeedConsumedPerday: '',
+    totalLivestockFeedConsumedPerday: '',
     feedPricePerkg: '',
     feedName:'',
   });
@@ -55,31 +56,35 @@ const FeedPage = () => {
     return remaining < 100;
   });
 
-  const totalValue = feeds.reduce((sum, item) => sum + item.cost, 0);
-  const totalConsumption = feeds.reduce((sum, item) => sum + item.consumption, 0);
-  const feedConsumptionTrend = feeds.reduce((acc, item) => {
-  const date = new Date(item.purchaseDate).toLocaleDateString();
-
-  const existing = acc.find((d) => d.date === date);
-
-  if (existing) {
-    existing.consumption += Number(item.consumption || 0);
-  } else {
-    acc.push({
-      date,
-      consumption: Number(item.consumption || 0),
-    });
-  }
-
-  return acc;
-}, []);
+  const totalValue = feeds.reduce((sum, item) => sum + Number(item.cost || 0), 0);
+  const totalConsumption = feeds.reduce((sum, item) => sum + Number(item.consumption || 0), 0);
+  const totalDailyConsumption = feeds.reduce((sum, item) => sum + Number(item.totalDailyConsumption || 0), 0);
+  const feedConsumptionTrend = feeds
+    .reduce((acc, item) => {
+      const rawDate = item.lastConsumptionUpdate || item.purchaseDate;
+      const dateObj = new Date(rawDate);
+      if (Number.isNaN(dateObj.getTime())) return acc;
+      const date = dateObj.toLocaleDateString();
+      const consumption = Number(item.totalDailyConsumption || item.consumption || 0);
+      const existing = acc.find((d) => d.date === date);
+      if (existing) {
+        existing.consumption += consumption;
+      } else {
+        acc.push({
+          date,
+          consumption,
+        });
+      }
+      return acc;
+    }, [])
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
 //   const feedConsumptionTrend = feeds.map((item) => ({
 //   date: new Date(item.purchaseDate).toLocaleDateString(),
 //   consumption: Number(item.consumption || 0),
 // }));
 
   const handleAddNew = () => {
-    setFormData({ feedType: '', poultryType: '', feedCategory: '', quantity: '', cost: '', supplier: '', purchaseDate: '', averageDailyConsumption: '', feedPricePerkg: '', feedName:'' });
+    setFormData({ feedType: '', poultryType: '', feedCategory: '', quantity: '', cost: '', supplier: '', purchaseDate: '', totalPoultryFeedConsumedPerday: '', totalLivestockFeedConsumedPerday: '', feedPricePerkg: '', feedName:'' });
     setEditingId(null);
     setErrors({});
     setIsModalOpen(true);
@@ -90,6 +95,8 @@ const FeedPage = () => {
     const match = feedType.match(/\b(broiler|layer|cow|goat|sheep|cattle|horse|ram|bool)\b/i)
     return match ? match[1].toLowerCase() : ''
   }
+
+  const parsePoultryType = (feedType) => parseanimalType(feedType)
 
   const parseFeedCategory = (feedType) => {
     if (!feedType) return ''
@@ -113,7 +120,8 @@ const FeedPage = () => {
       cost: item.cost || '',
       supplier: item.supplier || '',
       purchaseDate: item.purchaseDate?.split('T')[0] || '',
-      averageDailyConsumption: item.averageDailyConsumption || '',
+      totalPoultryFeedConsumedPerday: item.totalPoultryFeedConsumedPerday || '',
+      totalLivestockFeedConsumedPerday: item.totalLivestockFeedConsumedPerday || '',
       feedPricePerkg: item.feedPricePerkg || '',
       feedName: item.feedName || '',
     });
@@ -208,10 +216,13 @@ const FeedPage = () => {
     { key: 'animalType', label: 'Animal Type', render: (value, row) => value || parseanimalType(row.feedType) },
     { key: 'feedCategory', label: 'Feed Category', render: (value, row) => value || parseFeedCategory(row.feedType) },
     { key: 'quantity', label: 'Quantity (kg)' },
-    { key: 'averageDailyConsumption', label: 'Avg Daily Consumption (kg)' },
+    { key: 'totalPoultryFeedConsumedPerday', label: 'Total Poultry Feed Consumed (kg)' },
+    { key: 'totalLivestockFeedConsumedPerday', label: 'Total Livestock Feed Consumed (kg)' },
+    { key: 'poultryDailyConsumption', label: 'P/Avg Consume' },
+    { key: 'livestockDailyConsumption', label: 'L/Avg Consume' },
     { key: 'consumption', label: 'Consumed (kg)' },
     { key: 'feedPricePerkg', label: 'Price per kg (₦)', render: (value) => formatCurrency(Number(value || 0)) },
-    {key:'feedName', label:'Feed Name'},
+    { key:'feedName', label:'Feed Name'},
     {
       key: 'quantity',
       label: 'Remaining',
@@ -251,7 +262,7 @@ const FeedPage = () => {
 
         {/* Statistics */}
         <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard label="Total Feed (kg)" value={feeds.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()} />
+          <StatCard label="Total Feed (kg)" value={feeds.reduce((sum, item) => sum + Number(item.quantity || 0), 0).toLocaleString()} />
           <StatCard label="Total Consumption (kg)" value={totalConsumption.toLocaleString()} />
           <StatCard label="Inventory Value" value={formatCurrency(Number(totalValue || 0).toFixed(2))} />
         </div>
@@ -316,6 +327,22 @@ const FeedPage = () => {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
+            <Select
+              label="Feed Category"
+              name="feedCategory"
+              options={FEED_CATEGORY}
+              value={formData.feedCategory}
+              onChange={handleChange}
+              error={errors.feedCategory}
+            />
+            <Select
+              label="Animal Type"
+              name="animalType"
+              options={ANIMAL_TYPES}
+              value={formData.animalType}
+              onChange={handleChange}
+              error={errors.animalType}
+            />
             <Input
             label="Feed Type"
             type="text"
@@ -325,23 +352,7 @@ const FeedPage = () => {
             error={errors.feedType}
             required
           />
-          <Select
-            label="Animal Type"
-            name="animalType"
-            options={ANIMAL_TYPES}
-            value={formData.animalType}
-            onChange={handleChange}
-            error={errors.animalType}
-          />
           
-          <Select
-            label="Feed Category"
-            name="feedCategory"
-            options={FEED_CATEGORY}
-            value={formData.feedCategory}
-            onChange={handleChange}
-            error={errors.feedCategory}
-          />
             <Input
               label="Quantity (kg)"
               type="number"
@@ -373,15 +384,28 @@ const FeedPage = () => {
           />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
-            <Input
-              label="Average Daily Consumption (kg)"
+            {formData.animalType === 'broiler' || formData.animalType === 'layer' ? (
+               <Input
+              label="Total PoultryFeedConsumedPerday (kg)"
               type="number"
-              name="averageDailyConsumption"
-              value={formData.averageDailyConsumption}
+              name="totalPoultryFeedConsumedPerday"
+              value={formData.totalPoultryFeedConsumedPerday}
               onChange={handleChange}
-              error={errors.averageDailyConsumption}
+              error={errors.totalPoultryFeedConsumedPerday}
               required
             />
+            ) : (
+              <Input
+              label="Total LivestockFeedConsumedPerday (kg)"
+              type="number"
+              name="totalLivestockFeedConsumedPerday"
+              value={formData.totalLivestockFeedConsumedPerday}
+              onChange={handleChange}
+              error={errors.totalLivestockFeedConsumedPerday}
+              required
+            />
+            )}
+           
             <Input
               label="Feed Name"
               type="text"

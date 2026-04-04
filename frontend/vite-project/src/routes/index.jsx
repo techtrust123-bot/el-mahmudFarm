@@ -13,7 +13,7 @@ import AdminDashboardPage from '../pages/admin/AdminDashboard';
 // helper component to pick correct dashboard based on role
 const DashboardWrapper = () => {
   const { user } = useAuth();
-  return user?.role === 'admin' ? <AdminDashboardPage /> : <FarmerDashboardPage />;
+  return user?.role?.toLowerCase() === 'admin' ? <AdminDashboardPage /> : <FarmerDashboardPage />;
 };
 
 // Management Pages
@@ -33,6 +33,7 @@ import SalesPage from '../pages/SalesPage';
 import StaffPage from '../pages/StaffPage';
 import SettingsPage from '../pages/SettingsPage';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage';
+import ForbiddenPage from '../pages/ForbiddenPage';
 /**
  * Routes Configuration
  */
@@ -41,9 +42,11 @@ export const AppRoutes = () => {
     <Router>
       <Routes>
         {/* Public Routes */}
+        <Route path="/" element={<LoginPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/forbidden" element={<ForbiddenPage />} />
 
         {/* Protected Routes */}
         <Route
@@ -58,9 +61,8 @@ export const AppRoutes = () => {
         <Route
           path="/livestock"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission="livestock">
                 <LivestockPage/>
-              {/* <div>Livestock Management (Coming Soon)</div> */}
             </ProtectedRoute>
           }
         />
@@ -68,7 +70,7 @@ export const AppRoutes = () => {
         <Route
           path="/poultry"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission="poultry">
                 <PoultryPage/>
             </ProtectedRoute>
           }
@@ -77,19 +79,16 @@ export const AppRoutes = () => {
         <Route
           path="/feed"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission="feed">
               <FeedPage/>
             </ProtectedRoute>
           }
-        />      
-            {/* </ProtectedRoute>
-          }
-        /> */}
+        />
 
         <Route
           path="/sales"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission="sales">
               <SalesPage/>
             </ProtectedRoute>
           }
@@ -98,7 +97,7 @@ export const AppRoutes = () => {
         <Route
           path="/expenses"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission="expenses">
               <ExpensePage />
             </ProtectedRoute>
           }
@@ -107,7 +106,7 @@ export const AppRoutes = () => {
         <Route
           path="/staff"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredRole="manager">
               <StaffPage />
             </ProtectedRoute>
           }
@@ -134,9 +133,6 @@ export const AppRoutes = () => {
           <Route path="/vet" element={
               <VetBookingPage />
           } />
-          <Route path="/admin" element={
-              <AdminDashboardPage />
-          } />
 
         {/* Admin Routes */}
         <Route
@@ -149,7 +145,6 @@ export const AppRoutes = () => {
         />
 
         {/* Catch All */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>

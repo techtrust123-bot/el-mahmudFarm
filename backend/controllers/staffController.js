@@ -1,6 +1,7 @@
-const Staff = require('../models/staff');
+// const Staff = require('../models/staff');
 
 exports.addStaff = async(req,res)=>{
+    const { Staff } = req.farmModels
     const {name,role,email,contact,salary,hireDate} = req.body
     if(!name || !role || !email || !contact || !salary || !hireDate){
         return res.status(400).json({ message: 'All fields are required' });
@@ -16,6 +17,7 @@ exports.addStaff = async(req,res)=>{
 }
 
 exports.getStaff = async(req,res)=>{
+    const { Staff } = req.farmModels
     try {
         const staff = await Staff.find();
         if(staff.length === 0){
@@ -29,6 +31,7 @@ exports.getStaff = async(req,res)=>{
 }
 
 exports.getStaffById = async(req,res)=>{
+    const { Staff } = req.farmModels
     const id = req.params.id
     try {
         const staff = await Staff.findById(id);
@@ -43,7 +46,7 @@ exports.getStaffById = async(req,res)=>{
 }
 
 exports.updateStaff = async(req,res)=>{
-    const id = req.params.id
+    const { Staff } = req.farmModels
     
     try {
         const staff = await Staff.findById(id);
@@ -59,6 +62,7 @@ exports.updateStaff = async(req,res)=>{
 }
 
 exports.deleteStaff = async(req,res)=>{
+    const { Staff } = req.farmModels
     const id = req.params.id
     try {
         const staff = await Staff.findById(id);
@@ -74,6 +78,7 @@ exports.deleteStaff = async(req,res)=>{
 }
 
 exports.staffCount = async(req,res)=>{
+    const { Staff } = req.farmModels
     try {
         const count = await Staff.countDocuments();
         res.status(200).json({ success: true, message: "Staff count retrieved successfully...", data: { count } });

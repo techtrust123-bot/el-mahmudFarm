@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 
 const feedSchema = new mongoose.Schema({
+    farmId:{
+        type:String,
+    },
     feedType:{
         type:String,
         required:true,
@@ -9,6 +12,7 @@ const feedSchema = new mongoose.Schema({
     animalType:{
         type:String,
         enum:['broiler','layer','cattle','cow','sheep','goat','horse','ram','bool'],
+        required:true
     },
     poultryType:{
         type:String,
@@ -17,6 +21,26 @@ const feedSchema = new mongoose.Schema({
     feedCategory:{
         type:String,
         trim:true,
+    },
+    totalDailyConsumption:{
+        type:Number,
+        default:0
+    },
+    poultryDailyConsumption:{
+        type:Number,
+        default:0
+    },
+    livestockDailyConsumption:{
+        type:Number,
+        default:0
+    },
+    totalPoultryFeedConsumedPerday:{
+        type:Number,
+        default:0
+    },
+    totalLivestockFeedConsumedPerday:{
+        type:Number,
+        default:0
     },
     quantity:{
         type:Number,
@@ -60,6 +84,10 @@ const feedSchema = new mongoose.Schema({
         type:Number
      }
 },{timestamps:true})
+
+feedSchema.index({ farmId: 1 });
+feedSchema.index({ animalType: 1 });
+feedSchema.index({ quantity: 1 });
 
 
 const Feed = mongoose.model('Feed',feedSchema)

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 import { FiMenu, FiX } from 'react-icons/fi';
 import {
   FiHome,
@@ -16,15 +17,26 @@ import {
  */
 const Sidebar = ({ isOpen }) => {
   const location = useLocation();
+  const { user } = useAuth();
+  const normalizedRole = user?.role?.toLowerCase();
+  const normalizedUserType = user?.userType?.toLowerCase();
+  const normalizedPermissions = Array.isArray(user?.permissions)
+    ? user.permissions.map((perm) => (typeof perm === 'string' ? perm.toLowerCase() : perm))
+    : [];
+  const isManager =
+    normalizedUserType === 'manager' ||
+    normalizedUserType === 'admin' ||
+    normalizedRole === 'manager' ||
+    normalizedRole === 'admin';
 
   const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: FiHome },
-    { path: '/livestock', label: 'Livestock', icon: FiTrendingUp },
-    { path: '/poultry', label: 'Poultry', icon: FiShoppingCart },
-    { path: '/feed', label: 'Feed', icon: FiPackage },
-    { path: '/sales', label: 'Sales', icon: FiDollarSign },
-    { path: '/expenses', label: 'Expenses', icon: FiTrendingUp },
-    { path: '/staff', label: 'Staff', icon: FiUsers },
+    { path: '/dashboard', label: 'Dashboard', icon: FiHome, permission: 'dashboard' },
+    { path: '/livestock', label: 'Livestock', icon: FiTrendingUp, permission: 'livestock' },
+    { path: '/poultry', label: 'Poultry', icon: FiShoppingCart, permission: 'poultry' },
+    { path: '/feed', label: 'Feed', icon: FiPackage, permission: 'feed' },
+    { path: '/sales', label: 'Sales', icon: FiDollarSign, permission: 'sales' },
+    { path: '/expenses', label: 'Expenses', icon: FiTrendingUp, permission: 'expenses' },
+    { path: '/staff', label: 'Staff', icon: FiUsers, managerOnly: true },
     { path: '/settings', label: 'Settings', icon: FiSettings },
   ];
 
@@ -41,25 +53,35 @@ const Sidebar = ({ isOpen }) => {
       </h1>
 
       <nav className="space-y-4 flex-1">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location.pathname === item.path;
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`
+        {navItems
+          .filter((item) => {
+            if (item.managerOnly && !isManager) {
+              return false;
+            }
+            if (item.permission && !isManager) {
+              return normalizedPermissions.includes(item.permission.toLowerCase());
+            }
+            return true;
+          })
+          .map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`
                 flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
                 ${isActive 
                   ? 'bg-emerald-600 shadow-lg' 
                   : 'hover:bg-emerald-700'}
               `}
-            >
-              <Icon size={20} />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+              >
+                <Icon size={20} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
       </nav>
 
       <div className="pt-6 border-t border-emerald-700">

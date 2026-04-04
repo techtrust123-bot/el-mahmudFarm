@@ -1,5 +1,8 @@
 const mongoose = require('mongoose')
 const poultrySchema = new mongoose.Schema({
+    farmId:{
+        type:String
+    },
     batchId:{
         type:String,
         required:true,
@@ -11,9 +14,19 @@ const poultrySchema = new mongoose.Schema({
         enum:['broiler','layer'],
         required:true
      },
+     status:{
+        type:String,
+        enum:['available','sold'],
+        default:'available'
+     },
      quantity:{
         type:Number,
+        default:0,
         required:true
+     },
+     joinDate:{
+        type:Date,
+        default:Date.now
      },
      feedStage:{
         type:String,
@@ -31,9 +44,17 @@ const poultrySchema = new mongoose.Schema({
         type:Number,
         required:true
     },
+    joinDate:{
+        type:Date,
+        default:Date.now
+    },
     vaccinationStatus:{
         type:String,
         required:true
+    },
+    totalFeedConsumed:{
+        type:Number,
+        default:0
     },
     totalCost:{
         type:Number,
@@ -108,6 +129,11 @@ const poultrySchema = new mongoose.Schema({
         }
     ],
 },{timestamps:true})
+
+poultrySchema.index({ farmId: 1 });
+// poultrySchema.index({ batchId: 1 }); // Removed: batchId already has unique:true which creates index
+poultrySchema.index({ type: 1 });
+poultrySchema.index({ status: 1 });
 
 const Poultry = mongoose.model('Poultry', poultrySchema);
 module.exports = Poultry;

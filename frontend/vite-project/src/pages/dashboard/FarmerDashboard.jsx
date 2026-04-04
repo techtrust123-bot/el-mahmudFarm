@@ -98,18 +98,34 @@ const FarmerDashboardPage = () => {
     );
   };
 
+  const getWeekLabel = (date) => {
+    const d = new Date(date);
+    if (Number.isNaN(d.getTime())) return null;
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    const dayOfYear = Math.ceil(((d - yearStart) / 86400000) + 1);
+    const weekNumber = Math.ceil((dayOfYear + yearStart.getDay()) / 7);
+    return `${d.getFullYear()}-W${String(weekNumber).padStart(2, '0')}`;
+  };
+
   const buildFeedTrend = (feeds) => {
     const map = new Map();
     feeds.forEach((feed) => {
-      const date = new Date(feed.purchaseDate);
-      if (Number.isNaN(date.getTime())) return;
-      const key = date.toISOString().split('T')[0];
-      const current = map.get(key) || 0;
-      map.set(key, current + Number(feed.consumption || 0));
+      const rawDate = feed.lastConsumptionUpdate || feed.purchaseDate || feed.createdAt;
+      const week = getWeekLabel(rawDate);
+      if (!week) return;
+      let consumption = Number(feed.consumption || 0);
+      if (!consumption) {
+        const averageDaily = Number(feed.averageDailyConsumption || 0);
+        if (averageDaily > 0) {
+          consumption = averageDaily * 7;
+        }
+      }
+      const current = map.get(week) || 0;
+      map.set(week, current + consumption);
     });
     return Array.from(map.entries())
-      .map(([date, consumption]) => ({ date, consumption }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .map(([week, consumption]) => ({ week, consumption }))
+      .sort((a, b) => a.week.localeCompare(b.week));
   };
 
   const buildMortalityTrend = (poultry) => {
@@ -304,7 +320,7 @@ const FarmerDashboardPage = () => {
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={feedTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" />
-                <XAxis dataKey="date" />
+                <XAxis dataKey="week" />
                 <YAxis />
                 <Tooltip />
                 <Legend />

@@ -12,7 +12,6 @@ import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
-import { expenseData, monthlyChartData } from '../data/dummyData';
 import { EXPENSE_CATEGORIES } from '../utils/constants';
 import { validateForm, expenseSchema } from '../utils/validation';
 import { AuthContext } from '../context/AuthContext';
@@ -47,6 +46,24 @@ const ExpensePage = () => {
       .filter((exp) => exp.category === cat.value)
       .reduce((sum, exp) => sum + exp.amount, 0),
   }));
+
+  const monthlyExpenseData = Object.entries(
+    expenses.reduce((acc, item) => {
+      const date = new Date(item.date);
+      if (Number.isNaN(date.getTime())) return acc;
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      acc[monthKey] = (acc[monthKey] || 0) + Number(item.amount || 0);
+      return acc;
+    }, {})
+  )
+    .sort(([a], [b]) => new Date(`${a}-01`) - new Date(`${b}-01`))
+    .map(([month, amount]) => ({ month, expenses: amount }));
+
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const currentMonthExpense = monthlyExpenseData.find((entry) => entry.month === currentMonthKey)?.expenses || 0;
+  const monthlyAverageExpense = monthlyExpenseData.length
+    ? monthlyExpenseData.reduce((sum, entry) => sum + entry.expenses, 0) / monthlyExpenseData.length
+    : 0;
 
   const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6'];
 
@@ -200,8 +217,8 @@ const ExpensePage = () => {
         {/* Statistics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <StatCard label="Total Expenses" value={`${formatCurrency(totalExpenses)}`} change="+8%" trend="up" />
-          <StatCard label="Monthly Average" value={`${formatCurrency(totalExpenses / 12)}`} />
-          <StatCard label="Total Records" value={expenses.length} />
+          <StatCard label="This Month" value={`${formatCurrency(currentMonthExpense)}`} />
+          <StatCard label="Monthly Average" value={`${formatCurrency(monthlyAverageExpense)}`} />
         </div>
 
         {/* Charts */}
@@ -238,12 +255,12 @@ const ExpensePage = () => {
               Monthly Expenses
             </h2>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={monthlyChartData}>
+              <BarChart data={monthlyExpenseData.length > 0 ? monthlyExpenseData : [{ month: 'No data', expenses: 0 }] }>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
                 <Tooltip formatter={(value) => `${formatCurrency(value)}`} />
-                <Bar dataKey="expenses" fill="#ef4444" name="Expenses (€)" />
+                <Bar dataKey="expenses" fill="#ef4444" name="Expenses" />
               </BarChart>
             </ResponsiveContainer>
           </Card>

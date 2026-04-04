@@ -32,6 +32,7 @@ const LoginPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
     try {
     const response = await axios.post(backendUrl+'/api/auth/login', formData, { withCredentials: true });
     if (response.data.success) {
@@ -42,10 +43,26 @@ const LoginPage = () => {
     } else {
       setAlert({ type: 'error', message: response.data.message || 'Login failed' });
     }
+    setIsLoading(false);
   }
     catch (error) {
       console.error('Login error:', error);
-      setAlert({ type: 'error', message: error.response?.data?.message || 'Login failed' });
+      
+      // Handle validation errors
+      if (error.response?.data?.errors) {
+        const validationErrors = error.response.data.errors;
+        const formattedErrors = {};
+        Object.keys(validationErrors).forEach(field => {
+          formattedErrors[field] = Array.isArray(validationErrors[field]) 
+            ? validationErrors[field].join('. ') 
+            : validationErrors[field];
+        });
+        setErrors(formattedErrors);
+        setAlert({ type: 'error', message: 'Please fix the errors below' });
+      } else {
+        setAlert({ type: 'error', message: error.response?.data?.message || 'Login failed' });
+      }
+      setIsLoading(false);
     }
   };
 

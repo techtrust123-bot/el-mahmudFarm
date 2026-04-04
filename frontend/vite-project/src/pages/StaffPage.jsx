@@ -1,5 +1,6 @@
 import React, { useState,useContext,useEffect } from 'react';
 import { FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import { useAuth } from '../hooks/useAuth';
 import MainLayout from '../layouts/MainLayout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -10,7 +11,6 @@ import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
-import { staffData } from '../data/dummyData';
 import { STAFF_ROLES } from '../utils/constants';
 import { validateForm, staffSchema } from '../utils/validation';
 import { AuthContext } from '../context/AuthContext';
@@ -32,10 +32,33 @@ const StaffPage = () => {
     salary: '',
     contact: '',
     email: '',
+    password: '',
     hireDate: '',
+    permissions: [],
   });
   const [errors, setErrors] = useState({});
-  const {backendUrl} = useContext(AuthContext);
+  const { backendUrl } = useContext(AuthContext);
+  const { user } = useAuth();
+  const apiBaseUrl = backendUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+
+  const normalizedRole = user?.role?.toLowerCase();
+  const normalizedUserType = user?.userType?.toLowerCase();
+  const canManageStaff =
+    normalizedRole === 'manager' ||
+    normalizedRole === 'admin' ||
+    normalizedUserType === 'manager' ||
+    normalizedUserType === 'admin';
+
+  const PERMISSION_OPTIONS = [
+    { value: 'dashboard', label: 'Dashboard' },
+    { value: 'livestock', label: 'Livestock' },
+    { value: 'poultry', label: 'Poultry' },
+    { value: 'feed', label: 'Feed' },
+    { value: 'sales', label: 'Sales' },
+    { value: 'expenses', label: 'Expenses' },
+    { value: 'staff', label: 'Staff' },
+    { value: 'settings', label: 'Settings' },
+  ];
 
   const filteredStaff = staff.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -47,7 +70,7 @@ const StaffPage = () => {
   const activeStaff = staff.filter((item) => item.status === 'active').length;
 
   const handleAddNew = () => {
-    setFormData({ name: '', role: '', salary: '', contact: '', email: '', hireDate: '' });
+    setFormData({ name: '', role: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [] });
     setEditingId(null);
     setErrors({});
     setIsModalOpen(true);
@@ -60,7 +83,9 @@ const StaffPage = () => {
       salary: item.salary,
       contact: item.contact?.toString() || '',
       email: item.email,
+      password: '',
       hireDate: item.hireDate ? new Date(item.hireDate).toISOString().slice(0, 10) : '',
+      permissions: Array.isArray(item.permissions) ? item.permissions : [],
     });
     setEditingId(item._id || item.id);
     setErrors({});
@@ -69,7 +94,7 @@ const StaffPage = () => {
 
   const handleDelete = async (id) => {
     try {
-      const response = await axios.delete(`${backendUrl}/api/staff/del/${id}`, { withCredentials: true });
+      const response = await axios.delete(`${apiBaseUrl}/api/user/staff/delete/${id}`, { withCredentials: true });
       if (response.data.success) {
           setStaff((prev) => prev.filter((item) => item._id !== id));
           setAlert({ type: 'success', message: 'Staff member deleted successfully!' });
@@ -91,12 +116,29 @@ const StaffPage = () => {
     }
   };
 
-  const handleSubmit = async(e) => {
+  const handlePermissionChange = (permission) => {
+    setFormData((prev) => {
+      const hasPermission = prev.permissions.includes(permission);
+      return {
+        ...prev,
+        permissions: hasPermission
+          ? prev.permissions.filter((item) => item !== permission)
+          : [...prev.permissions, permission],
+      };
+    });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     const payload = {
-      ...formData,
+      name: formData.name,
+      role: formData.role,
+      email: formData.email,
       contact: formData.contact?.toString() || '',
+      salary: Number(formData.salary) || 0,
+      hireDate: formData.hireDate,
+      permissions: formData.permissions,
     };
 
     const { isValid, errors: validationErrors } = validateForm(payload, staffSchema);
@@ -104,49 +146,63 @@ const StaffPage = () => {
       setErrors(validationErrors);
       return;
     }
+
+    if (!editingId && (!formData.password || formData.password.length < 6)) {
+      setErrors((prev) => ({ ...prev, password: 'Password must be at least 6 characters' }));
+      return;
+    }
+
+    if (!editingId) {
+      payload.password = formData.password;
+    }
+
     try {
       let response;
       if (editingId) {
-        response = await axios.put(`${backendUrl}/api/staff/edit/${editingId}`, payload, { withCredentials: true });
+        response = await axios.put(`${apiBaseUrl}/api/user/staff/${editingId}`, payload, {
+          withCredentials: true,
+        });
         if (response.data.success) {
           setAlert({ type: 'success', message: response.data.message || 'Staff member updated successfully!' });
-          setFormData({ name: '', role: '', salary: '', contact: '', email: '', hireDate: '' });
+          setFormData({ name: '', role: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [] });
           setEditingId(null);
           setIsModalOpen(false);
-          const fetchStaffs = await axios.get(`${backendUrl}/api/staff/list`, { withCredentials: true });
+          const fetchStaffs = await axios.get(`${apiBaseUrl}/api/user/staff/list`, { withCredentials: true });
           setStaff(fetchStaffs.data.data || []);
         }
       } else {
-        response = await axios.post(`${backendUrl}/api/staff/add-staff`, payload, { withCredentials: true });
+        response = await axios.post(`${apiBaseUrl}/api/user/staff`, payload, {
+          withCredentials: true,
+        });
         if (response.data.success) {
           setAlert({ type: 'success', message: response.data.message });
-          setFormData({ name: '', role: '', salary: '', contact: '', email: '', hireDate: '' });
+          setFormData({ name: '', role: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [] });
           setEditingId(null);
           setIsModalOpen(false);
-          const fetchStaffs = await axios.get(`${backendUrl}/api/staff/list`, { withCredentials: true });
+          const fetchStaffs = await axios.get(`${apiBaseUrl}/api/user/staff/list`, { withCredentials: true });
           setStaff(fetchStaffs.data.data || []);
         }
       }
     } catch (error) {
-      console.log(error)
+      console.log(error);
       setAlert({ type: 'error', message: error.response?.data?.message || 'An error occurred. Please try again.' });
     }
   };
 
-  useEffect(()=>{
-    const fetchStaffs = async()=>{
+  useEffect(() => {
+    const fetchStaffs = async () => {
       try {
-        const response = await axios.get(`${backendUrl}/api/staff/list`,{withCredentials:true})
-        if(response.data.success){
+        const response = await axios.get(`${apiBaseUrl}/api/user/staff/list`, { withCredentials: true });
+        if (response.data.success) {
           setStaff(response.data.data || []);
         }
       } catch (error) {
-        console.log(error)
+        console.log(error);
         setAlert({ type: 'error', message: error.response?.data?.message || 'Failed to fetch staff data. Please try again.' });
       }
-    }
-    fetchStaffs()
-  },[backendUrl])
+    };
+    fetchStaffs();
+  }, [apiBaseUrl]);
 
   const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-NG', {
@@ -164,6 +220,17 @@ const StaffPage = () => {
         return <Badge variant="info">{role?.label}</Badge>;
       },
     },
+    {
+      key: 'permissions',
+      label: 'Permissions',
+      render: (value) => (
+        <div className="flex flex-wrap gap-1">
+          {(Array.isArray(value) ? value : []).map((permission) => (
+            <Badge key={permission} variant="secondary">{permission}</Badge>
+          ))}
+        </div>
+      ),
+    },
     { key: 'email', label: 'Email' },
     { key: 'contact', label: 'Contact' },
     { key: 'salary', label: 'Salary', render: (value) => formatCurrency(value) },
@@ -179,10 +246,12 @@ const StaffPage = () => {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Staff Management</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">Manage farm staff and personnel</p>
           </div>
-          <Button variant="primary" size="lg" onClick={handleAddNew} className="flex items-center gap-2">
-            <FiPlus size={20} />
-            Add Staff
-          </Button>
+          {canManageStaff && (
+            <Button variant="primary" size="lg" onClick={handleAddNew} className="flex items-center gap-2">
+              <FiPlus size={20} />
+              Add Staff
+            </Button>
+          )}
         </div>
 
         {alert && (
@@ -246,9 +315,9 @@ const StaffPage = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingId ? 'Edit Staff Member' : 'Add New Staff Member'}
-        size="lg"
+        size="xl"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 max-h-[72vh] overflow-y-auto pr-2">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Full Name"
@@ -277,6 +346,17 @@ const StaffPage = () => {
               error={errors.email}
               required
             />
+            {!editingId && (
+              <Input
+                label="Password"
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                error={errors.password}
+                required
+              />
+            )}
             <Input
               label="Contact"
               type="tel"
@@ -304,6 +384,26 @@ const StaffPage = () => {
               error={errors.hireDate}
               required
             />
+          </div>
+
+          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Assign Permissions</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {PERMISSION_OPTIONS.map((permission) => (
+                <label
+                  key={permission.value}
+                  className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 cursor-pointer text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={formData.permissions.includes(permission.value)}
+                    onChange={() => handlePermissionChange(permission.value)}
+                    className="h-4 w-4 text-emerald-600 rounded"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-200">{permission.label}</span>
+                </label>
+              ))}
+            </div>
           </div>
 
           <div className="flex gap-3 justify-end pt-4 border-t border-gray-200 dark:border-gray-700">

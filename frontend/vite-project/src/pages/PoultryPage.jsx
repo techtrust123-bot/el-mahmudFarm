@@ -190,20 +190,24 @@ const avgFeedConsumption = poultry.length > 0 ? (poultry.reduce((sum, item) => s
       console.error( error);
     }
   }
-
+     const formatCurrency = (amount) =>
+    new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN'
+  }).format(amount);
   const tableColumns = [
     { key: 'batchId', label: 'BatchID' ,style: { fontSize: 'small' } },
     { key: 'type', label: 'Type', render: (value) => POULTRY_TYPES.find((t) => t.value === value)?.label },
     { key: 'quantity', label: 'Quantity' },
     { key: 'mortality', label: 'Mortality' },
-    { key: 'purchasePrice', label: 'PurchasePrice' },
-    { key: 'currentFeedType', label: 'CurrentFeedType' },
+    { key: 'purchasePrice', label: 'Purchase Price', render: (value) => formatCurrency(value) },
+    { key: 'currentFeedType', label: 'Current FeedType' },
     // { key: 'currentFeedName', label: 'Current Feed Name' },
     { key: 'ageInDays', label: 'Days' },
     { key: 'ageInWeeks', label: 'Weeks' },
     { key: 'currentFeedStage', label: 'FeedStage' },
     // { key: 'totalCostPerPoultry', label: 'Total Cost Per Poultry' },
-    { key: 'costPerPoultry', label: 'CostPerPoultry' },
+    { key: 'costPerPoultry', label: 'Cost PerPoultry',render:(value)=> formatCurrency(value) },
     {
       key: 'vaccinationStatus',
       label: 'Vaccination',

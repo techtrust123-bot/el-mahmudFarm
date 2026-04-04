@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 const liveStockSchema = new mongoose.Schema({
+    farmId:{
+        type:String,
+    },
     type:{
         type:String,
         enum:['cattle','cow','sheep','goat','house','ram','bool'],
@@ -27,6 +30,13 @@ const liveStockSchema = new mongoose.Schema({
         type:String,
         required:true
     },
+
+
+
+    joinDate:{
+        type:Date,
+        default:Date.now
+    },
     healthStatus:{
         type:String,
         required:true
@@ -39,6 +49,10 @@ const liveStockSchema = new mongoose.Schema({
     },
     costPrice:{
         type:Number
+    },
+    totalFeedConsumed:{
+        type:Number,
+        default:0
     },
     livestockFeedConsumed:{
         type:Number
@@ -93,6 +107,11 @@ const liveStockSchema = new mongoose.Schema({
     ]
    
 },{timestamps:true})
+
+liveStockSchema.index({ farmId: 1 });
+// liveStockSchema.index({ tagNumber: 1 }); // Removed: tagNumber already has unique:true which creates index
+liveStockSchema.index({ type: 1 });
+liveStockSchema.index({ status: 1 });
 
 
 const LiveStock = mongoose.model('LiveStock', liveStockSchema);

@@ -1,6 +1,10 @@
 const mongoose = require('mongoose')
 
 const sellSchema = new  mongoose.Schema({
+    farmId:{
+        type:String,
+        required:true
+    },
     batchId:{
         type:String,
         trim:true

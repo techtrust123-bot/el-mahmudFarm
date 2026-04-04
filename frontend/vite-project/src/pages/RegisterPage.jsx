@@ -40,12 +40,13 @@ const RegisterPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
     try {
       const response = await axios.post(backendUrl+'/api/auth/register', formData, { withCredentials: true });
       setAlert({ type: 'success', message: response.data.message || 'Registration successful!' });
       setIsLogin(true)
       getUserData()
-      navigate('/login');
+      navigate('/');
       setFormData({
         name: '',
         email: '',
@@ -54,8 +55,23 @@ const RegisterPage = () => {
       });
     } catch (error) {
       console.error('Registration error:', error);
-      setAlert({ type: 'error', message: error.response?.data?.message || 'Registration failed' });
-      return;
+      
+      // Handle validation errors
+      if (error.response?.data?.errors) {
+        const validationErrors = error.response.data.errors;
+        const formattedErrors = {};
+        Object.keys(validationErrors).forEach(field => {
+          formattedErrors[field] = Array.isArray(validationErrors[field]) 
+            ? validationErrors[field].join('. ') 
+            : validationErrors[field];
+        });
+        setErrors(formattedErrors);
+        setAlert({ type: 'error', message: "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character" });
+      } else {
+        setAlert({ type: 'error', message: error.response?.data?.message || 'Registration failed' });
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 

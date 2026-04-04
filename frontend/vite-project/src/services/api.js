@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Configure API base URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -9,28 +9,91 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Required for cookies
 });
 
-// Add request interceptor to include auth token
+// Flag to prevent multiple refresh attempts
+let isRefreshing = false;
+let failedQueue = [];
+
+// Process queued requests after token refresh
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+
+  failedQueue = [];
+};
+
+// Add request interceptor to include auth token (if needed for headers)
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // Cookies are sent automatically with withCredentials: true
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Add response interceptor for error handling
+// Flag to prevent multiple redirects
+let isRedirecting = false;
+
+const redirectToLogin = () => {
+  if (isRedirecting || window.isRedirecting) return;
+  isRedirecting = true;
+  window.isRedirecting = true;
+
+  // Only redirect if not already on login page
+  if (window.location.pathname !== '/login') {
+    localStorage.removeItem('user');
+    window.location.href = '/login';
+  }
+};
+
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+
     if (error.response?.status === 401) {
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
+      // Don't redirect for auth endpoints that are expected to fail
+      if (originalRequest.url?.includes('/auth/') ||
+          originalRequest.url?.includes('/user/userData')) {
+        return Promise.reject(error);
+      }
+
+      if (originalRequest._retry) {
+        redirectToLogin();
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then(() => apiClient(originalRequest))
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        await apiClient.post('/auth/refresh');
+        processQueue(null);
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        redirectToLogin();
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
     }
+
     return Promise.reject(error);
   }
 );
@@ -41,8 +104,10 @@ apiClient.interceptors.response.use(
 export const authAPI = {
   login: (email, password) => apiClient.post('/auth/login', { email, password }),
   register: (data) => apiClient.post('/auth/register', data),
-  forgotPassword: (email) => apiClient.post('/auth/forgot-password', { email }),
+  forgotPassword: (email) => apiClient.post('/auth/send-reset-otp', { email }),
   logout: () => apiClient.post('/auth/logout'),
+  refresh: () => apiClient.post('/auth/refresh'),
+  getUserData: () => apiClient.get('/user/userData'),
 };
 
 /**

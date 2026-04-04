@@ -12,8 +12,8 @@ export const useAuth = () => {
   return {
     isAuthenticated: context.isLogin,
     user: context.userData,
-    login: () => {}, // placeholder
-    logout: () => {}, // placeholder
+    login: context.login,
+    logout: context.logout,
     ...context
   };
 };

@@ -22,7 +22,7 @@ const Navbar = ({ toggleSidebar, sidebarOpen }) => {
 
     try {
       const response = await axios.post(backendUrl+'/api/auth/logout')
-      response.data.success ? navigate('/login') : setAlert({ type: 'success',message: response.data.message || 'Logout successfull' })
+      response.data.success ? navigate('/') : setAlert({ type: 'success',message: response.data.message || 'Logout successfull' })
       setIsLogin(false)
       logout()
     } catch (error) {

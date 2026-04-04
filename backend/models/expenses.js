@@ -19,6 +19,10 @@ const expensesSchema = new mongoose.Schema({
         default:'',
         required: false
      },
+    farmId:{
+        type:String,
+        required:true
+    },
     date:{
         type:Date,
         required: true

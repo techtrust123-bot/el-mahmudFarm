@@ -29,16 +29,20 @@ const SalesPage = () => {
   const {backendUrl} = useContext(AuthContext)
   const [formData, setFormData] = useState({
     invoiceId: '',
-    tagNumber: '',
     date: '',
-    animalType: '',
-    quantity: '',
-    quantitySold: '',
-    buyerContact:'',
-    unitPrice: '',
     customerName: '',
+    buyerContact: '',
     status: '',
   });
+  const [orderItems, setOrderItems] = useState([
+    {
+      animalType: '',
+      batchId: '',
+      tagNumber: '',
+      quantitySold: '',
+      pricePerUnit: '',
+    },
+  ]);
   const [errors, setErrors] = useState({});
 
   const filteredSales = sales.filter((item) => {
@@ -69,17 +73,21 @@ const SalesPage = () => {
 
   const handleAddNew = () => {
     setFormData({
-      batchId: '',
+      invoiceId: '',
       date: '',
-      animalType: '',
-      tagNumber: '',
-      quantitySold: '',
-      pricePerUnit: '',
       customerName: '',
+      buyerContact: '',
       status: '',
-      costPrice:'',
-      buyerContact:''
     });
+    setOrderItems([
+      {
+        animalType: '',
+        batchId: '',
+        tagNumber: '',
+        quantitySold: '',
+        pricePerUnit: '',
+      },
+    ]);
     setEditingId(null);
     setErrors({});
     setIsModalOpen(true);
@@ -96,48 +104,169 @@ const SalesPage = () => {
     }
   };
 
+  const handleGenerateReceipt = (sale) => {
+    const printWindow = window.open('', '_blank', 'width=800,height=900');
+    if (!printWindow) return;
+
+    const saleDate = sale.date ? new Date(sale.date).toLocaleString() : '';
+    const amount = formatCurrency(Number(sale.totalAmount || 0));
+    const unitPrice = formatCurrency(Number(sale.pricePerUnit || 0));
+    const profit = formatCurrency(Number(sale.profit || 0));
+
+    const html = `<!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Order Receipt</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+            h1 { margin-bottom: 8px; font-size: 24px; }
+            h2 { margin-bottom: 16px; font-size: 18px; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+            th { background: #f5f7fa; }
+            .summary { margin-top: 24px; }
+            .summary p { margin: 4px 0; }
+            .footer { margin-top: 32px; font-size: 14px; color: #555; }
+          </style>
+        </head>
+        <body>
+          <h1>Order Receipt</h1>
+          <p><strong>Invoice ID:</strong> ${sale.invoiceId || 'N/A'}</p>
+          <p><strong>Date:</strong> ${saleDate}</p>
+          <p><strong>Customer:</strong> ${sale.customerName || 'N/A'}</p>
+          <p><strong>Contact:</strong> ${sale.buyerContact || 'N/A'}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Batch / Tag</th>
+                <th>Type</th>
+                <th>Qty</th>
+                <th>Unit Price</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${sale.animalType || 'N/A'}</td>
+                <td>${sale.batchId || sale.tagNumber || 'N/A'}</td>
+                <td>${sale.animalType || 'N/A'}</td>
+                <td>${sale.quantitySold || 1}</td>
+                <td>${unitPrice}</td>
+                <td>${amount}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="summary">
+            <p><strong>Status:</strong> ${sale.status || 'N/A'}</p>
+          </div>
+          <div class="footer">
+            <p>Thank you for your purchase.</p>
+          </div>
+        </body>
+      </html>`;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]:value,
+      [name]: value,
     }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: null }));
     }
   };
 
-  const handleSubmit = async(e) => {
+  const handleOrderItemChange = (index, name, value) => {
+    setOrderItems((prev) =>
+      prev.map((item, idx) =>
+        idx === index
+          ? {
+              ...item,
+              [name]: value,
+            }
+          : item
+      )
+    );
+  };
+
+  const handleAddOrderItem = () => {
+    setOrderItems((prev) => [
+      ...prev,
+      {
+        animalType: '',
+        batchId: '',
+        tagNumber: '',
+        quantitySold: '',
+        pricePerUnit: '',
+      },
+    ]);
+  };
+
+  const handleRemoveOrderItem = (index) => {
+    setOrderItems((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       let response;
       if (editingId) {
-      response = await axios.put(`${backendUrl}/api/sell/edit/${editingId}`,formData,{withCredentials:true })
-      setAlert({ type: 'success', message: 'Sale updated successfully!' });
-    }else{
-      response = await axios.post(`${backendUrl}/api/sell/add`,formData,{withCredentials:true })
-      if(response.data.success){
-        setFormData({
-          batchId: '',
-          date: '',
-          animalType: '',
-          tagNumber: '',
-          quantitySold: '',
-          pricePerUnit: '',
-          customerName: '',
-          status: '',
-          costPrice:'',
-          buyerContact:''
-        })
-        setAlert({ type: 'success', message: 'Sale recorded successfully!' });
+        response = await axios.put(`${backendUrl}/api/sell/edit/${editingId}`, formData, {
+          withCredentials: true,
+        });
+        setAlert({ type: 'success', message: 'Sale updated successfully!' });
+      } else {
+        const payload = {
+          orders: orderItems.map((item) => ({
+            ...item,
+            date: formData.date,
+            customerName: formData.customerName,
+            buyerContact: formData.buyerContact,
+            status: formData.status,
+          })),
+        };
+
+        response = await axios.post(`${backendUrl}/api/sell/add`, payload, {
+          withCredentials: true,
+        });
+
+        if (response.data.success) {
+          setFormData({
+            invoiceId: '',
+            date: '',
+            customerName: '',
+            buyerContact: '',
+            status: '',
+          });
+          setOrderItems([
+            {
+              animalType: '',
+              batchId: '',
+              tagNumber: '',
+              quantitySold: '',
+              pricePerUnit: '',
+            },
+          ]);
+          setAlert({ type: 'success', message: 'Sale recorded successfully!' });
+        }
+
+        const fetchSells = await axios.get(`${backendUrl}/api/sell/list`, {
+          withCredentials: true,
+        });
+        if (fetchSells.data.success) {
+          setSales(fetchSells.data.message);
+        }
       }
-      const fetchSells = await axios.get(`${backendUrl}/api/sell/list`,{withCredentials:true})
-      if(fetchSells.data.success){
-        setSales(fetchSells.data.message)
-      }
-    }
     } catch (error) {
-      setAlert({ type: 'error', message: error.response?.data?.message  });
+      setAlert({ type: 'error', message: error.response?.data?.message });
     }
     setIsModalOpen(false);
   };
@@ -252,7 +381,7 @@ const SalesPage = () => {
             columns={tableColumns}
             data={filteredSales}
             actions={(row) => [
-              <Button key="invoice" variant="outline" size="sm" className="flex items-center gap-1">
+              <Button key="invoice" variant="outline" size="sm" className="flex items-center gap-1" onClick={() => handleGenerateReceipt(row)}>
                 <FiDownload size={14} />
                 Invoice
               </Button>,
@@ -268,54 +397,92 @@ const SalesPage = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Record New Sale"
+        title={editingId ? 'Edit Sale' : 'Record New Sale'}
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
-             <Select
-              label="animalType"
-              type="text"
-              name="animalType"
-              options={ANIMAL_TYPE}
-              value={formData.animalType}
-              onChange={handleChange}
-              required
-            />
-           {formData.animalType !== "Livestock" && (
-              <Input
-                label="Batch ID"
-                type="text"
-                name="batchId"
-                value={formData.batchId}
-                onChange={handleChange}
-                placeholder="001"
-                required
-              />
-            )}
+          {!editingId && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Order Items</h3>
+                <Button type="button" variant="outline" size="sm" onClick={handleAddOrderItem}>
+                  <FiPlus size={16} />
+                  Add Item
+                </Button>
+              </div>
+              <div className="space-y-4">
+                {orderItems.map((item, index) => (
+                  <Card key={`order-item-${index}`} className="p-4 bg-gray-50 dark:bg-gray-900">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                      <Select
+                        label={`Item ${index + 1} type`}
+                        name="animalType"
+                        options={ANIMAL_TYPE}
+                        value={item.animalType}
+                        onChange={(e) => handleOrderItemChange(index, 'animalType', e.target.value)}
+                        required
+                      />
 
-          {formData.animalType === "Livestock" && (
-            <Input
-              label="Tag Number"
-              type="text"
-              name="tagNumber"
-              value={formData.tagNumber}
-              onChange={handleChange}
-              placeholder="Enter tag number"
-              required={formData.animalType === "Livestock"}
-            />
+                      {item.animalType !== 'Livestock' ? (
+                        <Input
+                          label="Batch ID"
+                          type="text"
+                          name="batchId"
+                          value={item.batchId}
+                          onChange={(e) => handleOrderItemChange(index, 'batchId', e.target.value)}
+                          placeholder="Enter batch ID"
+                          required
+                        />
+                      ) : (
+                        <Input
+                          label="Tag Number"
+                          type="text"
+                          name="tagNumber"
+                          value={item.tagNumber}
+                          onChange={(e) => handleOrderItemChange(index, 'tagNumber', e.target.value)}
+                          placeholder="Enter tag number"
+                          required
+                        />
+                      )}
+
+                      <Input
+                        label="Quantity"
+                        type="number"
+                        name="quantitySold"
+                        value={item.quantitySold}
+                        onChange={(e) => handleOrderItemChange(index, 'quantitySold', e.target.value)}
+                        placeholder="Quantity"
+                        required
+                      />
+                      <Input
+                        label="Unit Price (NGN)"
+                        type="number"
+                        name="pricePerUnit"
+                        value={item.pricePerUnit}
+                        onChange={(e) => handleOrderItemChange(index, 'pricePerUnit', e.target.value)}
+                        placeholder="Unit price"
+                        required
+                      />
+                      <div className="flex justify-end">
+                        {orderItems.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleRemoveOrderItem(index)}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
           )}
 
-            {formData.animalType !== "Livestock" && (
-              <Input
-                label="Quantity"
-                type="number"
-                name="quantitySold"
-                value={formData.quantitySold}
-                onChange={handleChange}
-                required={formData.animalType !== "Livestock"}
-              />
-            )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             <Input
               label="Date"
               type="date"
@@ -332,25 +499,9 @@ const SalesPage = () => {
               onChange={handleChange}
               required
             />
-            {/* <Input
-              label="Cost Price"
-              type="number"
-              name="costPrice"
-              value={formData.costPrice}
-              onChange={handleChange}
-              required
-            /> */}
             <Input
-              label="Unit Price (NGN)"
-              type="number"
-              name="pricePerUnit"
-              value={formData.pricePerUnit}
-              onChange={handleChange}
-              required
-            />
-            <Input
-              label="buyerContact"
-              type="number"
+              label="Buyer Contact"
+              type="text"
               name="buyerContact"
               value={formData.buyerContact}
               onChange={handleChange}
@@ -375,7 +526,7 @@ const SalesPage = () => {
               Cancel
             </Button>
             <Button variant="primary" type="submit">
-              Record Sale
+              {editingId ? 'Update Sale' : 'Record Sale'}
             </Button>
           </div>
         </form>

@@ -190,9 +190,9 @@ const LivestockPage = () => {
     // { key: 'currentFeedType', label: 'Current Feed Type' },
     { key: 'currentFeedName', label: 'Current Feed Name' },
     { key: 'weight', label: 'Weight (kg)' },
-    { key: 'purchasePrice', label: 'purchasePrice' },
-    { key: 'livestockFeedConsumed', label: 'feedConsumed (kg)' },
-    { key: 'totalCost', label: 'costPrice' },
+    { key: 'purchasePrice', label: 'purchase Price',render:(value)=> formatCurrency(value) },
+    { key: 'livestockFeedConsumed', label: 'feed Consumed (kg)' },
+    { key: 'totalCost', label: 'costPrice',render:(value)=> formatCurrency(value) },
     {key: 'status', label: 'status', render:(value)=>{
       const status = value === 'available' ? 'success' : value === 'sold' ? 'error' : 'warning'
       return <Badge variant={status}>{value}</Badge>

@@ -1,5 +1,7 @@
-const LiveStock = require("../models/liveStock")
-const Feed = require('../models/feed.js')
+// const LiveStock = require("../models/liveStock")
+// const Feed = require('../models/feed.js')
+const { recalculateLivestock } = require('./feedController')
+const { calculateLivestockConsumption } = require('../utils/feedCalculator')
 const {
   getFeedStage,
   calculateAge,
@@ -8,12 +10,13 @@ const {
 } = require('../utils/feedStageHelper')
 
 exports.createLiveStock = async(req,res)=>{
+    const { LiveStock, Feed } = req.farmModels
     const {type,tagNumber,breed,age,weight,purchaseDate,purchasePrice,healthStatus} = req.body
     if(!type || !tagNumber || !breed || !age || !weight || !purchaseDate || !healthStatus || !purchasePrice){
         return res.status(400).json({message:'All fields are required...'})
     }
     try {
-        const exist = await LiveStock.findOne({tagNumber})
+        const exist = await LiveStock.findOne({ tagNumber })
         if(exist){
             return res.status(400).json({success:false,message:'Tag number already exists...'})
         }
@@ -27,15 +30,31 @@ exports.createLiveStock = async(req,res)=>{
             return res.status(404).json({success:false,message:"Appropriate feed not found for this livestock type and age stage..."})
         }
 
-        const quantity = Number(1);
-        const livestockFeedConsumed = Number(feed.consumption) / quantity
-        const feedCostPerAnimal = Number(feed.feedPricePerkg) * livestockFeedConsumed
-        const costPrice = feedCostPerAnimal
-        const totalCost = Number(purchasePrice) + costPrice
+        const quantity = Number(req.body.quantity) > 0 ? Number(req.body.quantity) : 1;
+        const batchStats = calculateLivestockConsumption(feed, {
+          joinDate: new Date(),
+          quantity,
+          purchasePrice: Number(purchasePrice),
+        })
+        const livestockFeedConsumed = batchStats.livestockFeedConsumed;
+        const costPrice = batchStats.costPrice;
+        const totalCost = batchStats.totalCost;
 
-        const newLiveStock = new  LiveStock({
-            type,tagNumber,breed,age,weight,purchaseDate,healthStatus,livestockFeedConsumed,costPrice,
-            totalCost,purchasePrice,
+        const newLiveStock = new LiveStock({
+            type,
+            tagNumber,
+            breed,
+            age,
+            weight,
+            purchaseDate,
+            joinDate: new Date(),
+            healthStatus,
+            quantity,
+            livestockFeedConsumed,
+            totalFeedConsumed: batchStats.totalFeedConsumed,
+            costPrice,
+            totalCost,
+            purchasePrice,
             birthDay: birthDate,
             ageInDays,
             ageInWeeks,
@@ -49,8 +68,8 @@ exports.createLiveStock = async(req,res)=>{
                     feedType: feed.feedType,
                     feedCategory: feed.feedCategory,
                     livestockFeedConsumed,
-                    feedCostPerAnimal,
-                    totalFeedCost: costPrice,
+                    feedCostPerAnimal: costPrice,
+                    totalFeedCost: batchStats.totalFeedConsumed,
                     totalCost,
                     costPrice,
                     timestamp: new Date()
@@ -58,6 +77,7 @@ exports.createLiveStock = async(req,res)=>{
             ]
         })
         await newLiveStock.save()
+        await recalculateLivestock(feed, req.farmModels)
         res.status(201).json({success:true,message:'Livestock created successfully...'})
     } catch (error) {
         console.log(error)
@@ -66,9 +86,11 @@ exports.createLiveStock = async(req,res)=>{
 }
 
 exports.getLivestocks = async(req,res)=>{
+    const { LiveStock } = req.farmModels
     try {
         const livestocks = await LiveStock.find()
-        if(livestocks.length === 0){
+        
+        if (!livestocks || livestocks.length === 0) {
             return res.status(404).json({success:false,message:'No live stock found...'})
         }
         
@@ -92,11 +114,13 @@ exports.getLivestocks = async(req,res)=>{
 }
 
 exports.getLiveStockById = async(req,res)=>{
+    const { LiveStock } = req.farmModels
     const id = req.params.id
     try {
-        const fetchById = await LiveStock.findById(id)
-        if(!fetchById){
-            return res.status(404).json({messahe:"animal not found..."})
+        const fetchById = await LiveStock.findOne({ _id: id })
+        
+        if (!fetchById) {
+            return res.status(404).json({message:"animal not found..."})
         }
         
         const birthDate = fetchById.birthDay || fetchById.purchaseDate || new Date()
@@ -117,45 +141,8 @@ exports.getLiveStockById = async(req,res)=>{
     }
 }
 
-const recalculateLivestock = async(feed)=>{
-    try {
-        if (!feed) return
-        const livestockType = feed.animalType || feed.poultryType || parseFeedType(feed.feedType || '').animalType
-        if (!livestockType) return
-
-        const livestock = await LiveStock.find({ type: livestockType })
-        const operations = livestock.map((animal)=>{
-            const quantity = Number(animal.quantity);
-            if(!quantity || quantity <= 0) return null;
-            
-            const livestockFeedConsumed = Number(feed.consumption || 0) / quantity
-            
-                        if(animal.status === 'sold'){
-                             livestockFeedConsumed = Number(0)
-                        }
-            const costPrice = Number(feed.feedPricePerkg) * livestockFeedConsumed
-            const totalCost = Number(animal.purchasePrice) + costPrice
-
-            return{
-                updateOne:{
-                    filter:{_id:animal._id},
-                    update:{
-                        livestockFeedConsumed,
-                        costPrice,
-                        totalCost
-                    }
-                }
-            }
-        }).filter(Boolean)
-        if(operations.length > 0){
-            await LiveStock.bulkWrite(operations)
-        }
-    } catch (error) {
-        console.log("Bulk update error:", error);
-    }
-}
-
-const updateLivestock = async (livestock) => {
+const updateLivestock = async (livestock, farmModels) => {
+    const { Feed, LiveStock } = farmModels
     const birthDate = livestock.birthDay || livestock.purchaseDate || new Date()
     const { ageInDays, ageInWeeks } = calculateAge(birthDate)
     const feedStage = getFeedStage(ageInDays, livestock.type)
@@ -164,10 +151,27 @@ const updateLivestock = async (livestock) => {
         return livestock
     }
 
+    if (livestock.status === 'sold') {
+        return await LiveStock.findByIdAndUpdate(
+            livestock._id,
+            {
+                ageInDays,
+                ageInWeeks,
+                feedStage,
+                currentFeedType: feed.feedType,
+                currentFeedName: feed.feedName,
+                livestockFeedConsumed: 0,
+                costPrice: 0,
+                totalCost: Number(livestock.purchasePrice || 0),
+            },
+            { returnDocument: 'after' }
+        )
+    }
+
     const quantity = Number(livestock.quantity)
     if (!quantity || quantity <= 0) return livestock
 
-    const livestockFeedConsumed = Number(feed.consumption) / quantity
+    const livestockFeedConsumed = Number(feed.consumption || 0) / quantity
     const feedCostPerAnimal = Number(feed.feedPricePerkg) * livestockFeedConsumed
     const totalFeedCost = feedCostPerAnimal * quantity
     const totalCost = Number(livestock.purchasePrice) + feedCostPerAnimal
@@ -190,24 +194,28 @@ const updateLivestock = async (livestock) => {
 }
 
 exports.edit = async(req,res)=>{
+    const { LiveStock, Feed } = req.farmModels
     const {id} = req.params
     try {
-        const exist = await LiveStock.findById(id)
+        const exist = await LiveStock.findOne({ _id: id })
         if(!exist){
             return res.status(404).json({message:'Animal not Found...'})
         }
-        
+
         const updateData = {
             ...req.body,
             purchaseDate: req.body.purchaseDate ? new Date(req.body.purchaseDate).toISOString() : exist.purchaseDate,
             birthDay: req.body.purchaseDate ? new Date(req.body.purchaseDate) : exist.birthDay,
         }
-        
-        const edit = await LiveStock.findByIdAndUpdate(id, updateData, {returnDocument: 'after'})
-        await updateLivestock(edit)
+
+        const edit = await LiveStock.findOneAndUpdate({ _id: id }, updateData, {returnDocument: 'after'})
+        if (!edit) {
+            return res.status(404).json({ success:false, message:'Animal not found or not authorized.' })
+        }
+        await updateLivestock(edit, req.farmModels)
         const feed = await Feed.findOne({ animalType: edit.type })
         if (feed) {
-            await recalculateLivestock(feed)
+            await recalculateLivestock(feed, req.farmModels)
         }
         res.status(200).json({success:true,message:"Livestock Updated Successful..."})
     } catch (error) {
@@ -217,16 +225,17 @@ exports.edit = async(req,res)=>{
 }
 
 exports.remove = async(req,res)=>{
+    const { LiveStock } = req.farmModels
     const id = req.params.id
     try {
-        const animal = await LiveStock.findById(id)
+        const animal = await LiveStock.findOne({ _id: id })
         if(!animal){
             return res.status(404).json({message:'animal not found...'})
         }
-        await LiveStock.findByIdAndDelete(animal)
+        await LiveStock.findByIdAndDelete(animal._id)
         res.status(200).json({success:true,message:'Animal Deleted Successfull'})
     } catch (error) {
          console.log(error)
-        res.status(500).json({success:false,message:error.message}) 
+        res.status(500).json({success:false,message:error.message})
     }
 }

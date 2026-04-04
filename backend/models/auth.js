@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const authSechema = new mongoose.Schema({
+const authSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true
@@ -18,32 +18,61 @@ const authSechema = new mongoose.Schema({
     },
     farmName:{
         type:String,
-         required:true
+        default:''
     },
     phone:{
         type:Number,
-        required:true
+        default:0
     },
     address:{
         type:String,
-        required:true
+        default:''
     },
     country:{
         type:String,
-        required:true
+        default:''
     },
     city:{
         type:String,
-        required:true
+        default:''
     },
     postalCode:{
         type:String,
-        required:true
+        default:''
     },
     role:{
         type:String,
-        enum:['admin','staff','seller','manager',],
-        default:'staff'
+        trim:true,
+        default:'manager'
+    },
+    userType:{
+        type:String,
+        enum:['manager','staff','admin'],
+        default:'manager'
+    },
+    farmId:{
+        type:String,
+    },
+    permissions:{
+        type:[String],
+        default: []
+    },
+    createdBy:{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'auth',
+        default: null
+    },
+    salary:{
+        type:Number,
+        default:0
+    },
+    contact:{
+        type:String,
+        default:''
+    },
+    hireDate:{
+        type:Date,
+        default:null
     },
     balance:{
         type:Number,
@@ -68,8 +97,16 @@ const authSechema = new mongoose.Schema({
     resetPasswordExpiresAt:{
         type:Number,
         default:0
+    },
+    loginAttempts: {
+        type: Number,
+        default: 0
+    },
+    lockUntil: {
+        type: Date,
+        default: null
     }
 },{timestamps: true});
 
-const authModel = mongoose.model('auth', authSechema);
+const authModel = mongoose.model('auth', authSchema);
 module.exports = authModel;

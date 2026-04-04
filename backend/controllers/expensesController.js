@@ -1,7 +1,8 @@
-const Expenses = require("../models/expenses")
+// const Expenses = require("../models/expenses")
 
 
 exports.createExpense = async(req,res)=>{
+    const { Expenses } = req.farmModels
     const {title,amount,date,category,description,descriptions} = req.body
     const expenseDescription = description ?? descriptions ?? ''
     if(!title || amount === undefined || amount === null || amount === '' || !date || !category){
@@ -24,6 +25,7 @@ exports.createExpense = async(req,res)=>{
 }
 
 exports.getExpenses = async(req,res)=>{
+    const { Expenses } = req.farmModels
     try {
         const expenses = await Expenses.find()
         if(expenses.length === 0){
@@ -37,9 +39,10 @@ exports.getExpenses = async(req,res)=>{
 }
 
 exports.getExpenseById = async(req,res)=>{
+    const { Expenses } = req.farmModels
     const id = req.params.id
     try {
-        const expense = await Expenses.findById(id)
+        const expense = await Expenses.findOne({ _id: id })
         if(!expense){
             return res.status(404).json({success:false,message:"Expense not found..."})
         }
@@ -51,6 +54,7 @@ exports.getExpenseById = async(req,res)=>{
 }
 
 exports.editExpense = async(req,res)=>{
+    const { Expenses } = req.farmModels
     const id = req.params.id
     const {title,amount,date,category,description,descriptions} = req.body
     const expenseDescription = description ?? descriptions ?? ''
@@ -59,7 +63,11 @@ exports.editExpense = async(req,res)=>{
         if(!expense){
             return res.status(404).json({success:false,message:"Expense not found..."})
         }
-        const updateExpense = await Expenses.findByIdAndUpdate(id,{title,amount,date,category,descriptions: expenseDescription},{returnDocument:"after"})
+        const updateExpense = await Expenses.findOneAndUpdate(
+            { _id: id },
+            { title, amount, date, category, descriptions: expenseDescription },
+            { returnDocument: 'after' }
+        )
         res.status(200).json({success:true,message:"Expense updated successfully...",data:updateExpense})
     } catch (error) {
         console.log(error)
@@ -68,13 +76,14 @@ exports.editExpense = async(req,res)=>{
 }
 
 exports.removeExpense = async(req,res)=>{
+    const { Expenses } = req.farmModels
     const id = req.params.id
     try {
-        const expense = await Expenses.findById(id)
+        const expense = await Expenses.findOne({ _id: id })
         if(!expense){
             return res.status(404).json({success:false,message:"Expense not found..."})
         }
-        await Expenses.findByIdAndDelete(id)
+        await Expenses.findOneAndDelete({ _id: id })
         res.status(200).json({success:true,message:"Expense deleted successfully..."})
     } catch (error) {
         console.log(error)

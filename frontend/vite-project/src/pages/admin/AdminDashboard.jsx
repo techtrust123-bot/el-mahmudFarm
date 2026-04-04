@@ -19,6 +19,10 @@ const AdminDashboardPage = () => {
   const [sales, setSales] = useState([]);
   const [revenueData, setRevenueData] = useState([]);
   const [userGrowthData, setUserGrowthData] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [actionLoading, setActionLoading] = useState(null);
+  const baseUrl = backendUrl || import.meta.env.VITE_BACKEND_URL || '';
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeFarms: 0,
@@ -45,6 +49,71 @@ const AdminDashboardPage = () => {
     if (Array.isArray(response.data.data)) return response.data.data;
     if (Array.isArray(response.data.message)) return response.data.message;
     return [];
+  };
+
+  const buildActivityFeed = (userList, salesList) => {
+    const activity = [];
+
+    userList.forEach((user) => {
+      if (!user.createdAt) return;
+      activity.push({
+        id: `user-${user._id || user.id}`,
+        title: 'New User Registered',
+        description: `${user.name || user.email || 'Unknown user'} joined as ${user.role || 'User'}`,
+        timestamp: new Date(user.createdAt).toISOString(),
+      });
+    });
+
+    salesList.forEach((sale) => {
+      const dateValue = sale.date || sale.createdAt || sale.updatedAt;
+      if (!dateValue) return;
+      activity.push({
+        id: `sale-${sale._id || sale.id || sale.invoiceId}`,
+        title: 'Marketplace Sale',
+        description: `${sale.animalType || sale.product || 'Item'} sold for ${formatCurrency(Number(sale.totalAmount || sale.pricePerUnit || 0))}`,
+        timestamp: new Date(dateValue).toISOString(),
+      });
+    });
+
+    return activity
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, 8);
+  };
+
+  const activityColumns = [
+    { key: 'title', label: 'Activity' },
+    { key: 'description', label: 'Details' },
+    {
+      key: 'timestamp',
+      label: 'Time',
+      render: (value) => new Date(value).toLocaleString(),
+    },
+  ];
+
+  const handleToggleSuspend = async (row) => {
+    const userId = row.id;
+    const action = row.status === 'active' ? 'suspend' : 'activate';
+    try {
+      setActionLoading(userId);
+      await axios.put(`${baseUrl}/api/user/${action}/${userId}`, null, {
+        withCredentials: true,
+      });
+      setUsers((prev) =>
+        prev.map((user) => {
+          if (user._id === userId || user.id === userId) {
+            return {
+              ...user,
+              isAccountVerified: action === 'activate',
+            };
+          }
+          return user;
+        })
+      );
+      setActionLoading(null);
+    } catch (error) {
+      console.error(`Failed to ${action} user`, error);
+      setActionLoading(null);
+    }
   };
 
   const buildRevenueChart = (salesList) => {
@@ -90,7 +159,6 @@ const AdminDashboardPage = () => {
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
-        const baseUrl = backendUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
         const [usersResponse, salesResponse] = await Promise.all([
           axios.get(`${baseUrl}/api/user/users`, { withCredentials: true }),
           axios.get(`${baseUrl}/api/sell/list`, { withCredentials: true }),
@@ -118,23 +186,31 @@ const AdminDashboardPage = () => {
         });
         setRevenueData(buildRevenueChart(fetchedSales));
         setUserGrowthData(buildUserGrowth(fetchedUsers));
+        setActivities(buildActivityFeed(fetchedUsers, fetchedSales));
       } catch (error) {
         console.error('Failed to load admin dashboard data', error);
       }
     };
 
-    if (backendUrl || import.meta.env.VITE_BACKEND_URL) {
-      fetchAdminData();
-    }
-  }, [backendUrl]);
+    if (!baseUrl) return;
+
+    fetchAdminData();
+    const polling = setInterval(fetchAdminData, 15000);
+    return () => clearInterval(polling);
+  }, [baseUrl]);
+
+  useEffect(() => {
+    const ticking = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(ticking);
+  }, []);
 
   const tableUsers = users.map((user) => ({
     id: user._id || user.id,
     name: user.name,
     email: user.email,
     role: user.role || 'User',
-    farms: user.farmName ? 1 : 0,
-    status: user.isAccountVerified ? 'active' : 'inactive',
+    farm: user.farmName || user.farmId || 'N/A',
+    status: String(user.isAccountVerified) === 'true' || user.isAccountVerified === true ? 'active' : 'inactive',
     joinedDate: user.createdAt
       ? new Date(user.createdAt).toLocaleDateString()
       : user.createdAt || '-',
@@ -144,9 +220,14 @@ const AdminDashboardPage = () => {
     <MainLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Platform overview and management</p>
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">Platform overview and management</p>
+          </div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            Live time: <span className="font-semibold text-gray-800 dark:text-gray-100">{currentTime.toLocaleTimeString()}</span>
+          </div>
         </div>
 
         {/* Key Metrics */}
@@ -171,7 +252,7 @@ const AdminDashboardPage = () => {
               }} />
               <Legend />
               <Bar dataKey="revenue" fill="#10b981" name="Revenue" />
-              <Bar dataKey="sales" fill="#f59e0b" name="Sales" />
+              <Bar dataKey="sales" fill="#f09c0a" name="Sales" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -202,7 +283,7 @@ const AdminDashboardPage = () => {
               { key: 'name', label: 'Name' },
               { key: 'email', label: 'Email' },
               { key: 'role', label: 'Role', render: (val) => <Badge variant="info">{val}</Badge> },
-              { key: 'farms', label: 'Farms' },
+              { key: 'farm', label: 'Farm' },
               {
                 key: 'status',
                 label: 'Status',
@@ -210,12 +291,42 @@ const AdminDashboardPage = () => {
               },
             ]}
             data={tableUsers}
-            actions={(row) => [
-              <Button key="suspend" variant="danger" size="sm">Suspend</Button>,
-              <Button key="view" variant="ghost" size="sm">View</Button>,
-            ]}
+            actions={(row) => {
+              const isActive = row.status === 'active';
+              return [
+                <Button
+                  key={`toggle-${row.id}`}
+                  variant={isActive ? 'danger' : 'success'}
+                  size="sm"
+                  onClick={() => handleToggleSuspend(row)}
+                  disabled={actionLoading === row.id}
+                >
+                  {actionLoading === row.id
+                    ? isActive
+                      ? 'Suspending...'
+                      : 'Activating...'
+                    : isActive
+                    ? 'Suspend'
+                    : 'Activate'}
+                </Button>,
+                <Button key={`view-${row.id}`} variant="ghost" size="sm">View</Button>,
+              ]
+            }}
           />
         </Card>
+
+        {/* Live Activity Feed */}
+        <Card>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Live Activity Feed</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Real-time events and system activity.</p>
+            </div>
+            <span className="text-sm text-gray-600 dark:text-gray-400">Updated at {currentTime.toLocaleTimeString()}</span>
+          </div>
+          <Table columns={activityColumns} data={activities} loading={activities.length === 0 && users.length === 0} />
+        </Card>
+
 {/* 
         Marketplace Moderation
         <Card>

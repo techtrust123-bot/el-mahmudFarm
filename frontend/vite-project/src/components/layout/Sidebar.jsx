@@ -25,25 +25,29 @@ const Sidebar = ({ isOpen, onClose }) => {
   const [profileOpen, setProfileOpen] = useState(false);
 
   const isActive = (path) => location.pathname === path;
+  const isManager =
+    user &&
+    (user.userType?.toLowerCase() === 'manager' ||
+      user.role?.toLowerCase() === 'manager');
 
   // Navigation items based on role
   const navItems =
-    user?.role === 'admin'
+    user?.role?.toLowerCase() === 'admin'
       ? [
-          { path: '/admin', label: 'Dashboard', icon: FiHome },
+          { path: '/admin', label: 'Admin Dashboard', icon: FiHome },
           { path: '/admin/users', label: 'Users', icon: FiUsers },
           { path: '/admin/marketplace', label: 'Marketplace', icon: FiShoppingCart },
           { path: '/admin/revenue', label: 'Revenue', icon: FiTrendingUp },
           { path: '/settings', label: 'Settings', icon: FiSettings },
         ]
       : [
-          { path: '/admin', label: 'Admin Dashboard', icon: FiHome },
+          { path: '/dashboard', label: 'Dashboard', icon: FiHome },
           { path: '/livestock', label: 'Livestock', icon: FiTrendingUp },
           { path: '/poultry', label: 'Poultry', icon: FiShoppingCart },
-          { path: '/feeds', label: 'Feeds', icon: FiPackage },
+          { path: '/feed', label: 'Feeds', icon: FiPackage },
           { path: '/sales', label: 'Sales', icon: FiTrendingUp },
           { path: '/expenses', label: 'Expenses', icon: FiDollarSign },
-          { path: '/staff', label: 'Staff', icon: FiUsers  },
+          { path: '/staff', label: 'Staff', icon: FiUsers },
           { path: '/settings', label: 'Settings', icon: FiSettings },
         ];
 
