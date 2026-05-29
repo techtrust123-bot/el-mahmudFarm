@@ -12,7 +12,6 @@ import StatCard from '../components/ui/StatCard';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
 import { ANIMAL_TYPE } from '../utils/constants';
-import axios from 'axios'
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 
@@ -26,7 +25,7 @@ const SalesPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [alert, setAlert] = useState(null);
-  const {backendUrl} = useContext(AuthContext)
+  const {axiosInstance} = useContext(AuthContext)
   const [formData, setFormData] = useState({
     invoiceId: '',
     date: '',
@@ -95,7 +94,7 @@ const SalesPage = () => {
 
   const handleDelete = async (id) => {
     try {
-    const response =  await axios.delete(`${backendUrl}/api/sell/del/${id}`, { withCredentials: true });
+    const response =  await axiosInstance.delete(`/api/sell/del/${id}`);
       setSales((prev) => prev.filter((item) => item._id !== id));
       setAlert({ type: 'success', message: response.data.message });
     } catch (error) {
@@ -219,9 +218,7 @@ const SalesPage = () => {
     try {
       let response;
       if (editingId) {
-        response = await axios.put(`${backendUrl}/api/sell/edit/${editingId}`, formData, {
-          withCredentials: true,
-        });
+        response = await axiosInstance.put(`/api/sell/edit/${editingId}`, formData);
         setAlert({ type: 'success', message: 'Sale updated successfully!' });
       } else {
         const payload = {
@@ -234,9 +231,7 @@ const SalesPage = () => {
           })),
         };
 
-        response = await axios.post(`${backendUrl}/api/sell/add`, payload, {
-          withCredentials: true,
-        });
+        response = await axiosInstance.post(`/api/sell/add`, payload);
 
         if (response.data.success) {
           setFormData({
@@ -258,11 +253,9 @@ const SalesPage = () => {
           setAlert({ type: 'success', message: 'Sale recorded successfully!' });
         }
 
-        const fetchSells = await axios.get(`${backendUrl}/api/sell/list`, {
-          withCredentials: true,
-        });
+        const fetchSells = await axiosInstance.get(`/api/sell/list`);
         if (fetchSells.data.success) {
-          setSales(fetchSells.data.message);
+          setSales(Array.isArray(fetchSells.data.data) ? fetchSells.data.data : []);
         }
       }
     } catch (error) {
@@ -274,16 +267,16 @@ const SalesPage = () => {
   useEffect(()=>{
     const fetchSells = async()=>{
       try {
-        const response = await axios.get(`${backendUrl}/api/sell/list`,{withCredentials:true})
+        const response = await axiosInstance.get(`/api/sell/list`)
         if(response.data.success){
-          setSales(response.data.message)
+          setSales(response.data.data || response.data.message || [])
         }
       } catch (error) {
         console.log(error)
       }
     }
     fetchSells()
-  },[backendUrl])
+  },[])
   const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-NG', {
     style: 'currency',

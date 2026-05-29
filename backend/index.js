@@ -1,7 +1,13 @@
+const dotenv = require('dotenv');
+dotenv.config();
+// console.log('ENV CHECK:')
+// console.log('MONGO_URI:', process.env.MONGO_URI ? '✅ loaded' : '❌ undefined')
+// console.log('JWT_SECRET:', process.env.JWT_SECRET ? '✅ loaded' : '❌ undefined')
+// console.log('PORT:', process.env.PORT ? '✅ loaded' : '❌ undefined')
 const express = require('express');
 const mongoose = require('mongoose');
+// console.log('MONGO_URI:', process.env.MONGO_URI)
 const cors = require('cors');
-const dotenv = require('dotenv');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const MongoStore = require('rate-limit-mongo');
@@ -11,14 +17,14 @@ const compression = require('compression');
 const winston = require('winston');
 const morgan = require('morgan');
 const DailyRotateFile = require('winston-daily-rotate-file');
-const { connectDb } = require('./dbconnection/dbconfig');
+const { resolveSrvMongoUri } = require('./utils/dbManager');
+
 const dns = require("dns");
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 // const index = require('./routes/index.js');
 // const {router} = require('./routes/index.js')
 const cookie = require('cookie-parser');
 
-dotenv.config();
 
 // Validate required environment variables
 const requiredEnvVars = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'MONGO_URI', 'FRONTEND_URL'];
@@ -28,30 +34,7 @@ requiredEnvVars.forEach(key => {
   }
 });
 
-// Connect to main database for auth
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => logger.info('Main database connected'))
-  .catch(err => {
-    logger.error('Main database connection error:', err);
-    process.exit(1);
-  });
-
-const app = express();
-
-// Trust proxy if behind load balancer
-app.set('trust proxy', 1);
-
-// CORS configuration - must be applied early
-const corsOptions = {
-  origin: true, // Allow all origins in development
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  optionsSuccessStatus: 200
-};
-app.use(cors(corsOptions));
-
-// Security logging setup
+// Logger setup - must be before database connection
 const logFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
@@ -79,6 +62,33 @@ const logger = winston.createLogger({
   ]
 });
 
+// Connect to main database for auth
+(async () => {
+  try {
+    const mongoUri = await mongoose.connect(process.env.MONGO_URI);
+    logger.info('Main database connected');
+  } catch (err) {
+    logger.error('Main database connection error:', err);
+    process.exit(1);
+  }
+})();
+
+const app = express();
+
+// Trust proxy if behind load balancer
+app.set('trust proxy', 1);
+
+// CORS configuration - must be applied early
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  optionsSuccessStatus: 200,
+  maxAge: 86400 // 24 hours
+};
+app.use(cors(corsOptions));
+
 // Morgan middleware for HTTP request logging
 app.use(morgan('combined', {
   stream: {
@@ -90,6 +100,10 @@ app.use(morgan('combined', {
     }
   }
 }));
+
+// Custom request logger middleware
+const requestLogger = require('./middleware/requestLogger');
+app.use(requestLogger);
 
 // Trust proxy for rate limiting behind load balancer
 app.set('trust proxy', 1);
@@ -124,9 +138,9 @@ const globalLimiter = rateLimit({
   store: new MongoStore({
     uri: process.env.MONGO_URI,
     collectionName: 'rateLimits',
-    expireTimeMs: 15 * 60 * 1000, // 15 minutes
+    expireTimeMs: 30 * 60 * 1000, // 30 minutes
   }),
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 30 * 60 * 1000, // 30 minutes
   max: 100, // limit each IP to 100 requests per windowMs
   message: { success: false, message: "Too many requests, please try again later" },
   standardHeaders: true,
@@ -171,6 +185,7 @@ app.use('/api/auth/reset-password', otpLimiter);
 app.use(globalLimiter);
 
 // Body parsing with size limits
+app.use('/api/payment/webhook', express.raw({ type: 'application/json' }))
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
@@ -180,31 +195,13 @@ app.use(xss());
 
 // Cookie parser
 app.use(cookie());
+
 // Routes
 app.use('/api', require('./routes/index.js'));
 
-// Global error handler
-app.use((err, req, res, next) => {
-  logger.error('Unhandled Error', {
-    message: err.message,
-    stack: err.stack,
-    url: req.url,
-    method: req.method,
-    ip: req.ip,
-    userId: req.user?.id,
-    farmId: req.user?.farmId
-  });
-
-  if (process.env.NODE_ENV === 'production') {
-    res.status(500).json({ success: false, message: "Something went wrong" });
-  } else {
-    res.status(500).json({
-      success: false,
-      message: err.message,
-      stack: err.stack
-    });
-  }
-});
+// Global error handler - must be last
+const { errorHandler } = require('./middleware/errorHandler');
+app.use(errorHandler);
 
 // 404 handler
 // app.use('*', (req, res) => {
@@ -218,24 +215,47 @@ const server = app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
 
+server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} is already in use`)
+        console.log('Run: taskkill /F /IM node.exe  then restart')
+        process.exit(1)  // ✅ exit cleanly so nodemon can restart
+    } else {
+        console.error('Server error:', error)
+        process.exit(1)
+    }
+})
+
+
+
+
 // Graceful shutdown
 const { closeAllConnections } = require('./utils/dbManager');
-
 process.on('SIGINT', async () => {
-  logger.info('Received SIGINT, shutting down gracefully...');
+    console.log('\n🔌 Shutting down gracefully...')
+    server.close(async () => {
+        await closeAllConnections()  // close all farm DB connections
+        await mongoose.connection.close()  // close main DB
+        console.log('✅ All connections closed')
+        process.exit(0)
+    })
+})
 
-  // Close all farm connections
-  await closeAllConnections();
+// process.on('SIGINT', async () => {
+//   logger.info('Received SIGINT, shutting down gracefully...');
 
-  // Close main mongoose connection
-  await mongoose.connection.close();
+//   // Close all farm connections
+//   await closeAllConnections();
 
-  // Close server
-  server.close(() => {
-    logger.info('Server closed');
-    process.exit(0);
-  });
-});
+//   // Close main mongoose connection
+//   await mongoose.connection.close();
+
+//   // Close server
+//   server.close(() => {
+//     logger.info('Server closed');
+//     process.exit(0);
+//   });
+// });
 
 process.on('SIGTERM', async () => {
   logger.info('Received SIGTERM, shutting down gracefully...');

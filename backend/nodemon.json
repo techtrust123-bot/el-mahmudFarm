@@ -1,0 +1,7 @@
+{
+    "watch": ["src", "controllers", "routes", "utils", "middleware"],
+    "ext": "js,json",
+    "ignore": ["node_modules", "logs"],
+    "delay": "1000",
+    "signal": "SIGTERM"
+}

@@ -28,9 +28,6 @@ exports.getExpenses = async(req,res)=>{
     const { Expenses } = req.farmModels
     try {
         const expenses = await Expenses.find()
-        if(expenses.length === 0){
-            return res.status(404).json({success:false,message:"No expenses found..."})
-        }
         res.status(200).json({success:true,message:"Expenses found...",data:expenses})
     } catch (error) {
         console.log(error)

@@ -1,5 +1,6 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useState, useEffect } from "react";
-import { authAPI } from '../services/api';
+import axiosInstance from '../utils/axiosInstance';
 
 export const AuthContext = createContext()
 
@@ -9,16 +10,18 @@ export const AuthProvider = (props) =>{
   const [userData, setUserData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [authChecked, setAuthChecked] = useState(false)
+  const [sessionWarning, setSessionWarning] = useState(false)
 
   const getUserData = async()=>{
     if (authChecked) return; // Prevent multiple calls
 
     setLoading(true)
     try {
-      const res = await authAPI.getUserData();
+      const res = await axiosInstance.get('/api/user/userData');
       if (res.data.success) {
         setUserData(res.data.userData)
         setIsLogin(true)
+        scheduleTokenWarning()
       } else {
         setUserData(null)
         setIsLogin(false)
@@ -35,15 +38,12 @@ export const AuthProvider = (props) =>{
 
   const login = async (email, password) => {
     try {
-      const res = await authAPI.login(email, password);
+      const res = await axiosInstance.post('/api/auth/login', { email, password });
       if (res.data.success) {
         setUserData(res.data.userData);
         setIsLogin(true);
         setAuthChecked(true);
-        // Reset redirecting flag on successful login
-        if (typeof window !== 'undefined') {
-          window.isRedirecting = false;
-        }
+        scheduleTokenWarning();
         return { success: true };
       } else {
         return { success: false, message: res.data.message };
@@ -56,14 +56,59 @@ export const AuthProvider = (props) =>{
 
   const logout = async () => {
     try {
-      await authAPI.logout();
+      await axiosInstance.post('/api/auth/logout');
     } catch (error) {
       console.log('Logout error:', error);
     } finally {
       setUserData(null);
       setIsLogin(false);
       setAuthChecked(false);
-      // Redirect will be handled by the interceptor
+      setSessionWarning(false);
+    }
+  };
+
+  const refresh = async () => {
+    try {
+      const res = await axiosInstance.post('/api/auth/refresh');
+      if (res.data.success) {
+        setSessionWarning(false);
+        scheduleTokenWarning(); // Reschedule warnings with new token
+        return { success: true };
+      } else {
+        throw new Error('Refresh failed');
+      }
+    } catch (error) {
+      console.log('Refresh error:', error);
+      throw error;
+    }
+  };
+
+  const scheduleTokenWarning = () => {
+    // Get token from cookies (this is a simplified approach - in production you'd decode the JWT)
+    const token = document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1];
+    if (!token) return;
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const exp = payload.exp * 1000; // Convert to milliseconds
+      const now = Date.now();
+      const warningTime = exp - (2 * 60 * 1000); // 2 minutes before expiry
+      const expiryTime = exp;
+
+      if (warningTime > now) {
+        const warningTimeout = setTimeout(() => {
+          setSessionWarning(true);
+        }, warningTime - now);
+
+        const expiryTimeout = setTimeout(() => {
+          logout();
+        }, expiryTime - now);
+
+        // Store timeouts for cleanup
+        window.tokenTimeouts = { warningTimeout, expiryTimeout };
+      }
+    } catch (error) {
+      console.log('Error scheduling token warning:', error);
     }
   };
 
@@ -77,6 +122,14 @@ export const AuthProvider = (props) =>{
       return;
     }
     getUserData()
+
+    return () => {
+      // Cleanup timeouts on unmount
+      if (window.tokenTimeouts) {
+        clearTimeout(window.tokenTimeouts.warningTimeout);
+        clearTimeout(window.tokenTimeouts.expiryTimeout);
+      }
+    };
   }, [])
 
   const value ={
@@ -85,8 +138,12 @@ export const AuthProvider = (props) =>{
     getUserData,
     login,
     logout,
+    refresh,
     backendUrl,
     loading,
+    axiosInstance,
+    sessionWarning,
+    setSessionWarning,
   }
 
   return (

@@ -1,11 +1,15 @@
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 
 /**
  * ProtectedRoute - Guard routes that require authentication
  */
 const ProtectedRoute = ({ children, requiredRole = null, requiredPermission = null }) => {
-  const { isAuthenticated, user, loading } = useAuth();
+  const { isLogin, userData, loading } = useContext(AuthContext);
+  const isAuthenticated = isLogin;
+  const user = userData;
+  const isSubscribed = Boolean(user?.isSubscribed);
   const normalizedUserType = user?.userType?.toLowerCase();
   const normalizedRole = user?.role?.toLowerCase();
   const normalizedPermissions = Array.isArray(user?.permissions)
@@ -24,6 +28,10 @@ const ProtectedRoute = ({ children, requiredRole = null, requiredPermission = nu
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (!isSubscribed && window.location.pathname !== '/payment' && window.location.pathname !== '/payment/verify') {
+    return <Navigate to="/payment" replace />;
   }
 
   const hasRoleAccess = () => {

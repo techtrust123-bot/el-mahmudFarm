@@ -47,14 +47,18 @@ const calculateBatchConsumption = (feed, poultryBatch) => {
   };
 };
 
-const calculateLivestockConsumption = (feed, livestock) => {
+const calculateLivestockConsumption = (feed = {}, livestock) => {
   const daysOnFarm = getDaysOnFarm(livestock.joinDate || livestock.purchaseDate);
   const quantity = Math.max(Number(livestock.quantity) || 1, 1);
-  const livestockDailyConsumption = Number(feed.livestockDailyConsumption) || 0;
+  const livestockDailyConsumptionFromFeed = Number(feed.livestockDailyConsumption) || 0;
   const feedPricePerkg = Number(feed.feedPricePerkg) || 0;
+  const totalLivestockFeedPerday = Number(feed.totalLivestockFeedConsumedPerday) || 0;
 
-  // averageDailyConsumption is expected per animal per day
-  const livestockInput = Number(livestockDailyConsumption || 0)
+  let livestockDailyConsumption = livestockDailyConsumptionFromFeed;
+  if (livestockDailyConsumption <= 0 && totalLivestockFeedPerday > 0) {
+    livestockDailyConsumption = totalLivestockFeedPerday / quantity;
+  }
+
   const feedConsumedPerAnimal = livestockDailyConsumption * daysOnFarm;
   const totalFeedConsumed = feedConsumedPerAnimal * quantity;
 

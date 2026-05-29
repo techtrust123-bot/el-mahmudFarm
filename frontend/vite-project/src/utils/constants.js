@@ -49,10 +49,8 @@ export const EXPENSE_CATEGORIES = [
 ];
 
 export const STAFF_ROLES = [
-  { value: 'manager', label: 'Manager' },
-  { value: 'veterinarian', label: 'Veterinarian' },
-  { value: 'worker', label: 'Worker' },
-  { value: 'supervisor', label: 'Supervisor' },
+  { value: 'staff', label: 'Staff' },
+
 ];
 export const ANIMAL_TYPES =[
   { value: 'broiler', label: 'broiler' },

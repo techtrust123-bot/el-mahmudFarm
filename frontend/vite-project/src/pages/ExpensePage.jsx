@@ -15,7 +15,6 @@ import Badge from '../components/ui/Badge';
 import { EXPENSE_CATEGORIES } from '../utils/constants';
 import { validateForm, expenseSchema } from '../utils/validation';
 import { AuthContext } from '../context/AuthContext';
-import axios from 'axios';
 
 /**
  * Expense Management Page
@@ -38,7 +37,7 @@ const ExpensePage = () => {
   const filteredExpenses = expenses.filter((item) =>
     !filterCategory || item.category === filterCategory
   );
-  const {backendUrl} = useContext(AuthContext)
+  const {axiosInstance} = useContext(AuthContext)
   const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
   const expensesByCategory = EXPENSE_CATEGORIES.map((cat) => ({
     name: cat.label,
@@ -89,7 +88,7 @@ const ExpensePage = () => {
 
   const handleDelete = async(id) => {
     try {
-      const response = await axios.delete(`${backendUrl}/api/expense/delete/${id}`,{withCredentials:true})
+      const response = await axiosInstance.delete(`/api/expense/delete/${id}`)
       if(response.data.success){
         setExpenses((prev) => prev.filter((item) => (item._id || item.id) !== id));
         setAlert({ type: 'success', message: response.data.message || 'Expense deleted successfully!' });
@@ -131,10 +130,10 @@ const ExpensePage = () => {
     try {
       let response;
       if (editingId) {
-        response = await axios.put(`${backendUrl}/api/expense/edit/${editingId}`, payload,{withCredentials:true})
+        response = await axiosInstance.put(`/api/expense/edit/${editingId}`, payload)
         setAlert({ type: 'success', message: response.data.message || 'Expense updated successfully!' });
       }else{
-        response = await axios.post(`${backendUrl}/api/expense/add-expense`, payload,{withCredentials:true})
+        response = await axiosInstance.post('/api/expense/add-expense', payload)
         setAlert({ type: 'success', message: response.data.message || 'Expense added successfully!' });
       }
       if(response.data.success){
@@ -143,7 +142,7 @@ const ExpensePage = () => {
         setEditingId(null);
         setIsModalOpen(false);
         // Optionally, you can refetch expenses from the backend here to get the latest data
-        const fetchExpenses = await axios.get(`${backendUrl}/api/expense/list`,{withCredentials:true})
+        const fetchExpenses = await axiosInstance.get('/api/expense/list')
         setExpenses(fetchExpenses.data.data || [])
       }
     } catch (error) {
@@ -156,7 +155,7 @@ const ExpensePage = () => {
   useEffect(()=>{
     const fetchExpenses = async()=>{
       try {
-        const response = await axios.get(`${backendUrl}/api/expense/list`,{withCredentials:true})
+        const response = await axiosInstance.get('/api/expense/list')
         if(response.data.success){
           setExpenses(response.data.data || [])
         }else{
@@ -167,7 +166,7 @@ const ExpensePage = () => {
       }
     }
     fetchExpenses();
-  }, [backendUrl]);
+  }, []);
    
   const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-NG', {

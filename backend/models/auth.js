@@ -57,6 +57,31 @@ const authSchema = new mongoose.Schema({
         type:[String],
         default: []
     },
+    subscriptionStatus:{
+        type:String,
+        enum:['inactive','active','expired','cancelled'],
+        default:'inactive'
+    },
+    subscriptionStart:{
+        type:Date,
+        default:null
+    },
+    subscriptionEnd:{
+        type:Date,
+        default:null
+    },
+    paystackCustomerCode:{
+        type:String,
+        default:null
+    },
+    lastPaymentReference:{
+        type:String,
+        default:null
+    },
+    isSubscribed:{
+        type:Boolean,
+        default:false
+    },
     createdBy:{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'auth',

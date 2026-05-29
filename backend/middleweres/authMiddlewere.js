@@ -3,12 +3,12 @@ const jwt = require('jsonwebtoken')
 exports.authMiddleware = (req, res, next) => {
     const token = req.cookies.token
     if (!token) {
-        return res.status(401).json({ message: 'Unauthorized Access' })
+        return res.status(401).json({ success: false, message: 'Unauthorized', code: 'NO_TOKEN' })
     }
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET)
         if (!decoded) {
-            return res.status(401).json({ message: 'Unauthorized Access' })
+            return res.status(401).json({ success: false, message: 'Invalid Token', code: 'INVALID_TOKEN' })
         }
         req.user = {
             id: decoded.id,
@@ -22,7 +22,10 @@ exports.authMiddleware = (req, res, next) => {
         return next()
     } catch (error) {
         console.error(error)
-        return res.status(401).json({ message: 'Invalid Token' })
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ success: false, message: 'Token expired', code: 'TOKEN_EXPIRED' })
+        }
+        return res.status(401).json({ success: false, message: 'Invalid Token', code: 'INVALID_TOKEN' })
     }
 }
 

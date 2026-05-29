@@ -36,7 +36,7 @@ exports.createLiveStock = async(req,res)=>{
           quantity,
           purchasePrice: Number(purchasePrice),
         })
-        const livestockFeedConsumed = batchStats.livestockFeedConsumed;
+        const livestockFeedConsumed = batchStats.livestockFeedConsumedPerAnimal;
         const costPrice = batchStats.costPrice;
         const totalCost = batchStats.totalCost;
 
@@ -90,10 +90,6 @@ exports.getLivestocks = async(req,res)=>{
     try {
         const livestocks = await LiveStock.find()
         
-        if (!livestocks || livestocks.length === 0) {
-            return res.status(404).json({success:false,message:'No live stock found...'})
-        }
-        
         const data = livestocks.map((animal) => {
             const birthDate = animal.birthDay || animal.purchaseDate || new Date()
             const { ageInDays, ageInWeeks } = calculateAge(birthDate)
@@ -110,6 +106,54 @@ exports.getLivestocks = async(req,res)=>{
     } catch (error) {
         console.log(error)
         res.status(500).json({success:false,message:'Error fetching live stock...'})
+    }
+}
+
+exports.getAvailableLivestock = async(req,res)=>{
+    const { LiveStock } = req.farmModels
+    try {
+        const livestocks = await LiveStock.find({ status: 'available' })
+        
+        const data = livestocks.map((animal) => {
+            const birthDate = animal.birthDay || animal.purchaseDate || new Date()
+            const { ageInDays, ageInWeeks } = calculateAge(birthDate)
+            const feedStage = getFeedStage(ageInDays, animal.type)
+            return {
+                ...animal.toObject(),
+                ageInDays,
+                ageInWeeks,
+                feedStage,
+            }
+        })
+        
+        res.status(200).json({success:true,message:'Available livestock found...', data})
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({success:false,message:'Error fetching available livestock...'})
+    }
+}
+
+exports.getSoldLivestock = async(req,res)=>{
+    const { LiveStock } = req.farmModels
+    try {
+        const livestocks = await LiveStock.find({ status: 'sold' })
+        
+        const data = livestocks.map((animal) => {
+            const birthDate = animal.birthDay || animal.purchaseDate || new Date()
+            const { ageInDays, ageInWeeks } = calculateAge(birthDate)
+            const feedStage = getFeedStage(ageInDays, animal.type)
+            return {
+                ...animal.toObject(),
+                ageInDays,
+                ageInWeeks,
+                feedStage,
+            }
+        })
+        
+        res.status(200).json({success:true,message:'Sold livestock found...', data})
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({success:false,message:'Error fetching sold livestock...'})
     }
 }
 
@@ -171,11 +215,10 @@ const updateLivestock = async (livestock, farmModels) => {
     const quantity = Number(livestock.quantity)
     if (!quantity || quantity <= 0) return livestock
 
-    const livestockFeedConsumed = Number(feed.consumption || 0) / quantity
-    const feedCostPerAnimal = Number(feed.feedPricePerkg) * livestockFeedConsumed
-    const totalFeedCost = feedCostPerAnimal * quantity
-    const totalCost = Number(livestock.purchasePrice) + feedCostPerAnimal
-    const costPrice = feedCostPerAnimal
+    const batch = calculateLivestockConsumption(feed, livestock)
+    const livestockFeedConsumed = batch.livestockFeedConsumedPerAnimal
+    const costPrice = batch.costPrice
+    const totalCost = batch.totalCost
 
     return await LiveStock.findByIdAndUpdate(
         livestock._id,

@@ -11,8 +11,6 @@ import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
 import Alert from '../components/ui/Alert';
-// import { feedData, feedConsumptionData } from '../data/dummyData';
-import axios from 'axios';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import {  FEED_CATEGORY,ANIMAL_TYPES } from '../utils/constants';
@@ -41,7 +39,7 @@ const FeedPage = () => {
     feedName:'',
   });
   const [errors, setErrors] = useState({});
-  const {backendUrl} = useContext(AuthContext);
+  const {axiosInstance} = useContext(AuthContext);
 
   // const filteredFeeds = feeds.filter((item) =>
   //   item.feedType.toLowerCase().includes(searchTerm.toLowerCase())
@@ -132,7 +130,7 @@ const FeedPage = () => {
   };
   const handleDelete = async (id) => {
     try {
-     const response= await axios.delete(`${backendUrl}/api/feed/del-feed/${id}`, { withCredentials: true });
+     const response= await axiosInstance.delete(`/api/feed/del-feed/${id}`);
      if (response?.data?.success) {
        setFeeds((prev) => prev.filter((item) => item._id !== id));
         setAlert({ type: 'success', message: response.data.message});
@@ -173,9 +171,9 @@ const FeedPage = () => {
         feedType: formData.animalType && formData.feedCategory ? composeFeedType(formData.animalType, formData.feedCategory) : formData.feedType,
       }
       if (editingId) {
-        response = await axios.put(`${backendUrl}/api/feed/edit/${editingId}`, payload, { withCredentials: true });
+        response = await axiosInstance.put(`/api/feed/edit/${editingId}`, payload);
       } else {
-        response = await axios.post(`${backendUrl}/api/feed/add-feed`, payload, { withCredentials: true });
+        response = await axiosInstance.post(`/api/feed/add-feed`, payload);
       }
       if (response?.data?.success) {
         setAlert({ type: 'success', message: response.data.message || (editingId ? 'Feed updated successfully!' : 'Feed added successfully!') });
@@ -183,8 +181,8 @@ const FeedPage = () => {
         setFormData({ feedType: '', poultryType: '', feedCategory: '', quantity: '', cost: '', supplier: '', purchaseDate: '', averageDailyConsumption: '', feedPricePerkg: '', feedName:'' });
         setIsModalOpen(false);
         // Refresh data
-        const fetchResponse = await axios.get(backendUrl+'/api/feed/feed', { withCredentials: true });
-        setFeeds(fetchResponse.data.message || []);
+        const fetchResponse = await axiosInstance.get('/api/feed/feed');
+        setFeeds(fetchResponse.data.data || fetchResponse.data.message || []);
       } else {
         setAlert({ type: 'error', message: response.data.message || (editingId ? 'Failed to update feed' : 'Failed to add feed') });
       }
@@ -196,14 +194,14 @@ const FeedPage = () => {
   useEffect(() => {
     const fetchFeeds = async () => {
       try {
-        const response = await axios.get(backendUrl+'/api/feed/feed', { withCredentials: true });
-        setFeeds(response.data.message || []);
+        const response = await axiosInstance.get('/api/feed/feed');
+        setFeeds(response.data.data || response.data.message || []);
       } catch (error) {
         setAlert({ type: 'error', message: error.response?.data?.message || 'Failed to fetch feeds' });
       }
     };
     fetchFeeds();
-  }, [backendUrl]);
+  }, []);
 
   const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-NG', {

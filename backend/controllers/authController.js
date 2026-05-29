@@ -136,7 +136,7 @@ exports.register = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      maxAge: 30 * 60 * 1000, // 30 minutes
     });
 
     res.cookie('refreshToken', refreshTokenValue, {
@@ -243,7 +243,7 @@ exports.login = async (req, res) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-        maxAge: 15 * 60 * 1000, // 15 minutes
+        maxAge: 30 * 60 * 1000, // 30 minutes
       });
 
       res.cookie('refreshToken', refreshTokenValue, {
@@ -280,37 +280,54 @@ exports.refresh = async (req, res) => {
     const refreshTokenValue = req.cookies.refreshToken;
 
     if (!refreshTokenValue) {
-      logAuthEvent('refresh_failed', null, null, req.ip, req.get('User-Agent'), { reason: 'no_refresh_token' });
-      return res.status(401).json({ success: false, message: 'Refresh token required' });
+      logAuthEvent('refresh_failed', null, null, req.ip, req.get('User-Agent'), { reason: 'no_token' });
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Refresh token required', 
+        code: 'NO_REFRESH_TOKEN' 
+      });
     }
 
-    // Find the refresh token in database
-    const refreshTokenDoc = await RefreshToken.findOne({
-      tokenHash: { $exists: true },
+    // Find all valid refresh tokens for the user
+    const refreshTokenDocs = await RefreshToken.find({
       expiresAt: { $gt: new Date() }
     });
 
-    if (!refreshTokenDoc) {
-      logAuthEvent('refresh_failed', null, null, req.ip, req.get('User-Agent'), { reason: 'invalid_refresh_token' });
-      return res.status(401).json({ success: false, message: 'Invalid refresh token' });
+    let validTokenDoc = null;
+    let validUserId = null;
+
+    // Find the matching token
+    for (const tokenDoc of refreshTokenDocs) {
+      const isValid = await tokenDoc.verifyToken(refreshTokenValue);
+      if (isValid) {
+        validTokenDoc = tokenDoc;
+        validUserId = tokenDoc.userId;
+        break;
+      }
     }
 
-    // Verify the token
-    const isValid = await refreshTokenDoc.verifyToken(refreshTokenValue);
-    if (!isValid) {
-      logAuthEvent('refresh_failed', refreshTokenDoc.userId, null, req.ip, req.get('User-Agent'), { reason: 'token_verification_failed' });
-      return res.status(401).json({ success: false, message: 'Invalid refresh token' });
+    if (!validTokenDoc) {
+      logAuthEvent('refresh_failed', null, null, req.ip, req.get('User-Agent'), { reason: 'invalid_token' });
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid refresh token', 
+        code: 'REFRESH_TOKEN_INVALID' 
+      });
     }
 
     // Get user
-    const user = await authModel.findById(refreshTokenDoc.userId);
+    const user = await authModel.findById(validUserId);
     if (!user) {
-      logAuthEvent('refresh_failed', refreshTokenDoc.userId, null, req.ip, req.get('User-Agent'), { reason: 'user_not_found' });
-      return res.status(401).json({ success: false, message: 'User not found' });
+      logAuthEvent('refresh_failed', validUserId, null, req.ip, req.get('User-Agent'), { reason: 'user_not_found' });
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid refresh token', 
+        code: 'REFRESH_TOKEN_INVALID' 
+      });
     }
 
     // Delete old refresh token (one-time use)
-    await RefreshToken.findByIdAndDelete(refreshTokenDoc._id);
+    await RefreshToken.findByIdAndDelete(validTokenDoc._id);
 
     // Generate new tokens
     const newAccessToken = generateAccessToken(user);
@@ -331,7 +348,7 @@ exports.refresh = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      maxAge: 30 * 60 * 1000, // 30 minutes
     });
 
     res.cookie('refreshToken', newRefreshTokenValue, {
@@ -341,11 +358,17 @@ exports.refresh = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    logAuthEvent('token_refresh', user._id, user.farmId, req.ip, req.get('User-Agent'));
+    logAuthEvent('refresh_success', user._id, user.farmId, req.ip, req.get('User-Agent'));
 
     res.status(200).json({
       success: true,
-      message: 'Token refreshed successfully'
+      message: 'Token refreshed successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
     });
   } catch (error) {
     console.error('Refresh token error:', error);
@@ -428,21 +451,21 @@ exports.verifiedOtp = async (req, res) => {
 
   } catch (error) {
      console.log(error)
-    res.status(500).json({message:error.message})
+    res.status(500).json({success:false, message:error.message})
   }
 }
 
 exports.getUsers = async(req,res)=>{
   try {
     if (!req.user || (req.user.userType !== 'manager' && req.user.role !== 'admin')) {
-      return res.status(403).json({ message: 'Forbidden: Manager access only' })
+      return res.status(403).json({ success: false, message: 'Forbidden: Manager access only' })
     }
     const query = req.user.role === 'admin' ? {} : { farmId: req.user.farmId }
     const users = await authModel.find(query).select('-password -verificationOtp -resetPassword -loginAttempts -lockUntil')
-    return res.status(200).json({ users })
+    return res.status(200).json({ success: true, users })
   } catch (error) {
     console.log(error)
-    res.status(500).json({ message: error.message })
+    res.status(500).json({ success: false, message: error.message })
   }
 }
 
@@ -452,10 +475,10 @@ exports.resendOtp = async(req,res)=>{
   try {
     const user = await authModel.findById(userId)
     if(!user){
-      return res.status(404).json({message:'user not found'})
+      return res.status(404).json({success:false, message:'user not found'})
     }
     if(user.isAccountVerified === true){
-      return res.status(400).json({message:'Account Already Verified'})
+      return res.status(400).json({success:false, message:'Account Already Verified'})
     }
     const otp = String(Math.floor(100000 + Math.random() * 900000))
     const otphash = await bcrypt.hash(otp,12)
@@ -469,10 +492,10 @@ exports.resendOtp = async(req,res)=>{
       text:`Hello ${user.name}, your verification otpCode is: ${otp} please verified your account using this otpcode`
     }
     await trasporter.sendMail(mailOption)
-    res.status(200).json({message:'OTP Resend Successful'})
+    res.status(200).json({success:true, message:'OTP Resend Successful'})
   } catch (error) {
     console.log(error)
-    res.status(500).json({message:error.message})
+    res.status(500).json({success:false, message:error.message})
   }
 }
 
@@ -485,7 +508,7 @@ exports.forgotPasswordOtp = async(req,res)=>{
   try {
     const user = await authModel.findOne({email})
     if(!user){
-      return res.status(404).json({message:'user not found'})
+      return res.status(404).json({success:false, message:'user not found'})
     }
     const resetOtp = String(Math.floor(100000 + Math.random() * 900000))
    const resetOtpHash = await bcrypt.hash(resetOtp,12)
@@ -499,10 +522,10 @@ exports.forgotPasswordOtp = async(req,res)=>{
       text:`Your Reset Otp Code is :${resetOtp} Reset your password using this Otp code`
     }
     await trasporter.sendMail(mailOption)
-    res.status(200).json({message:'Reset Password Send Successful..'})
+    res.status(200).json({success:true, message:'Reset Password Send Successful..'})
   } catch (error) {
      console.log(error)
-    res.status(500).json({message:error.message})
+    res.status(500).json({success:false, message:error.message})
   }
 }
 

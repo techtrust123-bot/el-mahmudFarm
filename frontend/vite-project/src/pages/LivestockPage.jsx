@@ -11,7 +11,6 @@ import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
 import Alert from '../components/ui/Alert';
 import { LIVESTOCK_TYPES, HEALTH_STATUS } from '../utils/constants';
-import axios from 'axios';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 
@@ -23,11 +22,14 @@ const LivestockPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterHealth, setFilterHealth] = useState('');
+  const [activeTab, setActiveTab] = useState('available');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [alert, setAlert] = useState(null);
-  const { backendUrl } = useContext(AuthContext);
+  const { axiosInstance } = useContext(AuthContext);
   const [livestockList, setLivestockList] = useState([]);
+  const [availableLivestock, setAvailableLivestock] = useState([]);
+  const [soldLivestock, setSoldLivestock] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     tagNumber: '',
@@ -41,7 +43,7 @@ const LivestockPage = () => {
   });
   const [errors, setErrors] = useState({});
 
-  const filteredLivestock = livestockList.filter((item) => {
+  const filteredLivestock = (activeTab === 'available' ? availableLivestock : soldLivestock).filter((item) => {
     const matchesSearch =
       item.tagNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.breed.toLowerCase().includes(searchTerm.toLowerCase());
@@ -50,14 +52,18 @@ const LivestockPage = () => {
     return matchesSearch && matchesType && matchesHealth;
   });
 
-  const totalLivestocks = livestockList.length;
-  const totalCost = livestockList.reduce((sum,item)=> sum + Number(item.totalCost), 0)
-  const totalSold = livestockList.filter(item => item.status === 'sold').length
-  const totalAvailable = livestockList.filter(item => item.status === 'available').length
-  const avgFeedConsumption = livestockList.length > 0 ? (livestockList.reduce((sum, item) => sum + Number(item.livestockFeedConsumed || 0), 0) / livestockList.length).toFixed(2) : 0
-  const starterStage = livestockList.filter(item => item.feedStage === 'Starter').length
-  const growerStage = livestockList.filter(item => item.feedStage === 'Grower').length
-  const finisherStage = livestockList.filter(item => item.feedStage === 'Finisher').length
+  const getStatistics = (data) => {
+    const totalLivestocks = data.length;
+    const totalCost = data.reduce((sum,item)=> sum + Number(item.totalCost), 0)
+    const avgFeedConsumption = data.length > 0 ? (data.reduce((sum, item) => sum + Number(item.livestockFeedConsumed || 0), 0) / data.length).toFixed(2) : 0
+    const starterStage = data.filter(item => item.feedStage === 'Starter').length
+    const growerStage = data.filter(item => item.feedStage === 'Grower').length
+    const finisherStage = data.filter(item => item.feedStage === 'Finisher').length
+    return { totalLivestocks, totalCost, avgFeedConsumption, starterStage, growerStage, finisherStage };
+  };
+
+  const stats = getStatistics(activeTab === 'available' ? availableLivestock : soldLivestock);
+  const { totalLivestocks, totalCost, avgFeedConsumption, starterStage, growerStage, finisherStage } = stats;
 
   const handleAddNew = () => {
     setFormData({
@@ -76,7 +82,7 @@ const LivestockPage = () => {
   };
 
   const handleEdit = async (item) => {
-    const response = await axios.get(`${backendUrl}/api/livestock/${item._id}`, { withCredentials: true });
+    const response = await axiosInstance.get(`/api/livestock/${item._id}`);
     if(response.data.success){
     setFormData({
       tagNumber: item.tagNumber,
@@ -99,8 +105,10 @@ const LivestockPage = () => {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`${backendUrl}/api/livestock/${id}`, { withCredentials: true });
+      await axiosInstance.delete(`/api/livestock/${id}`);
       setLivestockList((prev) => prev.filter((item) => item._id !== id));
+      setAvailableLivestock((prev) => prev.filter((item) => item._id !== id));
+      setSoldLivestock((prev) => prev.filter((item) => item._id !== id));
       setAlert({ type: 'success', message: 'Livestock deleted successfully!' });
     } catch (error) {
       console.log(error);
@@ -125,9 +133,9 @@ const LivestockPage = () => {
     try {
       let response;
       if (editingId) {
-        response = await axios.put(`${backendUrl}/api/livestock/edit/${editingId}`, formData, { withCredentials: true });
+        response = await axiosInstance.put(`/api/livestock/edit/${editingId}`, formData);
       } else {
-        response = await axios.post(backendUrl + '/api/livestock/add-animal', formData, { withCredentials: true });
+        response = await axiosInstance.post('/api/livestock/add-animal', formData);
       }
       if (response.data.success) {
         setAlert({ type: "success", message: response.data.message });
@@ -143,8 +151,13 @@ const LivestockPage = () => {
         });
         setIsModalOpen(false);
         // Refresh data
-        const fetchResponse = await axios.get(backendUrl+'/api/livestock/list', { withCredentials: true });
-        setLivestockList(fetchResponse.data.data);
+        const [availableRes, soldRes] = await Promise.all([
+          axiosInstance.get('/api/livestock/available'),
+          axiosInstance.get('/api/livestock/sold')
+        ]);
+        setAvailableLivestock(availableRes.data.data);
+        setSoldLivestock(soldRes.data.data);
+        setLivestockList([...availableRes.data.data, ...soldRes.data.data]);
       }
     } catch (error) {
       console.log(error);
@@ -155,9 +168,15 @@ const LivestockPage = () => {
     console.log('Fetching livestock data...');
     const fetchLivestock = async()=>{
       try {
-        const response = await axios.get(backendUrl+'/api/livestock/list',{withCredentials: true})
-        console.log('Fetched data:', response.data.data);
-        setLivestockList(response.data.data)
+        const [availableRes, soldRes] = await Promise.all([
+          axiosInstance.get('/api/livestock/available'),
+          axiosInstance.get('/api/livestock/sold')
+        ]);
+        console.log('Fetched available:', availableRes.data.data);
+        console.log('Fetched sold:', soldRes.data.data);
+        setAvailableLivestock(availableRes.data.data);
+        setSoldLivestock(soldRes.data.data);
+        setLivestockList([...availableRes.data.data, ...soldRes.data.data]);
       } catch (error) {
         console.log(error)
       } finally {
@@ -165,7 +184,7 @@ const LivestockPage = () => {
       }
     }
     fetchLivestock()
-  },[backendUrl])
+  },[])
 
     const formatCurrency = (amount) =>
     new Intl.NumberFormat('en-NG', {
@@ -231,16 +250,39 @@ const LivestockPage = () => {
             onClose={() => setAlert(null)}
           />
         )}
+
+        {/* Tab Navigation */}
+        <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => setActiveTab('available')}
+            className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+              activeTab === 'available'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}
+          >
+            Available ({availableLivestock.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('sold')}
+            className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+              activeTab === 'sold'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}
+          >
+            Sold ({soldLivestock.length})
+          </button>
+        </div>
+
         {/* Statistics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
           <StatCard label="Total Livestocks" value={totalLivestocks} />
           <StatCard label="Total Cost" value={`${formatCurrency(totalCost)}`} />
-          <StatCard label="Available" value={totalAvailable} />
-          <StatCard label="Sold" value={totalSold} />
+          <StatCard label="Avg Feed (kg)" value={avgFeedConsumption} />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
-          <StatCard label="Avg Feed (kg)" value={avgFeedConsumption} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
           <StatCard label="Starter Stage" value={starterStage} />
           <StatCard label="Grower Stage" value={growerStage} />
           <StatCard label="Finisher Stage" value={finisherStage} />

@@ -12,7 +12,6 @@ import StatCard from '../components/ui/StatCard';
 import Alert from '../components/ui/Alert';
 import { POULTRY_TYPES, VACCINATION_STATUS } from '../utils/constants';
 import { AuthContext } from '../context/AuthContext';
-import axios from 'axios';
 import { useContext } from 'react';
 
 /**
@@ -20,12 +19,15 @@ import { useContext } from 'react';
  */
 const PoultryPage = () => {
   const [poultry, setPoultry] = useState([]);
+  const [availablePoultry, setAvailablePoultry] = useState([]);
+  const [soldPoultry, setSoldPoultry] = useState([]);
+  const [activeTab, setActiveTab] = useState('available');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [alert, setAlert] = useState(null);
-  const {backendUrl} = useContext(AuthContext)
+  const {axiosInstance} = useContext(AuthContext)
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     batchId: '',
@@ -41,36 +43,39 @@ const PoultryPage = () => {
   });
   const [errors, setErrors] = useState({});
 
-  const filteredPoultry = poultry.filter((item) => {
+  const filteredPoultry = (activeTab === 'available' ? availablePoultry : soldPoultry).filter((item) => {
     const matchesSearch = item.batchId.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = !filterType || item.type === filterType;
     return matchesSearch && matchesType;
   });
 
-const totalQuantity = poultry.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const getStatistics = (data) => {
+    const totalQuantity = data.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const totalMortality = data.reduce((sum, item) => sum + Number(item.mortality || 0), 0);
+    const vaccinatedBatches = data.filter((item) => item.vaccinationStatus === "vaccinated").length;
+    const remainingBirds = totalQuantity - totalMortality;
+    const starterFeed = data.filter(item => item.currentFeedStage === 'Starter').reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const growerFeed = data.filter(item => item.currentFeedStage === 'Grower').reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const finisherFeed = data.filter(item => item.currentFeedStage === 'Finisher').reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const avgFeedConsumption = data.length > 0 ? (data.reduce((sum, item) => sum + Number(item.poultryConsumePerkg || 0), 0) / data.length).toFixed(2) : 0;
+    return { totalQuantity, totalMortality, vaccinatedBatches, remainingBirds, starterFeed, growerFeed, finisherFeed, avgFeedConsumption };
+  };
 
-const totalMortality = poultry.reduce((sum, item) => sum + Number(item.mortality || 0), 0);
-
-const vaccinatedBatches = poultry.filter(
-  (item) => item.vaccinationStatus === "vaccinated"
-).length;
-
-const remainingBirds = totalQuantity - totalMortality;
-
-const starterFeed = poultry.filter(item => item.currentFeedStage === 'Starter').reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-const growerFeed = poultry.filter(item => item.currentFeedStage === 'Grower').reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-const finisherFeed = poultry.filter(item => item.currentFeedStage === 'Finisher').reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-const avgFeedConsumption = poultry.length > 0 ? (poultry.reduce((sum, item) => sum + Number(item.poultryConsumePerkg || 0), 0) / poultry.length).toFixed(2) : 0
+  const stats = getStatistics(activeTab === 'available' ? availablePoultry : soldPoultry);
+  const { remainingBirds, totalMortality, vaccinatedBatches, starterFeed, growerFeed, finisherFeed, avgFeedConsumption } = stats;
 
 
   useEffect(() => {
     const fetchPoultry = async () => {
       try {
         setTimeout(async()=>{
-          // setLoading(true);
-          const response = await axios.get(backendUrl+'/api/poultry/list', { withCredentials: true });
-          setPoultry(response.data.data);
-
+          const [availableRes, soldRes] = await Promise.all([
+            axiosInstance.get('/api/poultry/available'),
+            axiosInstance.get('/api/poultry/sold')
+          ]);
+          setAvailablePoultry(availableRes.data.data);
+          setSoldPoultry(soldRes.data.data);
+          setPoultry([...availableRes.data.data, ...soldRes.data.data]);
         }, 1000)
       } catch (error) {
         console.log(error);
@@ -79,7 +84,7 @@ const avgFeedConsumption = poultry.length > 0 ? (poultry.reduce((sum, item) => s
       }
     };
     fetchPoultry();
-  }, [backendUrl]);
+  }, []);
 
   const handleAddNew = () => {
     setFormData({
@@ -123,7 +128,9 @@ const avgFeedConsumption = poultry.length > 0 ? (poultry.reduce((sum, item) => s
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`${backendUrl}/api/poultry/${id}`, { withCredentials: true });
+      await axiosInstance.delete(`/api/poultry/${id}`);
+      setAvailablePoultry((prev) => prev.filter((item) => item._id !== id));
+      setSoldPoultry((prev) => prev.filter((item) => item._id !== id));
       setPoultry((prev) => prev.filter((item) => item._id !== id));
       setAlert({ type: 'success', message: 'Poultry deleted successfully!' });
     } catch (error) {
@@ -163,9 +170,9 @@ const avgFeedConsumption = poultry.length > 0 ? (poultry.reduce((sum, item) => s
     try {
       let response;
       if (editingId) {
-        response = await axios.put(`${backendUrl}/api/poultry/edit/${editingId}`, formData, { withCredentials: true });
+        response = await axiosInstance.put(`/api/poultry/edit/${editingId}`, formData);
       } else {
-        response = await axios.post(backendUrl+'/api/poultry/add-poultry', formData, { withCredentials: true });
+        response = await axiosInstance.post('/api/poultry/add-poultry', formData);
       }
       if (response.data.success) {
         setAlert({ type: 'success', message: response.data.message });
@@ -181,8 +188,13 @@ const avgFeedConsumption = poultry.length > 0 ? (poultry.reduce((sum, item) => s
         setIsModalOpen(false);
         // Refresh data
         setTimeout(async()=>{
-          const fetchResponse = await axios.get(backendUrl+'/api/poultry/list', { withCredentials: true });
-          setPoultry(fetchResponse.data.data);
+          const [availableRes, soldRes] = await Promise.all([
+            axiosInstance.get('/api/poultry/available'),
+            axiosInstance.get('/api/poultry/sold')
+          ]);
+          setAvailablePoultry(availableRes.data.data);
+          setSoldPoultry(soldRes.data.data);
+          setPoultry([...availableRes.data.data, ...soldRes.data.data]);
         }, 5000)
       }
     } catch (error) {
@@ -242,6 +254,30 @@ const avgFeedConsumption = poultry.length > 0 ? (poultry.reduce((sum, item) => s
             onClose={() => setAlert(null)}
           />
         )}
+
+        {/* Tab Navigation */}
+        <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => setActiveTab('available')}
+            className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+              activeTab === 'available'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}
+          >
+            Available ({availablePoultry.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('sold')}
+            className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+              activeTab === 'sold'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}
+          >
+            Sold ({soldPoultry.length})
+          </button>
+        </div>
 
         {/* Statistics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">

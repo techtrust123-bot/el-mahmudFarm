@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Sidebar from '../components/common/Sidebar';
 import Navbar from '../components/common/Navbar';
+import SessionWarningBanner from '../components/common/SessionWarningBanner';
 
 /**
  * Main Layout Component - Wraps all route pages
@@ -18,6 +19,9 @@ const MainLayout = ({ children }) => {
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Session Warning Banner */}
+      <SessionWarningBanner />
+
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} />
 

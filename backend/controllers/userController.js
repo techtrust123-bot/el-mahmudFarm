@@ -8,7 +8,26 @@ exports.userData = async(req,res)=>{
             return res.status(400).json({message:'user not found...'})
         }
     
-        res.status(200).json({success:"true",userData:{
+        let subscriptionData = {
+      isSubscribed: user.isSubscribed,
+      subscriptionStatus: user.subscriptionStatus,
+      subscriptionStart: user.subscriptionStart,
+      subscriptionEnd: user.subscriptionEnd,
+    }
+
+    if (user.userType === 'staff') {
+      const manager = await authModel.findOne({ farmId: user.farmId, userType: 'manager' })
+      if (manager) {
+        subscriptionData = {
+          isSubscribed: manager.isSubscribed,
+          subscriptionStatus: manager.subscriptionStatus,
+          subscriptionStart: manager.subscriptionStart,
+          subscriptionEnd: manager.subscriptionEnd,
+        }
+      }
+    }
+
+    res.status(200).json({success:"true",userData:{
             id: user._id,
             name: user.name,
             email: user.email,
@@ -26,6 +45,7 @@ exports.userData = async(req,res)=>{
             contact:user.contact,
             salary:user.salary,
             hireDate:user.hireDate,
+            ...subscriptionData,
         }})
     } catch (error) {
         console.log(error)

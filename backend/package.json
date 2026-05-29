@@ -4,8 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon index.js"
+    "dev": "node index.js",
+    "start": "nodemon index.js",
+    "migrate": "node scripts/migrateData.js",
+    "verify": "node scripts/verifyMigration.js",
+    "rollback": "node scripts/rollbackMigration.js"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +27,7 @@
     "express-validator": "^7.3.2",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
+    "axios": "^1.6.0",
     "mongodb": "^7.1.0",
     "mongoose": "^9.2.3",
     "morgan": "^1.10.1",

@@ -63,6 +63,14 @@ exports.recordSales = async (req, res) => {
                 if (poultry.quantity <= 0) {
                     poultry.quantity = 0;
                     poultry.status = 'sold';
+                    // Reset all feed-related fields when sold
+                    // poultry.totalFeedConsumed = 0;
+                    // poultry.poultryConsumePerBird = 0;
+                    // poultry.poultryConsumePerkg = 0;
+                    // poultry.feedCostPerPoultry = 0;
+                    // poultry.totalFeedCost = 0;
+                    // poultry.costPerPoultry = 0;
+                    poultry.totalCost = Number(poultry.purchasePrice || 0);
                 }
                 await poultry.save();
             } else if (animalType === 'Livestock') {
@@ -88,8 +96,10 @@ exports.recordSales = async (req, res) => {
                 profit = Number(pricePerUnit - costPrice) * (Number(quantitySold) || 1);
 
                 livestock.status = 'sold';
-                livestock.livestockFeedConsumed = 0;
-                livestock.costPrice = 0;
+                // Reset all feed-related fields when sold
+                // livestock.livestockFeedConsumed = 0;
+                // livestock.totalFeedConsumed = 0;
+                // livestock.costPrice = 0;
                 livestock.totalCost = Number(livestock.purchasePrice || 0);
                 await livestock.save();
             } else {
@@ -127,10 +137,7 @@ exports.getSells = async(req,res)=>{
     const { Sells } = req.farmModels
     try {
         const sells = await Sells.find()
-        if(sells.length === 0){
-            return res.status(404).json({success:false,message:'sells not found...'})
-        }
-        res.status(200).json({success:true,message:sells})
+        res.status(200).json({success:true,message:'Sales found...',data:sells})
     } catch (error) {
            console.log(error)
         res.status(500).json({success:false,message:error.message})

@@ -1,18 +1,82 @@
 // const Staff = require('../models/staff');
+const authModel = require('../models/auth');
+const bcrypt = require('bcryptjs')
 
-exports.addStaff = async(req,res)=>{
+// exports.addStaff = async(req,res)=>{
+//     const { Staff } = req.farmModels
+//     const {name,role,email,contact,salary,hireDate} = req.body
+//     if(!name || !role || !email || !contact || !salary || !hireDate){
+//         return res.status(400).json({ message: 'All fields are required' });
+//     }
+//     try {
+//         const newStaff = new Staff({name,role,email,contact,salary,hireDate});
+//         await newStaff.save();
+//         res.status(201).json({success:true,message:"Staff added successfully..."});
+//     } catch (error) {
+//         console.log(error);
+//         res.status(400).json({ success: false, message: error.message });
+//     }
+// }
+
+exports.addStaff = async (req, res) => {
     const { Staff } = req.farmModels
-    const {name,role,email,contact,salary,hireDate} = req.body
-    if(!name || !role || !email || !contact || !salary || !hireDate){
-        return res.status(400).json({ message: 'All fields are required' });
+    const { name, role, email, password, contact, salary, hireDate, permissions } = req.body
+
+    if (!name || !role || !email || !password || !contact || !salary || !hireDate) {
+        return res.status(400).json({ message: 'All fields are required' })
     }
+
     try {
-        const newStaff = new Staff({name,role,email,contact,salary,hireDate});
-        await newStaff.save();
-        res.status(201).json({success:true,message:"Staff added successfully..."});
+       
+        const existingUser = await authModel.findOne({ email })
+        if (existingUser) {
+            return res.status(400).json({ success: false, message: 'Email already exists' })
+        }
+
+        const hashPassword = await bcrypt.hash(password, 12)
+
+        
+        const newAuthUser = new authModel({
+            name,
+            email,
+            password: hashPassword,
+            role,
+            userType: 'staff',
+            farmId: req.user.farmId,        // ✅ link staff to manager's farm
+            permissions: Array.isArray(permissions) ? permissions : [],
+            createdBy: req.user.id,
+            contact: contact || '',
+            salary: Number(salary) || 0,
+            hireDate: hireDate ? new Date(hireDate) : null,
+            isAccountVerified: true,        // ✅ staff don't need email verification
+        })
+        await newAuthUser.save()
+
+        // ✅ Step 2 — Save to FARM DB for farm-specific staff management
+        const newStaff = new Staff({
+            authUserId: newAuthUser._id,    // ✅ link back to auth record
+            name,
+            role,
+            email,
+            contact,
+            salary: Number(salary),
+            hireDate: hireDate ? new Date(hireDate) : null,
+            permissions: Array.isArray(permissions) ? permissions : [],
+        })
+        await newStaff.save()
+
+        
+        const { password: _, ...staffData } = newAuthUser.toObject()
+
+        res.status(201).json({
+            success: true,
+            message: 'Staff added successfully',
+            data: staffData
+        })
+
     } catch (error) {
-        console.log(error);
-        res.status(400).json({ success: false, message: error.message });
+        console.log(error)
+        res.status(400).json({ success: false, message: error.message })
     }
 }
 

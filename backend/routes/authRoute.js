@@ -1,7 +1,7 @@
 const express = require('express');
 const { register, login, logout, refresh, verifiedOtp, getUsers, resendOtp, resetPassword, forgotPasswordOtp } = require('../controllers/authController');
 const { authMiddleware } = require('../middleweres/authMiddlewere');
-const { validate, emailValidation, passwordValidation, nameValidation } = require('../middleweres/validation');
+const { validate, emailValidation, passwordValidation, newPasswordValidation, nameValidation } = require('../middleweres/validation');
 const { body } = require('express-validator');
 const router = express.Router();
 
@@ -12,7 +12,7 @@ router.post('/logout', logout);
 router.post('/verified', authMiddleware, verifiedOtp);
 router.post('/resend-otp', authMiddleware, resendOtp);
 router.get('/', getUsers);
-router.post('/reset-password', validate([emailValidation, body('otp').notEmpty().withMessage('OTP is required'), passwordValidation]), resetPassword);
+router.post('/reset-password', validate([emailValidation, body('otp').notEmpty().withMessage('OTP is required'), newPasswordValidation]), resetPassword);
 router.post('/send-reset-otp', validate([emailValidation]), forgotPasswordOtp);
 
 module.exports = router;

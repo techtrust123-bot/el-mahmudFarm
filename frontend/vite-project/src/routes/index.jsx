@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
-import { useAuth } from '../hooks/useAuth';
+import { useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 
 // Auth Pages
 import LoginPage from '../pages/LoginPage';
@@ -12,8 +13,8 @@ import AdminDashboardPage from '../pages/admin/AdminDashboard';
 
 // helper component to pick correct dashboard based on role
 const DashboardWrapper = () => {
-  const { user } = useAuth();
-  return user?.role?.toLowerCase() === 'admin' ? <AdminDashboardPage /> : <FarmerDashboardPage />;
+  const { userData } = useContext(AuthContext);
+  return userData?.role?.toLowerCase() === 'admin' ? <AdminDashboardPage /> : <FarmerDashboardPage />;
 };
 
 // Management Pages
@@ -26,6 +27,8 @@ import ExpensePage from '../pages/ExpensePage';
 
 // Subscription
 import SubscriptionPage from '../pages/subscription/SubscriptionPage';
+import PaymentPage from '../pages/PaymentPage';
+import PaymentVerifyPage from '../pages/PaymentVerifyPage';
 import PoultryPage from '../pages/PoultryPage';
 import LivestockPage from '../pages/LivestockPage';
 import FeedPage from '../pages/FeedPage';
@@ -34,6 +37,7 @@ import StaffPage from '../pages/StaffPage';
 import SettingsPage from '../pages/SettingsPage';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage';
 import ForbiddenPage from '../pages/ForbiddenPage';
+import ResetOtp from '../pages/ResetOtp';
 /**
  * Routes Configuration
  */
@@ -46,6 +50,7 @@ export const AppRoutes = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetOtp/>} />
         <Route path="/forbidden" element={<ForbiddenPage />} />
 
         {/* Protected Routes */}
@@ -120,6 +125,8 @@ export const AppRoutes = () => {
             </ProtectedRoute>
           }
         />
+        <Route path="/payment" element={<PaymentPage />} />
+        <Route path="/payment/verify" element={<PaymentVerifyPage />} />
           <Route path="/sub" element={
               <SubscriptionPage />
           } />

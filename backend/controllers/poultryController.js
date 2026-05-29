@@ -83,6 +83,7 @@ exports.createPoultry = async (req, res) => {
             ]
         })
         await newPoultry.save()
+
         await recalculatePoultry(feed, req.farmModels)
         res.status(201).json({ success: true, message: 'Poultry created successfully...' })
     } catch (error) {
@@ -95,9 +96,6 @@ exports.getPoultry = async (req, res) => {
     const { Poultry } = req.farmModels
     try {
         const poultryList = await Poultry.find()
-        if (poultryList.length === 0) {
-            return res.status(404).json({ success: false, message: 'No poultry found...' })
-        }
 
         const data = poultryList.map((bird) => {
             const birthDate = bird.birthDay || bird.purchaseDate || new Date()
@@ -114,6 +112,52 @@ exports.getPoultry = async (req, res) => {
         res.status(200).json({ success: true, message: 'Poultry found...', data })
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error fetching poultry...' })
+    }
+}
+
+exports.getAvailablePoultry = async (req, res) => {
+    const { Poultry } = req.farmModels
+    try {
+        const poultryList = await Poultry.find({ status: 'available' })
+
+        const data = poultryList.map((bird) => {
+            const birthDate = bird.birthDay || bird.purchaseDate || new Date()
+            const { ageInDays, ageInWeeks } = calculateAge(birthDate)
+            const currentFeedStage = getFeedStage(ageInDays, bird.type)
+            return {
+                ...bird.toObject(),
+                ageInDays,
+                ageInWeeks,
+                currentFeedStage,
+            }
+        })
+
+        res.status(200).json({ success: true, message: 'Available poultry found...', data })
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching available poultry...' })
+    }
+}
+
+exports.getSoldPoultry = async (req, res) => {
+    const { Poultry } = req.farmModels
+    try {
+        const poultryList = await Poultry.find({ status: 'sold' })
+
+        const data = poultryList.map((bird) => {
+            const birthDate = bird.birthDay || bird.purchaseDate || new Date()
+            const { ageInDays, ageInWeeks } = calculateAge(birthDate)
+            const currentFeedStage = getFeedStage(ageInDays, bird.type)
+            return {
+                ...bird.toObject(),
+                ageInDays,
+                ageInWeeks,
+                currentFeedStage,
+            }
+        })
+
+        res.status(200).json({ success: true, message: 'Sold poultry found...', data })
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching sold poultry...' })
     }
 }
 

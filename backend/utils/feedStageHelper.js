@@ -55,9 +55,11 @@ const parseFeedType = (rawFeedType) => {
   const normalized = rawFeedType.toLowerCase()
   const typeMatch = normalized.match(/\b(broiler|layer|cow|goat|sheep|cattle|horse|ram|bool)\b/)
   const animalType = typeMatch ? typeMatch[1] : null
+  const isPoultry = animalType && POULTRY_TYPES.has(animalType)
+  const poultryType = isPoultry ? animalType : null
   const categoryMatch = normalized.match(/\b(super starter|starter|chick mash|grower mash|grower|finisher|layer mash)\b/)
   const feedCategory = normalizeFeedCategory(categoryMatch ? categoryMatch[1] : '')
-  return { animalType, poultryType: animalType, feedCategory }
+  return { animalType, poultryType, feedCategory }
 }
 
 const getFeedForStage = async (Feed, animalType, feedStage) => {
