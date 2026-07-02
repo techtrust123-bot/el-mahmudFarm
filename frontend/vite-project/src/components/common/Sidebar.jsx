@@ -1,16 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { FiMenu, FiX } from 'react-icons/fi';
-import {
-  FiHome,
-  FiTrendingUp,
-  FiShoppingCart,
-  FiDollarSign,
-  FiPackage,
-  FiUsers,
-  FiSettings,
-} from 'react-icons/fi';
+import { FiMenu, FiX, FiHome, FiPackage, FiUsers, FiSettings } from 'react-icons/fi';
+import { GiCow, GiChicken, GiPayMoney } from 'react-icons/gi';
+import { TbCurrencyNaira } from 'react-icons/tb';
 
 /**
  * Sidebar Navigation Component
@@ -31,11 +24,11 @@ const Sidebar = ({ isOpen }) => {
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: FiHome, permission: 'dashboard' },
-    { path: '/livestock', label: 'Livestock', icon: FiTrendingUp, permission: 'livestock' },
-    { path: '/poultry', label: 'Poultry', icon: FiShoppingCart, permission: 'poultry' },
+    { path: '/livestock', label: 'Livestock', icon: GiCow, permission: 'livestock' },
+    { path: '/poultry', label: 'Poultry', icon: GiChicken, permission: 'poultry' },
     { path: '/feed', label: 'Feed', icon: FiPackage, permission: 'feed' },
-    { path: '/sales', label: 'Sales', icon: FiDollarSign, permission: 'sales' },
-    { path: '/expenses', label: 'Expenses', icon: FiTrendingUp, permission: 'expenses' },
+    { path: '/sales', label: 'Sales', icon: TbCurrencyNaira, permission: 'sales' },
+    { path: '/expenses', label: 'Expenses', icon: GiPayMoney, permission: 'expenses' },
     { path: '/staff', label: 'Staff', icon: FiUsers, managerOnly: true },
     { path: '/settings', label: 'Settings', icon: FiSettings },
   ];

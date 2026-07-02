@@ -4,20 +4,22 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
 import Alert from '../components/ui/Alert';
-import { validateForm, registerSchema } from '../utils/validation';
-import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-
+import axiosInstance from '../utils/axiosInstance';
 
 /**
  * Register Page
  */
 const RegisterPage = () => {
   const navigate = useNavigate();
-  const {getUserData, setIsLogin,backendUrl} = useContext(AuthContext)
+  const { getUserData, setIsLogin } = useContext(AuthContext)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    farmName: '',
+    phone: '',
+    address: '',
+    city: '',
     password: '',
     confirmPassword: '',
   });
@@ -42,14 +44,18 @@ const RegisterPage = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const response = await axios.post(backendUrl+'/api/auth/register', formData, { withCredentials: true });
+      const response = await axiosInstance.post('/api/auth/register', formData);
       setAlert({ type: 'success', message: response.data.message || 'Registration successful!' });
-      setIsLogin(true)
-      getUserData()
-      navigate('/');
+      setIsLogin(true);
+      await getUserData(true);
+      navigate('/dashboard');
       setFormData({
         name: '',
         email: '',
+        farmName: '',
+        phone: '',
+        address: '',
+        city: '',
         password: '',
         confirmPassword: '',
       });
@@ -90,14 +96,15 @@ const RegisterPage = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
+           <Input
             label="Full Name"
             type="text"
             name="name"
             value={formData.name}
             onChange={handleChange}
             error={errors.name}
-            placeholder="John Doe"
+            placeholder="Mahmud Abdullahi"
             fullWidth
             required
           />
@@ -113,8 +120,54 @@ const RegisterPage = () => {
             fullWidth
             required
           />
-
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
           <Input
+            label="Farm Name"
+            type="text"
+            name="farmName"
+            value={formData.farmName}
+            onChange={handleChange}
+            error={errors.farmName}
+            placeholder="Your Farm Name"
+            fullWidth
+          />
+          <Input
+            label="Phone"
+            type="tel"
+            name="phone"
+            value={formData.phone}
+            onChange={handleChange}
+            error={errors.phone}
+            placeholder="+2348029945242"
+            fullWidth
+          />
+         
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
+           <Input
+            label="Address"
+            type="text"
+            name="address"
+            value={formData.address}
+            onChange={handleChange}
+            error={errors.address}
+            placeholder="123 Main St"
+            fullWidth
+          />
+          <Input
+            label="City"
+            type="text"
+            name="city"
+            value={formData.city}
+            onChange={handleChange}
+            error={errors.city}
+            placeholder="Your City"
+            fullWidth
+          />
+        </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
+            <Input
             label="Password"
             type="password"
             name="password"
@@ -137,6 +190,8 @@ const RegisterPage = () => {
             fullWidth
             required
           />
+          </div>
+          
 
           <label className="flex items-center gap-2">
             <input type="checkbox" className="w-4 h-4 rounded" required />

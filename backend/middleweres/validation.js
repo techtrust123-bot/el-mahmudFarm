@@ -1,6 +1,6 @@
 const { body, validationResult } = require('express-validator');
 
-// Reusable validation middleware
+// Reusable validation middleware with better error handling
 const validate = (validations) => {
   return async (req, res, next) => {
     // Run all validations
@@ -13,14 +13,23 @@ const validate = (validations) => {
 
     // Format errors for consistent response
     const formattedErrors = {};
-    errors.array().forEach(error => {
-      formattedErrors[error.param] = error.msg;
+    const errorArray = errors.array();
+    
+    errorArray.forEach(error => {
+      const fieldName = error.param && error.param !== 'undefined' ? error.param : 'orders';
+      // If we already have an error for this field, append to it
+      if (formattedErrors[fieldName]) {
+        formattedErrors[fieldName] += '; ' + error.msg;
+      } else {
+        formattedErrors[fieldName] = error.msg;
+      }
     });
 
     return res.status(400).json({
       success: false,
       message: 'Validation failed',
-      errors: formattedErrors
+      errors: formattedErrors,
+      debug: errorArray // Include raw errors for debugging
     });
   };
 };

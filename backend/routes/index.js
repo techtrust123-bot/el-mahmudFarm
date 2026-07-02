@@ -11,5 +11,9 @@ router.use('/feed', require('./feedRoute'))
 router.use('/sell', require('./sellsRoute'))
 router.use('/expense', require('./expenseRoute'))
 router.use('/staff', require('./staffRoute'))
+router.use('/dashboard', require('./dashboardRoute'))
+router.use('/export', require('./exportRoute'))
+router.use('/backup', require('./backupRoute'))
+router.use('/ai', require('./aiRoute'))
 
 module.exports = router

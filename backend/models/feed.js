@@ -6,8 +6,7 @@ const feedSchema = new mongoose.Schema({
     },
     feedType:{
         type:String,
-        required:true,
-        unique:true
+        required:true
     },
     animalType:{
         type:String,
@@ -20,6 +19,7 @@ const feedSchema = new mongoose.Schema({
     },
     feedCategory:{
         type:String,
+        required:true,
         trim:true,
     },
     totalDailyConsumption:{
@@ -88,6 +88,8 @@ const feedSchema = new mongoose.Schema({
 feedSchema.index({ farmId: 1 });
 feedSchema.index({ animalType: 1 });
 feedSchema.index({ quantity: 1 });
+// Ensure feedType is unique per farm, not globally
+feedSchema.index({ farmId: 1, feedType: 1 }, { unique: true, sparse: true });
 
 
 const Feed = mongoose.model('Feed',feedSchema)

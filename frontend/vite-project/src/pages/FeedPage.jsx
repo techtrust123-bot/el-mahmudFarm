@@ -1,5 +1,5 @@
-import React, { useState,useEffect } from 'react';
-import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiAlertTriangle } from 'react-icons/fi';
+import React, { useState, useEffect, useContext } from 'react';
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiAlertTriangle, FiDownload } from 'react-icons/fi';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import MainLayout from '../layouts/MainLayout';
 import Card from '../components/ui/Card';
@@ -9,11 +9,13 @@ import Select from '../components/ui/Select';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
-import StatCard from '../components/ui/StatCard';
 import Alert from '../components/ui/Alert';
-import { useContext } from 'react';
+import StatCard from '../components/ui/StatCard';
+import CurrencyInput from '../components/ui/CurrencyInput';
+import { toast } from 'react-hot-toast';
 import { AuthContext } from '../context/AuthContext';
-import {  FEED_CATEGORY,ANIMAL_TYPES } from '../utils/constants';
+import { FEED_CATEGORY, ANIMAL_TYPES } from '../utils/constants';
+import { downloadExport, getDefaultFilename } from '../utils/exportHelper';
 // import { FEED_TYPE, FEED_CATEGORY, POULTRY_TYPES,ANIMAL_TYPES } from '../utils/constants';
 
 /**
@@ -24,7 +26,7 @@ const FeedPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [alert, setAlert] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [formData, setFormData] = useState({
     feedType: '',
     animalType: '',
@@ -39,7 +41,17 @@ const FeedPage = () => {
     feedName:'',
   });
   const [errors, setErrors] = useState({});
-  const {axiosInstance} = useContext(AuthContext);
+  const [aiFeedInput, setAiFeedInput] = useState({
+    animalType: '',
+    ageMonths: '',
+    weightKg: '',
+    feedCategory: 'standard',
+    pastureQuality: 'average',
+  });
+  const [aiRecommendation, setAiRecommendation] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const { axiosInstance } = useContext(AuthContext);
 
   // const filteredFeeds = feeds.filter((item) =>
   //   item.feedType.toLowerCase().includes(searchTerm.toLowerCase())
@@ -88,6 +100,18 @@ const FeedPage = () => {
     setIsModalOpen(true);
   };
 
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      await downloadExport('feed', axiosInstance, getDefaultFilename('feed'));
+      toast.success('Feed data exported successfully!');
+    } catch (error) {
+      toast.error(error.message || 'Failed to export feed data');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const parseanimalType = (feedType) => {
     if (!feedType) return ''
     const match = feedType.match(/\b(broiler|layer|cow|goat|sheep|cattle|horse|ram|bool)\b/i)
@@ -110,6 +134,9 @@ const FeedPage = () => {
   }
 
   const handleEdit = (item) => {
+    // if(formData.totalPoultryFeedConsumedPerday){
+    //   formData.totalLivestockFeedConsumedPerday = 1;
+    // }
     setFormData({
       feedType: item.feedType || '',
       animalType: item.poultryType || parsePoultryType(item.feedType || ''),
@@ -133,11 +160,11 @@ const FeedPage = () => {
      const response= await axiosInstance.delete(`/api/feed/del-feed/${id}`);
      if (response?.data?.success) {
        setFeeds((prev) => prev.filter((item) => item._id !== id));
-        setAlert({ type: 'success', message: response.data.message});
+        toast.success(response.data.message || 'Feed deleted successfully');
         return;
       }
     } catch (error) {
-      setAlert({ type: 'error', message: error.response?.data?.message || 'Failed to delete feed' });
+      toast.error(error.response?.data?.message || 'Failed to delete feed');
     }
   };
 
@@ -169,14 +196,21 @@ const FeedPage = () => {
       const payload = {
         ...formData,
         feedType: formData.animalType && formData.feedCategory ? composeFeedType(formData.animalType, formData.feedCategory) : formData.feedType,
-      }
+      };
+
+      Object.keys(payload).forEach((key) => {
+        if (payload[key] === '') {
+          delete payload[key];
+        }
+      });
+
       if (editingId) {
         response = await axiosInstance.put(`/api/feed/edit/${editingId}`, payload);
       } else {
         response = await axiosInstance.post(`/api/feed/add-feed`, payload);
       }
       if (response?.data?.success) {
-        setAlert({ type: 'success', message: response.data.message || (editingId ? 'Feed updated successfully!' : 'Feed added successfully!') });
+        toast.success(response.data.message || (editingId ? 'Feed updated successfully!' : 'Feed added successfully!'));
         
         setFormData({ feedType: '', poultryType: '', feedCategory: '', quantity: '', cost: '', supplier: '', purchaseDate: '', averageDailyConsumption: '', feedPricePerkg: '', feedName:'' });
         setIsModalOpen(false);
@@ -184,10 +218,41 @@ const FeedPage = () => {
         const fetchResponse = await axiosInstance.get('/api/feed/feed');
         setFeeds(fetchResponse.data.data || fetchResponse.data.message || []);
       } else {
-        setAlert({ type: 'error', message: response.data.message || (editingId ? 'Failed to update feed' : 'Failed to add feed') });
+        toast.error(response.data.message || (editingId ? 'Failed to update feed' : 'Failed to add feed'));
       }
     } catch (error) {
-      setAlert({ type: 'error', message: error.response?.data?.message || (editingId ? 'Failed to update feed' : 'Failed to add feed') });
+      toast.error(error.response?.data?.message || (editingId ? 'Failed to update feed' : 'Failed to add feed'));
+    }
+  }
+
+  const handleRecommendFeed = async () => {
+    setAiError(null);
+    setAiRecommendation(null);
+    const { animalType, ageMonths, weightKg, feedCategory, pastureQuality } = aiFeedInput;
+
+    if (!animalType || !ageMonths || !weightKg) {
+      setAiError('Animal type, age in months and weight are required');
+      return;
+    }
+
+    setAiLoading(true);
+    try {
+      const response = await axiosInstance.post('/api/ai/predict/feed', {
+        animalType,
+        ageMonths: Number(ageMonths),
+        weightKg: Number(weightKg),
+        feedCategory,
+        pastureQuality,
+      });
+      if (response.data.success) {
+        setAiRecommendation(response.data.data);
+      } else {
+        setAiError(response.data.message || 'Failed to get recommendation');
+      }
+    } catch (error) {
+      setAiError(error.response?.data?.message || 'Failed to get recommendation');
+    } finally {
+      setAiLoading(false);
     }
   }
 
@@ -197,7 +262,7 @@ const FeedPage = () => {
         const response = await axiosInstance.get('/api/feed/feed');
         setFeeds(response.data.data || response.data.message || []);
       } catch (error) {
-        setAlert({ type: 'error', message: error.response?.data?.message || 'Failed to fetch feeds' });
+        toast.error(error.response?.data?.message || 'Failed to fetch feeds');
       }
     };
     fetchFeeds();
@@ -248,15 +313,17 @@ const FeedPage = () => {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Feed Management</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">Track and manage feed inventory</p>
           </div>
-          <Button variant="primary" size="lg" onClick={handleAddNew} className="flex items-center gap-2">
-            <FiPlus size={20} />
-            Add Feed
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="lg" onClick={handleExport} disabled={isExporting} className="flex items-center gap-2">
+              <FiDownload size={20} />
+              {isExporting ? 'Exporting...' : 'Export'}
+            </Button>
+            <Button variant="primary" size="lg" onClick={handleAddNew} className="flex items-center gap-2">
+              <FiPlus size={20} />
+              Add Feed
+            </Button>
+          </div>
         </div>
-
-        {alert && (
-          <Alert type={alert.type} message={alert.message} closeable onClose={() => setAlert(null)} />
-        )}
 
         {/* Statistics */}
         <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-3 gap-4">
@@ -273,6 +340,83 @@ const FeedPage = () => {
             message={`${lowStockFeeds.length} feed type(s) have low stock levels`}
           />
         )}
+
+        {/* AI Feed Recommendation */}
+        <Card className="p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">AI Feed Recommendation</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Get a recommended daily feed quantity based on animal type, age, and weight.
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={handleRecommendFeed}
+              disabled={aiLoading}
+            >
+              {aiLoading ? 'Calculating...' : 'Get Recommendation'}
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+            <Select
+              label="Animal Type"
+              name="animalType"
+              options={ANIMAL_TYPES}
+              value={aiFeedInput.animalType}
+              onChange={(e) => setAiFeedInput((prev) => ({ ...prev, animalType: e.target.value }))}
+            />
+            <Input
+              label="Age (months)"
+              type="number"
+              name="ageMonths"
+              value={aiFeedInput.ageMonths}
+              onChange={(e) => setAiFeedInput((prev) => ({ ...prev, ageMonths: e.target.value }))}
+            />
+            <Input
+              label="Weight (kg)"
+              type="number"
+              name="weightKg"
+              value={aiFeedInput.weightKg}
+              onChange={(e) => setAiFeedInput((prev) => ({ ...prev, weightKg: e.target.value }))}
+            />
+            <Select
+              label="Feed Category"
+              name="feedCategory"
+              options={FEED_CATEGORY}
+              value={aiFeedInput.feedCategory}
+              onChange={(e) => setAiFeedInput((prev) => ({ ...prev, feedCategory: e.target.value }))}
+            />
+            <Select
+              label="Pasture Quality"
+              name="pastureQuality"
+              options={[
+                { label: 'Average', value: 'average' },
+                { label: 'Good', value: 'good' },
+                { label: 'Poor', value: 'poor' },
+              ]}
+              value={aiFeedInput.pastureQuality}
+              onChange={(e) => setAiFeedInput((prev) => ({ ...prev, pastureQuality: e.target.value }))}
+            />
+          </div>
+
+          {aiError && <Alert type="error" message={aiError} closeable onClose={() => setAiError(null)} />}
+          {aiRecommendation && (
+            <Card className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700">
+              <div className="p-4">
+                <h3 className="text-lg font-semibold text-emerald-800 dark:text-emerald-100">Recommendation</h3>
+                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-200 mt-2">
+                  {aiRecommendation.recommendedDailyFeedKg} kg/day
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                  {aiRecommendation.note}
+                </p>
+              </div>
+            </Card>
+          )}
+        </Card>
 
         {/* Feed Consumption Chart */}
         <Card>
@@ -362,9 +506,8 @@ const FeedPage = () => {
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
-            <Input
-              label="Cost (₦)"
-              type="number"
+            <CurrencyInput
+              label="Feed price (₦)"
               name="cost"
               value={formData.cost}
               onChange={handleChange}

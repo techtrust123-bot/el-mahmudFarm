@@ -1,6 +1,7 @@
 const axios = require('axios')
 const crypto = require('crypto')
 const authModel = require('../models/auth')
+const { sendNotification } = require('../services/emailService')
 
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY
 const AMOUNT = Number(process.env.SUBSCRIPTION_AMOUNT) || 500000
@@ -10,6 +11,7 @@ const CALLBACK_URL = process.env.FRONTEND_URL
 
 const buildSubscriptionData = () => ({
   isSubscribed: true,
+  subscriptionType: 'paid',
   subscriptionStatus: 'active',
   subscriptionStart: new Date(),
   subscriptionEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -21,6 +23,13 @@ exports.initializePayment = async (req, res) => {
     const user = await authModel.findById(userId)
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' })
+    }
+
+    if (user.userType === 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin users are not permitted to subscribe in this system.',
+      })
     }
 
     if (user.userType === 'staff') {
@@ -126,6 +135,13 @@ exports.verifyPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' })
     }
 
+    if (user.userType === 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin users are not permitted to subscribe in this system.',
+      })
+    }
+
     if (user.userType === 'staff') {
       return res.status(403).json({
         success: false,
@@ -179,12 +195,17 @@ exports.webhook = async (req, res) => {
       const userId = metadata.userId
 
       if (userId && metadata.type === 'subscription') {
+      const user = await authModel.findById(userId).select('userType')
+      if (user && user.userType === 'admin') {
+        console.log(`⚠️ Ignoring subscription webhook for admin user: ${userId}`)
+      } else {
         const subscriptionData = buildSubscriptionData()
         await authModel.findByIdAndUpdate(userId, {
           ...subscriptionData,
         })
         console.log(`✅ Subscription activated for user: ${userId}`)
       }
+    }
     }
 
     res.status(200).json({ message: 'Webhook received' })
@@ -207,7 +228,7 @@ exports.getSubscriptionStatus = async (req, res) => {
       const manager = await authModel.findOne({
         farmId: user.farmId,
         userType: 'manager',
-      }).select('isSubscribed subscriptionStatus subscriptionStart subscriptionEnd')
+      }).select('isSubscribed subscriptionStatus subscriptionType subscriptionStart subscriptionEnd')
       if (manager) {
         target = manager
       }
@@ -217,12 +238,14 @@ exports.getSubscriptionStatus = async (req, res) => {
       await authModel.findByIdAndUpdate(target._id, {
         isSubscribed: false,
         subscriptionStatus: 'expired',
+        subscriptionType: 'none',
       })
       return res.status(200).json({
         success: true,
         data: {
           isSubscribed: false,
           subscriptionStatus: 'expired',
+          subscriptionType: 'none',
           subscriptionStart: target.subscriptionStart,
           subscriptionEnd: target.subscriptionEnd,
           daysRemaining: 0,
@@ -234,11 +257,20 @@ exports.getSubscriptionStatus = async (req, res) => {
       ? Math.max(Math.ceil((target.subscriptionEnd - new Date()) / (1000 * 60 * 60 * 24)), 0)
       : 0
 
+    if (daysRemaining <= 7 && target.email) {
+      await sendNotification(target.email, 'SUBSCRIPTION_EXPIRING', {
+        userName: target.name || 'User',
+        daysLeft: daysRemaining,
+        expiryDate: target.subscriptionEnd
+      })
+    }
+
     res.status(200).json({
       success: true,
       data: {
         isSubscribed: Boolean(target.isSubscribed),
         subscriptionStatus: target.subscriptionStatus,
+        subscriptionType: target.subscriptionType || 'none',
         subscriptionStart: target.subscriptionStart,
         subscriptionEnd: target.subscriptionEnd,
         daysRemaining,

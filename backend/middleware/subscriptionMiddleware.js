@@ -21,6 +21,14 @@ const checkSubscription = async (req, res, next) => {
       }).select('isSubscribed subscriptionEnd subscriptionStatus')
 
       if (!manager || !manager.isSubscribed || !manager.subscriptionEnd || manager.subscriptionEnd < new Date()) {
+        if (manager && manager.subscriptionEnd && manager.subscriptionEnd < new Date()) {
+          await authModel.findByIdAndUpdate(manager._id, {
+            isSubscribed: false,
+            subscriptionStatus: 'expired',
+            subscriptionType: 'none',
+          })
+        }
+
         return res.status(403).json({
           success: false,
           message: 'Farm subscription expired. Please contact your manager.',
@@ -36,6 +44,7 @@ const checkSubscription = async (req, res, next) => {
         await authModel.findByIdAndUpdate(req.user.id, {
           isSubscribed: false,
           subscriptionStatus: 'expired',
+          subscriptionType: 'none',
         })
       }
 

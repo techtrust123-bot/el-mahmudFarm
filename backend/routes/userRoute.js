@@ -2,6 +2,7 @@ const express = require('express')
 const { getUsers } = require('../controllers/authController')
 const { authMiddleware, isManager } = require('../middleweres/authMiddlewere')
 const { checkSubscription } = require('../middleware/subscriptionMiddleware')
+const { asyncHandler } = require('../middleware/errorHandler')
 const {
   userData,
   addStaff,
@@ -19,20 +20,20 @@ const {
 } = require('../controllers/userController')
 const router = express.Router()
 
-router.get('/userData', authMiddleware, userData)
-router.get('/users', authMiddleware, checkSubscription, getUsers)
-router.post('/staff', authMiddleware, checkSubscription, isManager, addStaff)
-router.get('/staff/list', authMiddleware, checkSubscription, isManager, getStaff)
-router.get('/staff/:id', authMiddleware, checkSubscription, isManager, getStaffById)
-router.put('/staff/:id', authMiddleware, checkSubscription, isManager, updateStaff)
-router.delete('/staff/:id', authMiddleware, checkSubscription, isManager, deleteStaff)
+router.get('/userData', authMiddleware, asyncHandler(userData))
+router.get('/users', authMiddleware, checkSubscription, asyncHandler(getUsers))
+router.post('/staff', authMiddleware, checkSubscription, isManager, asyncHandler(addStaff))
+router.get('/staff/list', authMiddleware, checkSubscription, isManager, asyncHandler(getStaff))
+router.get('/staff/:id', authMiddleware, checkSubscription, isManager, asyncHandler(getStaffById))
+router.put('/staff/:id', authMiddleware, checkSubscription, isManager, asyncHandler(updateStaff))
+router.delete('/staff/:id', authMiddleware, checkSubscription, isManager, asyncHandler(deleteStaff))
 
-router.put('/balance', authMiddleware, checkSubscription, updateBalance)
-router.get('/all', authMiddleware, checkSubscription, getAllUsers)
-router.get('/profile/:id', authMiddleware, checkSubscription, getUserById)
-router.put('/role/:id', authMiddleware, checkSubscription, isManager, updateUserRole)
-router.put('/suspend/:id', authMiddleware, checkSubscription, isManager, suspendUser)
-router.put('/activate/:id', authMiddleware, checkSubscription, isManager, activateUser)
-router.delete('/delete/:id', authMiddleware, checkSubscription, isManager, deleteUser)
+router.put('/balance', authMiddleware, checkSubscription, asyncHandler(updateBalance))
+router.get('/all', authMiddleware, checkSubscription, asyncHandler(getAllUsers))
+router.get('/profile/:id', authMiddleware, checkSubscription, asyncHandler(getUserById))
+router.put('/role/:id', authMiddleware, checkSubscription, isManager, asyncHandler(updateUserRole))
+router.put('/suspend/:id', authMiddleware, checkSubscription, isManager, asyncHandler(suspendUser))
+router.put('/activate/:id', authMiddleware, checkSubscription, isManager, asyncHandler(activateUser))
+router.delete('/delete/:id', authMiddleware, checkSubscription, isManager, asyncHandler(deleteUser))
 
 module.exports = router

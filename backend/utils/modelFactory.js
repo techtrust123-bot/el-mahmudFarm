@@ -18,6 +18,7 @@ function getModels(connection) {
   const Sells = connection.models.Sells || connection.model('Sells', sellsSchema);
   const Expenses = connection.models.Expenses || connection.model('Expenses', expensesSchema);
   const Staff = connection.models.Staff || connection.model('Staff', staffSchema);
+  const Counter = connection.models.Counter || connection.model('Counter', require('../schemas/counter'));
 
   return {
     Feed,
@@ -25,7 +26,8 @@ function getModels(connection) {
     LiveStock,
     Sells,
     Expenses,
-    Staff
+    Staff,
+    Counter,
   };
 }
 

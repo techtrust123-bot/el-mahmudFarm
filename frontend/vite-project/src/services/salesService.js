@@ -5,7 +5,7 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
 const salesService = {
   /**
@@ -13,7 +13,7 @@ const salesService = {
    */
   getAll: async (filters = {}) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/sell`, {
+      const response = await axios.get(`${API_BASE_URL}/sell/list`, {
         params: filters,
         withCredentials: true
       });
@@ -42,7 +42,7 @@ const salesService = {
    */
   create: async (saleData) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/sell`, saleData, {
+      const response = await axios.post(`${API_BASE_URL}/sell/add`, saleData, {
         withCredentials: true
       });
       return response.data;
@@ -56,7 +56,7 @@ const salesService = {
    */
   update: async (id, saleData) => {
     try {
-      const response = await axios.put(`${API_BASE_URL}/sell/${id}`, saleData, {
+      const response = await axios.put(`${API_BASE_URL}/sell/edit/${id}`, saleData, {
         withCredentials: true
       });
       return response.data;
@@ -70,7 +70,7 @@ const salesService = {
    */
   delete: async (id) => {
     try {
-      const response = await axios.delete(`${API_BASE_URL}/sell/${id}`, {
+      const response = await axios.delete(`${API_BASE_URL}/sell/del/${id}`, {
         withCredentials: true
       });
       return response.data;

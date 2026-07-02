@@ -1,12 +1,8 @@
+const path = require('path');
 const dotenv = require('dotenv');
-dotenv.config();
-// console.log('ENV CHECK:')
-// console.log('MONGO_URI:', process.env.MONGO_URI ? '✅ loaded' : '❌ undefined')
-// console.log('JWT_SECRET:', process.env.JWT_SECRET ? '✅ loaded' : '❌ undefined')
-// console.log('PORT:', process.env.PORT ? '✅ loaded' : '❌ undefined')
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 const express = require('express');
 const mongoose = require('mongoose');
-// console.log('MONGO_URI:', process.env.MONGO_URI)
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -18,6 +14,7 @@ const winston = require('winston');
 const morgan = require('morgan');
 const DailyRotateFile = require('winston-daily-rotate-file');
 const { resolveSrvMongoUri } = require('./utils/dbManager');
+require('./services/scheduleBackup');
 
 const dns = require("dns");
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
@@ -26,8 +23,10 @@ dns.setServers(["1.1.1.1", "8.8.8.8"]);
 const cookie = require('cookie-parser');
 
 
+process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/cloudfarm_main';
+
 // Validate required environment variables
-const requiredEnvVars = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'MONGO_URI', 'FRONTEND_URL'];
+const requiredEnvVars = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'FRONTEND_URL'];
 requiredEnvVars.forEach(key => {
   if (!process.env[key]) {
     throw new Error(`Missing required environment variable: ${key}`);
@@ -65,13 +64,31 @@ const logger = winston.createLogger({
 // Connect to main database for auth
 (async () => {
   try {
-    const mongoUri = await mongoose.connect(process.env.MONGO_URI);
+    const mongoUri =
+      await resolveSrvMongoUri(
+        process.env.MONGO_URI
+      );
+
+    await mongoose.connect(mongoUri);
+
     logger.info('Main database connected');
   } catch (err) {
-    logger.error('Main database connection error:', err);
+    logger.error(
+      'Main database connection error:',
+      err
+    );
     process.exit(1);
   }
 })();
+// (async () => {
+//   try {
+//     const mongoUri = await mongoose.connect(process.env.MONGO_URI);
+//     logger.info('Main database connected');
+//   } catch (err) {
+//     logger.error('Main database connection error:', err);
+//     process.exit(1);
+//   }
+// })();
 
 const app = express();
 
@@ -138,14 +155,26 @@ const globalLimiter = rateLimit({
   store: new MongoStore({
     uri: process.env.MONGO_URI,
     collectionName: 'rateLimits',
-    expireTimeMs: 30 * 60 * 1000, // 30 minutes
+    expireTimeMs: 10 * 60 * 1000, // 10 minutes
   }),
-  windowMs: 30 * 60 * 1000, // 30 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 150, // limit each IP to 150 requests per windowMs
   message: { success: false, message: "Too many requests, please try again later" },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.method === 'OPTIONS', // Skip OPTIONS requests
+  // Skip OPTIONS and the specific create routes for poultry and livestock
+  skip: (req) => {
+    if (req.method === 'OPTIONS') return true;
+    const path = req.path || req.originalUrl || '';
+    const allowedCreateRoutes = [
+      '/api/poultry/add-poultry',
+      '/api/livestock/add-animal'
+    ];
+    if (req.method === 'POST' && allowedCreateRoutes.includes(path)) {
+      return true;
+    }
+    return false;
+  },
 });
 
 const authLimiter = rateLimit({
@@ -155,7 +184,7 @@ const authLimiter = rateLimit({
     expireTimeMs: 5 * 60 * 1000, // 5 minutes
   }),
   windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 20, // Allow 20 auth attempts per 5 minutes
+  max: 30, // Allow 30 auth attempts per 5 minutes
   message: { success: false, message: "Too many requests, please try again later" },
   standardHeaders: true,
   legacyHeaders: false,
@@ -209,6 +238,7 @@ app.use(errorHandler);
 // });
 
 require('./jobs/feedRecalculationJob');
+require('./jobs/backupJob');
 
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
@@ -225,9 +255,6 @@ server.on('error', (error) => {
         process.exit(1)
     }
 })
-
-
-
 
 // Graceful shutdown
 const { closeAllConnections } = require('./utils/dbManager');

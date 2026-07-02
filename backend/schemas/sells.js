@@ -48,6 +48,10 @@ const sellSchema = new mongoose.Schema({
         type:String,
         unique:true,
         default:''
+    },
+    invoiceGroupId: {
+        type: String,
+        index: true,
     }
 },{timestamps:true})
 

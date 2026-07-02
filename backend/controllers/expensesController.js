@@ -1,5 +1,5 @@
 // const Expenses = require("../models/expenses")
-
+const { sendNotification } = require('../services/emailService')
 
 exports.createExpense = async(req,res)=>{
     const { Expenses } = req.farmModels
@@ -17,6 +17,22 @@ exports.createExpense = async(req,res)=>{
             descriptions: expenseDescription
         })
         await expense.save()
+
+        const categoryExpenses = await Expenses.find({ category }).lean()
+        const averageAmount = categoryExpenses.length > 0
+            ? categoryExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0) / categoryExpenses.length
+            : 0
+        const isUnusualExpense = Number(amount) > 0 && averageAmount > 0 && Number(amount) > averageAmount * 2
+
+        if (isUnusualExpense && req.user?.email) {
+            await sendNotification(req.user.email, 'UNUSUAL_EXPENSE', {
+                userName: req.user.name || 'User',
+                category,
+                amount: Number(amount),
+                avgAmount: averageAmount
+            })
+        }
+
         res.status(201).json({success:true,message:"Expense created successfully..."})
     } catch (error) {
         console.log(error)

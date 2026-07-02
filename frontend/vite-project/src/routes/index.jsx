@@ -38,6 +38,8 @@ import SettingsPage from '../pages/SettingsPage';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage';
 import ForbiddenPage from '../pages/ForbiddenPage';
 import ResetOtp from '../pages/ResetOtp';
+import SupportPage from '../pages/SupportPage';
+
 /**
  * Routes Configuration
  */
@@ -122,6 +124,14 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/support"
+          element={
+            <ProtectedRoute>
+              <SupportPage />
             </ProtectedRoute>
           }
         />

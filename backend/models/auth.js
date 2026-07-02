@@ -59,8 +59,13 @@ const authSchema = new mongoose.Schema({
     },
     subscriptionStatus:{
         type:String,
-        enum:['inactive','active','expired','cancelled'],
+        enum:['inactive','active','trial','expired','cancelled'],
         default:'inactive'
+    },
+    subscriptionType: {
+        type: String,
+        enum: ['none','trial','paid'],
+        default: 'none'
     },
     subscriptionStart:{
         type:Date,

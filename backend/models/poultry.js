@@ -24,10 +24,10 @@ const poultrySchema = new mongoose.Schema({
         default:0,
         required:true
      },
-     joinDate:{
-        type:Date,
-        default:Date.now
-     },
+    //  joinDate:{
+    //     type:Date,
+    //     default:Date.now
+    //  },
      feedStage:{
         type:String,
         enum:['Starter','Grower','Finisher'],
@@ -55,6 +55,10 @@ const poultrySchema = new mongoose.Schema({
     totalFeedConsumed:{
         type:Number,
         default:0
+    },
+    lastFeedUpdate:{
+        type:Date,
+        default:Date.now
     },
     totalCost:{
         type:Number,

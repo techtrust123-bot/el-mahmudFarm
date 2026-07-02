@@ -1,10 +1,11 @@
 import React, { useState,useEffect,useContext } from 'react';
-import { FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiDownload } from 'react-icons/fi';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import MainLayout from '../layouts/MainLayout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import CurrencyInput from '../components/ui/CurrencyInput';
 import Select from '../components/ui/Select';
 import Textarea from '../components/ui/Textarea';
 import Table from '../components/ui/Table';
@@ -15,6 +16,7 @@ import Badge from '../components/ui/Badge';
 import { EXPENSE_CATEGORIES } from '../utils/constants';
 import { validateForm, expenseSchema } from '../utils/validation';
 import { AuthContext } from '../context/AuthContext';
+import { downloadExport, getDefaultFilename } from '../utils/exportHelper';
 
 /**
  * Expense Management Page
@@ -25,6 +27,7 @@ const ExpensePage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [alert, setAlert] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     amount: '',
@@ -84,6 +87,18 @@ const ExpensePage = () => {
     setEditingId(item._id || item.id);
     setErrors({});
     setIsModalOpen(true);
+  };
+
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      await downloadExport('expenses', axiosInstance, getDefaultFilename('expenses'));
+      setAlert({ type: 'success', message: 'Expenses data exported successfully!' });
+    } catch (error) {
+      setAlert({ type: 'error', message: error.message });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleDelete = async(id) => {
@@ -203,10 +218,16 @@ const ExpensePage = () => {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Expense Management</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">Track farm expenses and spending</p>
           </div>
-          <Button variant="primary" size="lg" onClick={handleAddNew} className="flex items-center gap-2">
-            <FiPlus size={20} />
-            Add Expense
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="lg" onClick={handleExport} disabled={isExporting} className="flex items-center gap-2">
+              <FiDownload size={20} />
+              {isExporting ? 'Exporting...' : 'Export'}
+            </Button>
+            <Button variant="primary" size="lg" onClick={handleAddNew} className="flex items-center gap-2">
+              <FiPlus size={20} />
+              Add Expense
+            </Button>
+          </div>
         </div>
 
         {alert && (
@@ -311,9 +332,8 @@ const ExpensePage = () => {
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
-            <Input
-              label="Amount (€)"
-              type="number"
+            <CurrencyInput
+              label="Amount (₦)"
               name="amount"
               value={formData.amount}
               onChange={handleChange}

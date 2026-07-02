@@ -16,6 +16,7 @@ import {
   FiShoppingCart,
   FiDollarSign,
   FiAlertCircle,
+  FiDownload,
 } from 'react-icons/fi';
 import MainLayout from '../layouts/MainLayout';
 import Card from '../components/ui/Card';
@@ -24,6 +25,7 @@ import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
 import { AuthContext } from '../context/AuthContext';
 import axios from 'axios';
+import { downloadExport, getDefaultFilename } from '../utils/exportHelper';
 
 /**
  * Dashboard Page - Main analytics and overview
@@ -41,7 +43,9 @@ const DashboardPage = () => {
   const [feedTrend, setFeedTrend] = useState([]);
   const [mortalityTrend, setMortalityTrend] = useState([]);
   const [activities, setActivities] = useState([]);
-  const { userData, backendUrl } = useContext(AuthContext);
+  const [isExporting, setIsExporting] = useState(false);
+  const [alert, setAlert] = useState(null);
+  const { userData, backendUrl, axiosInstance } = useContext(AuthContext);
 
   const activityColumns = [
     { key: 'title', label: 'Activity' },
@@ -237,14 +241,38 @@ const DashboardPage = () => {
   const revenueTrend = getPeriodChange('sales');
   const expenseTrend = getPeriodChange('expenses');
 
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      await downloadExport('farm-report', axiosInstance, getDefaultFilename('farm-report'));
+      setAlert({ type: 'success', message: 'Farm report exported successfully!' });
+    } catch (error) {
+      setAlert({ type: 'error', message: error.message });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6">
         {/* Page Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Welcome back, {userData?.name}! Here's your farm overview.</p>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">Welcome back, {userData?.name}! Here's your farm overview.</p>
+          </div>
+          <Button variant="outline" size="lg" onClick={handleExport} disabled={isExporting} className="flex items-center gap-2">
+            <FiDownload size={20} />
+            {isExporting ? 'Exporting...' : 'Export Report'}
+          </Button>
         </div>
+
+        {alert && (
+          <div className={`p-4 rounded-lg ${alert.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+            {alert.message}
+          </div>
+        )}
 
         {/* Summary Stats Grid */}
         {/*

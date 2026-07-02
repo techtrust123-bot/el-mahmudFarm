@@ -5,25 +5,26 @@ const { calculateBatchConsumption } = require('../utils/feedCalculator')
 const {
   getFeedStage,
   calculateAge,
+  getBirthDateFromAge,
   getFeedForStage,
 } = require('../utils/feedStageHelper')
+const { sendNotification } = require('../services/emailService')
 
 exports.createPoultry = async (req, res) => {
     const { Poultry, Feed } = req.farmModels
-    const { batchId, type, quantity, purchaseDate, vaccinationStatus, mortality, purchasePrice } = req.body
-    if (!batchId || !type || !quantity || !purchaseDate || !vaccinationStatus || !purchasePrice) {
-        return res.status(400).json({ message: 'All fields are required...' })
+    const { batchId, type, quantity, purchaseDate, vaccinationStatus, mortality, purchasePrice, ageInWeeks, ageInDays } = req.body
+    if (!batchId || !type || !quantity || (!purchaseDate && ageInWeeks == null && ageInDays == null) || !vaccinationStatus || !purchasePrice) {
+        return res.status(400).json({ message: 'All fields are required. Provide purchaseDate or ageInWeeks/ageInDays for age calculation.' })
     }
     try {
-        // let quantity = 0;
         const exist = await Poultry.findOne({ batchId })
         if (exist) {
             return res.status(400).json({ success: false, message: 'Batch ID already exists...' })
         }
 
-        const birthDate = purchaseDate ? new Date(purchaseDate) : new Date()
-        const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-        const feedStage = getFeedStage(ageInDays, type)
+        const birthDate = getBirthDateFromAge({ ageInDays, ageInWeeks, purchaseDate })
+        const { ageInDays: resolvedAgeInDays, ageInWeeks: resolvedAgeInWeeks } = calculateAge(birthDate)
+        const feedStage = getFeedStage(resolvedAgeInDays, type)
 
         const feed = await getFeedForStage(Feed, type, feedStage)
         if (!feed) {
@@ -35,35 +36,31 @@ exports.createPoultry = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Quantity must be greater than mortality' })
         }
 
-        const batchStats = calculateBatchConsumption(feed, {
-          joinDate: new Date(),
-          quantity: adjustedQuantity,
-          purchasePrice: Number(purchasePrice),
-          poultryDailyConsumption: Number(feed.poultryDailyConsumption) || 0,
-        })
-        const totalCostPerPoultry = batchStats.costPerPoultry
-
+        const totalPurchaseCost = Number(purchasePrice) || 0
+        const initialCostPerPoultry = adjustedQuantity > 0 ? totalPurchaseCost / adjustedQuantity : 0
+        const yesterday = new Date(new Date().getTime() - 24 * 60 * 60 * 1000)
         const newPoultry = new Poultry({
             batchId,
             type,
             status: 'available',
             quantity: adjustedQuantity,
             joinDate: new Date(),
-            purchaseDate: birthDate,
+            purchaseDate: new Date(purchaseDate || new Date()),
+            lastFeedUpdate: yesterday,
             vaccinationStatus,
             mortality: mortality || 0,
-            purchasePrice: Number(purchasePrice),
-            totalFeedConsumed: batchStats.totalFeedConsumed,
-            totalCost: batchStats.totalCost,
-            costPerPoultry: batchStats.costPerPoultry,
-            poultryConsumePerkg: batchStats.poultryConsumePerBird,
-            feedCostPerPoultry: batchStats.feedCostPerPoultry,
-            totalFeedCost: batchStats.totalFeedCost,
-            totalCostPerPoultry: batchStats.costPerPoultry,
+            purchasePrice: totalPurchaseCost,
+            totalFeedConsumed: 0,
+            totalCost: totalPurchaseCost,
+            costPerPoultry: initialCostPerPoultry,
+            poultryConsumePerkg: 0,
+            feedCostPerPoultry: 0,
+            totalFeedCost: 0,
+            totalCostPerPoultry: initialCostPerPoultry,
             feedStage,
             birthDay: birthDate,
-            ageInDays,
-            ageInWeeks,
+            ageInDays: resolvedAgeInDays,
+            ageInWeeks: resolvedAgeInWeeks,
             currentFeedStage: feedStage,
             currentFeedType: feed.feedType,
             currentFeedName: feed.feedName,
@@ -73,16 +70,25 @@ exports.createPoultry = async (req, res) => {
                     feedName: feed.feedName,
                     feedType: feed.feedType,
                     feedCategory: feed.feedCategory,
-                    poultryConsumePerkg: batchStats.poultryConsumePerBird,
-                    feedCostPerPoultry: batchStats.feedCostPerPoultry,
-                    totalFeedCost: batchStats.totalFeedCost,
-                    totalCost: batchStats.totalCost,
-                    costPerPoultry: batchStats.costPerPoultry,
-                    totalCostPerPoultry: batchStats.costPerPoultry,
+                    poultryConsumePerkg: 0,
+                    feedCostPerPoultry: 0,
+                    totalFeedCost: 0,
+                    totalCost: totalPurchaseCost,
+                    costPerPoultry: initialCostPerPoultry,
+                    totalCostPerPoultry: initialCostPerPoultry,
                 }
             ]
         })
         await newPoultry.save()
+
+        if (req.user?.email && ['sick', 'poor', 'critical', 'unhealthy'].includes(String(vaccinationStatus).toLowerCase())) {
+            await sendNotification(req.user.email, 'ANIMAL_HEALTH_ALERT', {
+                userName: req.user.name || 'User',
+                animalType: type,
+                animalId: batchId,
+                issue: vaccinationStatus
+            })
+        }
 
         await recalculatePoultry(feed, req.farmModels)
         res.status(201).json({ success: true, message: 'Poultry created successfully...' })
@@ -225,9 +231,20 @@ exports.editPoultry = async(req,res)=>{
             return res.status(404).json({message:"poultry not found..."})
         }
 
+        const purchaseDate = req.body.purchaseDate ? new Date(req.body.purchaseDate) : existingPoultry.purchaseDate
+        const birthDate = getBirthDateFromAge({
+          ageInDays: req.body.ageInDays,
+          ageInWeeks: req.body.ageInWeeks,
+          purchaseDate: purchaseDate || existingPoultry.birthDay || existingPoultry.purchaseDate,
+        })
+        const { ageInDays: resolvedAgeInDays, ageInWeeks: resolvedAgeInWeeks } = calculateAge(birthDate)
+
         const updateData = {
             ...req.body,
-            purchaseDate: req.body.purchaseDate ? new Date(req.body.purchaseDate) : existingPoultry.purchaseDate,
+            purchaseDate,
+            birthDay: birthDate,
+            ageInDays: resolvedAgeInDays,
+            ageInWeeks: resolvedAgeInWeeks,
         }
 
         const editedPoultry = await Poultry.findByIdAndUpdate(id, updateData, { returnDocument: 'after' })

@@ -5,15 +5,17 @@ import MainLayout from '../layouts/MainLayout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import CurrencyInput from '../components/ui/CurrencyInput';
 import Select from '../components/ui/Select';
 import Table from '../components/ui/Table';
 import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
-import Alert from '../components/ui/Alert';
+import { toast } from 'react-hot-toast';
 import Badge from '../components/ui/Badge';
 import { ANIMAL_TYPE } from '../utils/constants';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import { downloadExport, getDefaultFilename } from '../utils/exportHelper';
 
 /**
  * Sales & Revenue Page
@@ -24,7 +26,7 @@ const SalesPage = () => {
   const [filterStatus, setFilterStatus] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [alert, setAlert] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
   const {axiosInstance} = useContext(AuthContext)
   const [formData, setFormData] = useState({
     invoiceId: '',
@@ -43,6 +45,7 @@ const SalesPage = () => {
     },
   ]);
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filteredSales = sales.filter((item) => {
     const matchesSearch = item.invoiceId.toLowerCase().includes(searchTerm.toLowerCase());
@@ -92,14 +95,26 @@ const SalesPage = () => {
     setIsModalOpen(true);
   };
 
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      await downloadExport('sales', axiosInstance, getDefaultFilename('sales'));
+      toast.success('Sales data exported successfully!');
+    } catch (error) {
+      toast.error(error.message || 'Failed to export sales data');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleDelete = async (id) => {
     try {
     const response =  await axiosInstance.delete(`/api/sell/del/${id}`);
       setSales((prev) => prev.filter((item) => item._id !== id));
-      setAlert({ type: 'success', message: response.data.message });
+      toast.success(response.data.message || 'Sale deleted successfully');
     } catch (error) {
       console.log(error);
-      setAlert({ type: 'error', message: error.response?.data?.message });
+      toast.error(error.response?.data?.message || 'Failed to delete sale');
     }
   };
 
@@ -107,10 +122,35 @@ const SalesPage = () => {
     const printWindow = window.open('', '_blank', 'width=800,height=900');
     if (!printWindow) return;
 
-    const saleDate = sale.date ? new Date(sale.date).toLocaleString() : '';
-    const amount = formatCurrency(Number(sale.totalAmount || 0));
-    const unitPrice = formatCurrency(Number(sale.pricePerUnit || 0));
-    const profit = formatCurrency(Number(sale.profit || 0));
+    const groupKey = sale.invoiceGroupId || sale.invoiceId;
+    const invoiceItems = sales.filter((item) => {
+      if (sale.invoiceGroupId) {
+        return item.invoiceGroupId === sale.invoiceGroupId;
+      }
+      return item.invoiceId === sale.invoiceId;
+    });
+
+    const firstSale = invoiceItems[0] || sale;
+    const saleDate = firstSale.date ? new Date(firstSale.date).toLocaleString() : '';
+    const invoiceLabel = firstSale.invoiceGroupId || firstSale.invoiceId || 'N/A';
+    const totalAmount = invoiceItems.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0);
+    const totalProfit = invoiceItems.reduce((sum, item) => sum + Number(item.profit || 0), 0);
+
+    const rows = invoiceItems
+      .map((item) => {
+        const unitPrice = formatCurrency(Number(item.pricePerUnit || 0));
+        const amount = formatCurrency(Number(item.totalAmount || 0));
+        return `
+          <tr>
+            <td>${item.animalType || 'N/A'}</td>
+            <td>${item.batchId || item.tagNumber || 'N/A'}</td>
+            <td>${item.animalType || 'N/A'}</td>
+            <td>${item.quantitySold || 1}</td>
+            <td>${unitPrice}</td>
+            <td>${amount}</td>
+          </tr>`;
+      })
+      .join('');
 
     const html = `<!DOCTYPE html>
       <html>
@@ -131,10 +171,10 @@ const SalesPage = () => {
         </head>
         <body>
           <h1>Order Receipt</h1>
-          <p><strong>Invoice ID:</strong> ${sale.invoiceId || 'N/A'}</p>
+          <p><strong>Invoice Group:</strong> ${invoiceLabel}</p>
           <p><strong>Date:</strong> ${saleDate}</p>
-          <p><strong>Customer:</strong> ${sale.customerName || 'N/A'}</p>
-          <p><strong>Contact:</strong> ${sale.buyerContact || 'N/A'}</p>
+          <p><strong>Customer:</strong> ${firstSale.customerName || 'N/A'}</p>
+          <p><strong>Contact:</strong> ${firstSale.buyerContact || 'N/A'}</p>
           <table>
             <thead>
               <tr>
@@ -147,18 +187,13 @@ const SalesPage = () => {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>${sale.animalType || 'N/A'}</td>
-                <td>${sale.batchId || sale.tagNumber || 'N/A'}</td>
-                <td>${sale.animalType || 'N/A'}</td>
-                <td>${sale.quantitySold || 1}</td>
-                <td>${unitPrice}</td>
-                <td>${amount}</td>
-              </tr>
+              ${rows}
             </tbody>
           </table>
           <div class="summary">
-            <p><strong>Status:</strong> ${sale.status || 'N/A'}</p>
+            <p><strong>Total Amount:</strong> ${formatCurrency(totalAmount)}</p>
+            
+            <p><strong>Status:</strong> ${firstSale.status || 'N/A'}</p>
           </div>
           <div class="footer">
             <p>Thank you for your purchase.</p>
@@ -170,6 +205,54 @@ const SalesPage = () => {
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
+  };
+
+  const validateSale = () => {
+    const validationErrors = {};
+
+    if (!formData.date) validationErrors.date = 'Sale date is required';
+    if (!formData.customerName) validationErrors.customerName = 'Customer name is required';
+    if (!formData.buyerContact) validationErrors.buyerContact = 'Buyer contact is required';
+    if (!formData.status) validationErrors.status = 'Sale status is required';
+
+    if (!editingId) {
+      if (!orderItems.length) {
+        toast.error('Please add at least one order item.');
+        return false;
+      }
+
+      let orderHasError = false;
+      orderItems.forEach((item, index) => {
+        const row = index + 1;
+        if (!item.animalType) {
+          orderHasError = true;
+          toast.error(`Order ${row}: animal type is required`);
+        }
+        if (!item.pricePerUnit) {
+          orderHasError = true;
+          toast.error(`Order ${row}: unit price is required`);
+        }
+        if (item.quantitySold && (isNaN(Number(item.quantitySold)) || Number(item.quantitySold) <= 0)) {
+          orderHasError = true;
+          toast.error(`Order ${row}: quantity must be a valid number`);
+        }
+        if (item.animalType === 'Poultry' && !item.batchId) {
+          orderHasError = true;
+          toast.error(`Order ${row}: batch ID is required for poultry`);
+        }
+        if (item.animalType === 'Livestock' && !item.tagNumber && !item.type) {
+          orderHasError = true;
+          toast.error(`Order ${row}: tag number or type is required for livestock`);
+        }
+      });
+
+      if (orderHasError) {
+        return false;
+      }
+    }
+
+    setErrors(validationErrors);
+    return Object.keys(validationErrors).length === 0;
   };
 
   const handleChange = (e) => {
@@ -213,13 +296,31 @@ const SalesPage = () => {
     setOrderItems((prev) => prev.filter((_, idx) => idx !== index));
   };
 
+  const handleEdit = (sale) => {
+    setEditingId(sale._id);
+    setFormData({
+      invoiceId: sale.invoiceId || '',
+      date: sale.date ? sale.date.split('T')[0] : '',
+      customerName: sale.customerName || '',
+      buyerContact: sale.buyerContact || '',
+      status: sale.status || '',
+    });
+    setErrors({});
+    setIsModalOpen(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validateSale()) {
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       let response;
       if (editingId) {
         response = await axiosInstance.put(`/api/sell/edit/${editingId}`, formData);
-        setAlert({ type: 'success', message: 'Sale updated successfully!' });
+        toast.success('Sale updated successfully!');
       } else {
         const payload = {
           orders: orderItems.map((item) => ({
@@ -250,18 +351,20 @@ const SalesPage = () => {
               pricePerUnit: '',
             },
           ]);
-          setAlert({ type: 'success', message: 'Sale recorded successfully!' });
-        }
-
-        const fetchSells = await axiosInstance.get(`/api/sell/list`);
-        if (fetchSells.data.success) {
-          setSales(Array.isArray(fetchSells.data.data) ? fetchSells.data.data : []);
+          toast.success('Sale recorded successfully!');
         }
       }
+
+      const fetchSells = await axiosInstance.get(`/api/sell/list`);
+      if (fetchSells.data.success) {
+        setSales(Array.isArray(fetchSells.data.data) ? fetchSells.data.data : []);
+      }
+      setIsModalOpen(false);
     } catch (error) {
-      setAlert({ type: 'error', message: error.response?.data?.message });
+      toast.error(error.response?.data?.message || 'Failed to save sale');
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsModalOpen(false);
   };
 
   useEffect(()=>{
@@ -284,6 +387,11 @@ const SalesPage = () => {
   }).format(amount);
 
   const tableColumns = [
+    {
+      key: 'invoiceGroupId',
+      label: 'Invoice Group',
+      render: (value, row) => value || row.invoiceId || 'N/A'
+    },
     { key: 'invoiceId', label: 'Invoice ID' },
     { key: 'date', label: 'Date' },
     { key: 'animalType', label: 'Animal Type' },
@@ -311,15 +419,18 @@ const SalesPage = () => {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Sales & Revenue</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">Track and manage all sales transactions</p>
           </div>
-          <Button variant="primary" size="lg" onClick={handleAddNew} className="flex items-center gap-2">
-            <FiPlus size={20} />
-            Record Sale
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="lg" onClick={handleExport} disabled={isExporting} className="flex items-center gap-2">
+              <FiDownload size={20} />
+              {isExporting ? 'Exporting...' : 'Export'}
+            </Button>
+            <Button variant="primary" size="lg" onClick={handleAddNew} className="flex items-center gap-2">
+              <FiPlus size={20} />
+              Record Sale
+            </Button>
+          </div>
         </div>
 
-        {alert && (
-          <Alert type={alert.type} message={alert.message} closeable onClose={() => setAlert(null)} />
-        )}
 
         {/* Statistics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -377,6 +488,10 @@ const SalesPage = () => {
               <Button key="invoice" variant="outline" size="sm" className="flex items-center gap-1" onClick={() => handleGenerateReceipt(row)}>
                 <FiDownload size={14} />
                 Invoice
+              </Button>,
+              <Button key="edit" variant="secondary" size="sm" className="flex items-center gap-1" onClick={() => handleEdit(row)}>
+                <FiEdit2 size={14} />
+                Edit
               </Button>,
               <Button key="delete" variant="danger" size="sm" onClick={() => handleDelete(row._id)}>
                 <FiTrash2 size={14} />
@@ -447,9 +562,8 @@ const SalesPage = () => {
                         placeholder="Quantity"
                         required
                       />
-                      <Input
+                      <CurrencyInput
                         label="Unit Price (NGN)"
-                        type="number"
                         name="pricePerUnit"
                         value={item.pricePerUnit}
                         onChange={(e) => handleOrderItemChange(index, 'pricePerUnit', e.target.value)}
@@ -506,8 +620,8 @@ const SalesPage = () => {
             label="Status"
             name="status"
             options={[
-              { value: 'completed', label: 'Completed' },
-              { value: 'pending', label: 'Pending' },
+              { value: 'completed', label: 'completed' },
+              { value: 'pending', label: 'pending' },
             ]}
             value={formData.status}
             onChange={handleChange}
@@ -515,11 +629,11 @@ const SalesPage = () => {
           />
 
           <div className="flex gap-3 justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
+            <Button variant="secondary" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit">
-              {editingId ? 'Update Sale' : 'Record Sale'}
+            <Button variant="primary" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (editingId ? 'Updating...' : 'Recording...') : editingId ? 'Update Sale' : 'Record Sale'}
             </Button>
           </div>
         </form>

@@ -8,7 +8,9 @@
     "start": "nodemon index.js",
     "migrate": "node scripts/migrateData.js",
     "verify": "node scripts/verifyMigration.js",
-    "rollback": "node scripts/rollbackMigration.js"
+    "verify-feed-stage": "node scripts/verifyFeedStageLogic.js",
+    "rollback": "node scripts/rollbackMigration.js",
+    "test": "node test/backupHelpers.test.js"
   },
   "keywords": [],
   "author": "",
@@ -37,6 +39,7 @@
     "rate-limit-mongo": "^2.3.2",
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",
-    "xss-clean": "^0.1.4"
+    "xss-clean": "^0.1.4",
+    "json2csv": "^5.0.7"
   }
 }

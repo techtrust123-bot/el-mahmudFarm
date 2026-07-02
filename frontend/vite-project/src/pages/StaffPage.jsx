@@ -1,4 +1,4 @@
-import React, { useState,useContext,useEffect } from 'react';
+import React, { useState,useEffect } from 'react';
 import { FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
 import MainLayout from '../layouts/MainLayout';
@@ -13,8 +13,7 @@ import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
 import { STAFF_ROLES } from '../utils/constants';
 import { validateForm, staffSchema } from '../utils/validation';
-import { AuthContext } from '../context/AuthContext';
-import axios from 'axios';
+import axiosInstance from '../utils/axiosInstance';
 
 /**
  * Staff Management Page
@@ -37,9 +36,7 @@ const StaffPage = () => {
     permissions: [],
   });
   const [errors, setErrors] = useState({});
-  const { backendUrl } = useContext(AuthContext);
   const { user } = useAuth();
-  const apiBaseUrl = backendUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
   const normalizedRole = user?.role?.toLowerCase();
   const normalizedUserType = user?.userType?.toLowerCase();
@@ -94,7 +91,7 @@ const StaffPage = () => {
 
   const handleDelete = async (id) => {
     try {
-      const response = await axios.delete(`${apiBaseUrl}/api/user/staff/delete/${id}`, { withCredentials: true });
+      const response = await axiosInstance.delete(`/api/user/staff/delete/${id}`);
       if (response.data.success) {
           setStaff((prev) => prev.filter((item) => item._id !== id));
           setAlert({ type: 'success', message: 'Staff member deleted successfully!' });
@@ -159,27 +156,23 @@ const StaffPage = () => {
     try {
       let response;
       if (editingId) {
-        response = await axios.put(`${apiBaseUrl}/api/user/staff/${editingId}`, payload, {
-          withCredentials: true,
-        });
+        response = await axiosInstance.put(`/api/user/staff/${editingId}`, payload);
         if (response.data.success) {
           setAlert({ type: 'success', message: response.data.message || 'Staff member updated successfully!' });
           setFormData({ name: '', role: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [] });
           setEditingId(null);
           setIsModalOpen(false);
-          const fetchStaffs = await axios.get(`${apiBaseUrl}/api/user/staff/list`, { withCredentials: true });
+          const fetchStaffs = await axiosInstance.get('/api/user/staff/list');
           setStaff(fetchStaffs.data.data || []);
         }
       } else {
-        response = await axios.post(`${apiBaseUrl}/api/user/staff`, payload, {
-          withCredentials: true,
-        });
+        response = await axiosInstance.post('/api/user/staff', payload);
         if (response.data.success) {
           setAlert({ type: 'success', message: response.data.message });
           setFormData({ name: '', role: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [] });
           setEditingId(null);
           setIsModalOpen(false);
-          const fetchStaffs = await axios.get(`${apiBaseUrl}/api/user/staff/list`, { withCredentials: true });
+          const fetchStaffs = await axiosInstance.get('/api/user/staff/list');
           setStaff(fetchStaffs.data.data || []);
         }
       }
@@ -192,7 +185,7 @@ const StaffPage = () => {
   useEffect(() => {
     const fetchStaffs = async () => {
       try {
-        const response = await axios.get(`${apiBaseUrl}/api/user/staff/list`, { withCredentials: true });
+        const response = await axiosInstance.get('/api/user/staff/list');
         if (response.data.success) {
           setStaff(response.data.data || []);
         }
@@ -202,7 +195,7 @@ const StaffPage = () => {
       }
     };
     fetchStaffs();
-  }, [apiBaseUrl]);
+  }, []);
 
   const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-NG', {

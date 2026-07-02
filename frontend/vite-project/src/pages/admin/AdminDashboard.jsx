@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { FiUsers, FiTrendingUp, FiCheckCircle, FiDollarSign } from 'react-icons/fi';
+import { FiUsers, FiTrendingUp, FiCheckCircle, FiDollarSign, FiDatabase } from 'react-icons/fi';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import axios from 'axios';
 import MainLayout from '../../components/layout/MainLayout';
@@ -20,6 +20,13 @@ const AdminDashboardPage = () => {
   const [revenueData, setRevenueData] = useState([]);
   const [userGrowthData, setUserGrowthData] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [emailActivity, setEmailActivity] = useState([]);
+  const [backups, setBackups] = useState([]);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupMessage, setBackupMessage] = useState('');
+  const [emailFilter, setEmailFilter] = useState('all');
+  const [emailStatusFilter, setEmailStatusFilter] = useState('all');
+  const [emailSearch, setEmailSearch] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [actionLoading, setActionLoading] = useState(null);
   const baseUrl = backendUrl || import.meta.env.VITE_BACKEND_URL || '';
@@ -47,6 +54,7 @@ const AdminDashboardPage = () => {
     if (Array.isArray(response.data)) return response.data;
     if (Array.isArray(response.data.users)) return response.data.users;
     if (Array.isArray(response.data.data)) return response.data.data;
+    if (Array.isArray(response.data.emails)) return response.data.emails;
     if (Array.isArray(response.data.message)) return response.data.message;
     return [];
   };
@@ -159,13 +167,17 @@ const AdminDashboardPage = () => {
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
-        const [usersResponse, salesResponse] = await Promise.all([
+        const [usersResponse, salesResponse, emailResponse, backupResponse] = await Promise.all([
           axios.get(`${baseUrl}/api/user/users`, { withCredentials: true }),
           axios.get(`${baseUrl}/api/sell/list`, { withCredentials: true }),
+          axios.get(`${baseUrl}/api/dashboard/email-activity?limit=8`, { withCredentials: true }),
+          axios.get(`${baseUrl}/api/backup/list`, { withCredentials: true }),
         ]);
 
         const fetchedUsers = safeArray(usersResponse);
         const fetchedSales = safeArray(salesResponse);
+        const fetchedEmailActivity = safeArray(emailResponse);
+        const fetchedBackups = safeArray(backupResponse);
 
         const totalRevenue = fetchedSales.reduce(
           (sum, sale) => sum + Number(sale.totalAmount || sale.pricePerUnit || 0),
@@ -178,6 +190,8 @@ const AdminDashboardPage = () => {
 
         setUsers(fetchedUsers);
         setSales(fetchedSales);
+        setEmailActivity(fetchedEmailActivity);
+        setBackups(fetchedBackups);
         setStats({
           totalUsers: fetchedUsers.length,
           activeFarms: activeFarmsCount,
@@ -204,6 +218,63 @@ const AdminDashboardPage = () => {
     return () => clearInterval(ticking);
   }, []);
 
+  const refreshBackups = async () => {
+    try {
+      const backupListResponse = await axios.get(`${baseUrl}/api/backup/list`, { withCredentials: true });
+      setBackups(safeArray(backupListResponse));
+    } catch (error) {
+      console.error('Failed to refresh backups', error);
+    }
+  };
+
+  const handleCreateBackup = async () => {
+    try {
+      setBackupLoading(true);
+      setBackupMessage('');
+      const response = await axios.post(`${baseUrl}/api/backup/create`, {}, { withCredentials: true });
+      const message = response?.data?.message || 'Backup created successfully';
+      setBackupMessage(message);
+      await refreshBackups();
+    } catch (error) {
+      const message = error?.response?.data?.message || 'Failed to create backup';
+      setBackupMessage(message);
+      console.error('Backup creation failed', error);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRestoreBackup = async (backupName) => {
+    try {
+      setBackupLoading(true);
+      setBackupMessage('');
+      const response = await axios.post(`${baseUrl}/api/backup/restore`, { backupName }, { withCredentials: true });
+      setBackupMessage(response?.data?.message || 'Backup restored successfully');
+    } catch (error) {
+      const message = error?.response?.data?.message || 'Failed to restore backup';
+      setBackupMessage(message);
+      console.error('Backup restore failed', error);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleCleanupBackups = async () => {
+    try {
+      setBackupLoading(true);
+      setBackupMessage('');
+      const response = await axios.post(`${baseUrl}/api/backup/cleanup`, {}, { withCredentials: true });
+      setBackupMessage(response?.data?.message || 'Backup cleanup completed');
+      await refreshBackups();
+    } catch (error) {
+      const message = error?.response?.data?.message || 'Failed to cleanup backups';
+      setBackupMessage(message);
+      console.error('Backup cleanup failed', error);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
   const tableUsers = users.map((user) => ({
     id: user._id || user.id,
     name: user.name,
@@ -215,6 +286,18 @@ const AdminDashboardPage = () => {
       ? new Date(user.createdAt).toLocaleDateString()
       : user.createdAt || '-',
   }));
+
+  const filteredEmailActivity = emailActivity.filter((item) => {
+    const matchesType = emailFilter === 'all' || item.type === emailFilter;
+    const matchesStatus = emailStatusFilter === 'all' || item.status === emailStatusFilter;
+    const searchValue = emailSearch.trim().toLowerCase();
+    const matchesSearch = !searchValue || [item.type, item.subject, item.recipient, item.status]
+      .join(' ')
+      .toLowerCase()
+      .includes(searchValue);
+
+    return matchesType && matchesStatus && matchesSearch;
+  });
 
   return (
     <MainLayout>
@@ -312,6 +395,122 @@ const AdminDashboardPage = () => {
                 <Button key={`view-${row.id}`} variant="ghost" size="sm">View</Button>,
               ]
             }}
+          />
+        </Card>
+
+        {/* Backup Management */}
+        <Card>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
+                <FiDatabase size={18} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Backup Management</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Create a manual backup and review recent backup snapshots.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="primary" size="sm" onClick={handleCreateBackup} disabled={backupLoading}>
+                {backupLoading ? 'Creating backup...' : 'Create Backup'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleCleanupBackups} disabled={backupLoading}>
+                {backupLoading ? 'Cleaning up...' : 'Cleanup Old'}
+              </Button>
+            </div>
+          </div>
+
+          {backupMessage && (
+            <div className={`mt-4 rounded-lg border px-3 py-2 text-sm ${backupMessage.toLowerCase().includes('failed') || backupMessage.toLowerCase().includes('error') ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+              {backupMessage}
+            </div>
+          )}
+
+          <div className="mt-4">
+            <Table
+              columns={[
+                { key: 'name', label: 'Backup Name' },
+                { key: 'createdAt', label: 'Created At', render: (value) => new Date(value).toLocaleString() },
+                { key: 'size', label: 'Size' },
+                { key: 'farmId', label: 'Target' },
+              ]}
+              data={backups.slice(0, 5)}
+              loading={backups.length === 0 && !backupLoading}
+              actions={(row) => [
+                <Button
+                  key={`restore-${row.name}`}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRestoreBackup(row.name)}
+                  disabled={backupLoading}
+                >
+                  Restore
+                </Button>
+              ]}
+            />
+          </div>
+        </Card>
+
+        {/* Email Activity Feed */}
+        <Card>
+          <div className="flex flex-col gap-4 mb-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Email Activity</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Recent notifications sent through the platform.</p>
+              </div>
+            </div>
+            <div className="flex flex-col md:flex-row gap-3">
+              <input
+                type="text"
+                value={emailSearch}
+                onChange={(event) => setEmailSearch(event.target.value)}
+                placeholder="Search email activity"
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <select
+                value={emailFilter}
+                onChange={(event) => setEmailFilter(event.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="all">All Types</option>
+                <option value="WELCOME">Welcome</option>
+                <option value="OTP">OTP</option>
+                <option value="LOW_FEED_ALERT">Low Feed</option>
+                <option value="UNUSUAL_EXPENSE">Unusual Expense</option>
+                <option value="ANIMAL_HEALTH_ALERT">Animal Health</option>
+                <option value="SUBSCRIPTION_EXPIRING">Subscription Expiring</option>
+                <option value="DAILY_SUMMARY">Daily Summary</option>
+              </select>
+              <select
+                value={emailStatusFilter}
+                onChange={(event) => setEmailStatusFilter(event.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="all">All Status</option>
+                <option value="sent">Sent</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
+          </div>
+          <Table
+            columns={[
+              { key: 'type', label: 'Type' },
+              { key: 'recipient', label: 'Recipient' },
+              { key: 'subject', label: 'Subject' },
+              {
+                key: 'status',
+                label: 'Status',
+                render: (val) => <Badge variant={val === 'sent' ? 'success' : 'danger'}>{val}</Badge>,
+              },
+              {
+                key: 'createdAt',
+                label: 'Time',
+                render: (value) => new Date(value).toLocaleString(),
+              },
+            ]}
+            data={filteredEmailActivity}
+            loading={emailActivity.length === 0}
           />
         </Card>
 

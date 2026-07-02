@@ -1,17 +1,15 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Alert from '../components/ui/Alert';
-import axios from 'axios';
+import axiosInstance from '../utils/axiosInstance';
 import { AiOutlineLock, AiOutlineCheckCircle, AiOutlineReload } from 'react-icons/ai';
 import { BiErrorCircle } from 'react-icons/bi';
 
 function ResetOtp() {
   const navigate = useNavigate();
-  const { backendUrl } = useContext(AuthContext);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -160,14 +158,11 @@ function ResetOtp() {
 
     setIsLoading(true);
     try {
-      const response = await axios.post(
-        `${backendUrl}/api/auth/reset-password`,
-        {
+      const response = await axiosInstance.post('/api/auth/reset-password', {
           email: formData.email,
           otp: formData.otp,
           newPassword: formData.newPassword,
-        },
-        { withCredentials: true }
+        }
       );
 
       if (response.data.success) {
@@ -208,11 +203,7 @@ function ResetOtp() {
 
     setIsResending(true);
     try {
-      const response = await axios.post(
-        `${backendUrl}/api/auth/forgot-password-otp`,
-        { email: formData.email },
-        { withCredentials: true }
-      );
+      const response = await axiosInstance.post('/api/auth/forgot-password-otp', { email: formData.email });
 
       if (response.data.success) {
         setAlert({

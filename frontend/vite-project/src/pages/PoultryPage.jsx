@@ -1,18 +1,20 @@
 import React, { useState,useEffect } from 'react';
-import { FiPlus, FiEdit2, FiTrash2, FiSearch } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiDownload } from 'react-icons/fi';
 import MainLayout from '../layouts/MainLayout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import CurrencyInput from '../components/ui/CurrencyInput';
 import Select from '../components/ui/Select';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
-import Alert from '../components/ui/Alert';
+import { toast } from 'react-hot-toast';
 import { POULTRY_TYPES, VACCINATION_STATUS } from '../utils/constants';
 import { AuthContext } from '../context/AuthContext';
 import { useContext } from 'react';
+import { downloadExport, getDefaultFilename } from '../utils/exportHelper';
 
 /**
  * Poultry Management Page
@@ -26,7 +28,7 @@ const PoultryPage = () => {
   const [filterType, setFilterType] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [alert, setAlert] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
   const {axiosInstance} = useContext(AuthContext)
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
@@ -36,6 +38,8 @@ const PoultryPage = () => {
     vaccinationStatus: '',
     feedConsumption: '',
     purchaseDate: '',
+    ageInWeeks: '',
+    ageInDays: '',
     mortality: '',
     poultryConsumePerkg:'',
     purchasePrice: '',
@@ -87,19 +91,38 @@ const PoultryPage = () => {
   }, []);
 
   const handleAddNew = () => {
+    // Generate unique batchId
+    const timestamp = Date.now();
+    const randomNum = Math.floor(Math.random() * 1000);
+    const generatedBatchId = `BATCH-${timestamp}-${randomNum}`;
+    
     setFormData({
-      batchId: '',
+      batchId: generatedBatchId,
       type: '',
       quantity: '',
       vaccinationStatus: '',
       poultryConsumePerkg: '',
       purchaseDate: '',
+      ageInWeeks: '',
+      ageInDays: '',
       mortality: '',
       purchasePrice: '',
     });
     setEditingId(null);
     setErrors({});
     setIsModalOpen(true);
+  };
+
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      await downloadExport('poultry', axiosInstance, getDefaultFilename('poultry'));
+      toast.success('Poultry data exported successfully!');
+    } catch (error) {
+      toast.error(error.message || 'Failed to export poultry data');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
  
@@ -112,6 +135,8 @@ const PoultryPage = () => {
         quantity: item.quantity,
         vaccinationStatus: item.vaccinationStatus,
         purchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : '',
+        ageInWeeks: item.ageInWeeks || '',
+        ageInDays: item.ageInDays || '',
         mortality: item.mortality || '',
         purchasePrice: item.purchasePrice || '',
       });
@@ -120,7 +145,7 @@ const PoultryPage = () => {
       setErrors({});
       setIsModalOpen(true);
   } catch (error) {
-    setAlert({ type: 'error', message: 'Error fetching poultry details' });
+    toast.error('Error fetching poultry details');
     console.error('Error fetching poultry details:', error);
   }
   };
@@ -132,10 +157,10 @@ const PoultryPage = () => {
       setAvailablePoultry((prev) => prev.filter((item) => item._id !== id));
       setSoldPoultry((prev) => prev.filter((item) => item._id !== id));
       setPoultry((prev) => prev.filter((item) => item._id !== id));
-      setAlert({ type: 'success', message: 'Poultry deleted successfully!' });
+      toast.success('Poultry deleted successfully!');
     } catch (error) {
       console.log(error);
-      setAlert({ type: 'error', message: error.response?.data?.message || 'Error deleting poultry' });
+      toast.error(error.response?.data?.message || 'Error deleting poultry');
     }
   };
 
@@ -154,13 +179,19 @@ const PoultryPage = () => {
     e.preventDefault();
 
     // Validate required fields
-    const requiredFields = ['batchId', 'type', 'quantity', 'purchaseDate', 'vaccinationStatus', 'purchasePrice'];
+    const requiredFields = ['batchId', 'type', 'quantity', 'vaccinationStatus', 'purchasePrice'];
     const newErrors = {};
     requiredFields.forEach(field => {
       if (!formData[field] || formData[field].toString().trim() === '') {
         newErrors[field] = `${field} is required`;
       }
     });
+
+    if (!formData.purchaseDate && !formData.ageInDays && !formData.ageInWeeks) {
+      newErrors.purchaseDate = 'Either purchase date or age in weeks/days is required';
+      if (!formData.ageInWeeks) newErrors.ageInWeeks = 'Enter age in weeks or days';
+      if (!formData.ageInDays) newErrors.ageInDays = 'Enter age in weeks or days';
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -175,13 +206,15 @@ const PoultryPage = () => {
         response = await axiosInstance.post('/api/poultry/add-poultry', formData);
       }
       if (response.data.success) {
-        setAlert({ type: 'success', message: response.data.message });
+        toast.success(response.data.message || 'Poultry saved successfully');
         setFormData({
           batchId: '',
           type: '',
           quantity: '',
           vaccinationStatus: '',
           purchaseDate: '',
+          ageInWeeks: '',
+          ageInDays: '',
           mortality: '',
           purchasePrice: '',
         });
@@ -198,7 +231,7 @@ const PoultryPage = () => {
         }, 5000)
       }
     } catch (error) {
-      setAlert({ type: 'error', message: error.response?.data?.message});
+      toast.error(error.response?.data?.message || 'Error saving poultry');
       console.error( error);
     }
   }
@@ -240,20 +273,17 @@ const PoultryPage = () => {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Poultry Management</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">Monitor and manage poultry batches</p>
           </div>
-          <Button variant="primary" size="lg" onClick={handleAddNew} className="flex items-center gap-2">
-            <FiPlus size={20} />
-            Add Batch
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="lg" onClick={handleExport} disabled={isExporting} className="flex items-center gap-2">
+              <FiDownload size={20} />
+              {isExporting ? 'Exporting...' : 'Export'}
+            </Button>
+            <Button variant="primary" size="lg" onClick={handleAddNew} className="flex items-center gap-2">
+              <FiPlus size={20} />
+              Add Batch
+            </Button>
+          </div>
         </div>
-
-        {alert && (
-          <Alert
-            type={alert.type}
-            message={alert.message}
-            closeable
-            onClose={() => setAlert(null)}
-          />
-        )}
 
         {/* Tab Navigation */}
         <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700">
@@ -357,6 +387,8 @@ const PoultryPage = () => {
               value={formData.batchId}
               onChange={handleChange}
               error={errors.batchId}
+              disabled={!editingId}
+              title={!editingId ? "Batch ID is auto-generated" : ""}
               required
             />
             
@@ -387,9 +419,8 @@ const PoultryPage = () => {
               error={errors.mortality}
             />
             {formData.type === 'layer' || formData.type === 'broiler' ? (
-              <Input
+              <CurrencyInput
                 label="Purchase Price (₦)"
-                type="number"
                 name="purchasePrice"
                 value={formData.purchasePrice}
                 onChange={handleChange}
@@ -414,6 +445,24 @@ const PoultryPage = () => {
               onChange={handleChange}
               error={errors.vaccinationStatus}
               required
+            />
+            <Input
+              label="Age (weeks)"
+              type="number"
+              name="ageInWeeks"
+              value={formData.ageInWeeks}
+              onChange={handleChange}
+              error={errors.ageInWeeks}
+              placeholder="Optional if purchase date is set"
+            />
+            <Input
+              label="Age (days)"
+              type="number"
+              name="ageInDays"
+              value={formData.ageInDays}
+              onChange={handleChange}
+              error={errors.ageInDays}
+              placeholder="Optional if purchase date is set"
             />
           </div>
 

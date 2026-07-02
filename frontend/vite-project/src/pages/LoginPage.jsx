@@ -1,25 +1,22 @@
 import React, { useContext, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
 import Alert from '../components/ui/Alert';
-import { validateForm, loginSchema } from '../utils/validation';
-import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
+import axiosInstance from '../utils/axiosInstance';
 
 /**
  * Login Page
  */
 const LoginPage = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
   const [alert, setAlert] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const {setIsLogin,backendUrl,getUserData} = useContext(AuthContext)
+  const { setIsLogin, getUserData } = useContext(AuthContext)
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -34,11 +31,12 @@ const LoginPage = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-    const response = await axios.post(backendUrl+'/api/auth/login', formData, { withCredentials: true });
+    const response = await axiosInstance.post('/api/auth/login', formData);
+    console.log('Login response:', response.data);
     if (response.data.success) {
       setAlert({ type: 'success', message: response.data.message });
-      setIsLogin(true)
-      await getUserData()
+      setIsLogin(true);
+      await getUserData(true);
       navigate('/dashboard');
     } else {
       setAlert({ type: 'error', message: response.data.message || 'Login failed' });

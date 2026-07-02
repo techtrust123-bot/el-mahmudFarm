@@ -5,42 +5,45 @@ import axiosInstance from '../utils/axiosInstance';
 export const AuthContext = createContext()
 
 export const AuthProvider = (props) =>{
-  const backendUrl = import.meta.env.VITE_BACKEND_URL
+  const backendUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
   const [isLogin, setIsLogin] = useState(false)
   const [userData, setUserData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [authChecked, setAuthChecked] = useState(false)
   const [sessionWarning, setSessionWarning] = useState(false)
 
-  const getUserData = async()=>{
-    if (authChecked) return; // Prevent multiple calls
+  const getUserData = async (force = false) => {
+    if (!force && authChecked) return; // Prevent repeated calls unless explicitly forced
 
-    setLoading(true)
+    setLoading(true);
     try {
       const res = await axiosInstance.get('/api/user/userData');
       if (res.data.success) {
-        setUserData(res.data.userData)
-        setIsLogin(true)
-        scheduleTokenWarning()
+        setUserData(res.data.userData);
+        setIsLogin(true);
+        scheduleTokenWarning();
       } else {
-        setUserData(null)
-        setIsLogin(false)
+        setUserData(null);
+        setIsLogin(false);
       }
     } catch (error) {
-      console.log(error)
-      setUserData(null)
-      setIsLogin(false)
+      console.log(error);
+      setUserData(null);
+      setIsLogin(false);
     } finally {
-      setLoading(false)
-      setAuthChecked(true)
+      setLoading(false);
+      setAuthChecked(true);
     }
-  }
+  };
 
   const login = async (email, password) => {
     try {
       const res = await axiosInstance.post('/api/auth/login', { email, password });
       if (res.data.success) {
-        setUserData(res.data.userData);
+        const user = res.data.user || res.data.userData || null;
+        if (user) {
+          setUserData(user);
+        }
         setIsLogin(true);
         setAuthChecked(true);
         scheduleTokenWarning();

@@ -9,9 +9,10 @@ const ProtectedRoute = ({ children, requiredRole = null, requiredPermission = nu
   const { isLogin, userData, loading } = useContext(AuthContext);
   const isAuthenticated = isLogin;
   const user = userData;
-  const isSubscribed = Boolean(user?.isSubscribed);
   const normalizedUserType = user?.userType?.toLowerCase();
   const normalizedRole = user?.role?.toLowerCase();
+  const isAdmin = normalizedRole === 'admin' || normalizedUserType === 'admin';
+  const isSubscribed = Boolean(user?.isSubscribed || isAdmin);
   const normalizedPermissions = Array.isArray(user?.permissions)
     ? user.permissions.map((perm) => (typeof perm === 'string' ? perm.toLowerCase() : perm))
     : [];

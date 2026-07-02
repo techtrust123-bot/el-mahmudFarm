@@ -3,11 +3,12 @@ const RefreshToken = require('../models/refreshToken');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-const trasporter = require('../nodemailer/trasporter');
 const bcrypt = require('bcryptjs');
 const winston = require('winston');
 const { body, validationResult } = require('express-validator');
 const { validate, emailValidation, passwordValidation, nameValidation } = require('../middleweres/validation');
+const ApiError = require('../utils/ApiError');
+const { sendNotification } = require('../services/emailService');
 
 // Logger instance (assuming it's set up in index.js)
 const logger = winston.createLogger({
@@ -65,32 +66,46 @@ exports.register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Validation failed', errors: formattedErrors });
     }
 
-    const { name, email, password } = req.body;
+    const { name, email, password, farmName, phone, address, city } = req.body;
 
     const existingUser = await authModel.findOne({ email });
     if (existingUser) {
       logAuthEvent('registration_failed', null, null, req.ip, req.get('User-Agent'), { reason: 'user_exists', email });
-      return res.status(400).json({ success: false, message: 'User already exists' });
+      // return res.status(400).json({ success: false, message: 'User already exists' });
+      throw new ApiError(400, 'User already exists');
     }
 
     const userCount = await authModel.countDocuments();
-    if (userCount > 1000) {
-      return res.status(403).json({ success: false, message: 'Registration is restricted. Please ask your manager to create your staff account.' });
-    }
+    // if (userCount > 1000) {
+    //   return res.status(403).json({ success: false, message: 'Registration is restricted. Please ask your manager to create your staff account.' });
+    // }
     const role = userCount === 0 ? 'admin' : 'manager';
     const hashPassword = await bcrypt.hash(password, 12);
     const farmId = new mongoose.Types.ObjectId();
     const defaultPermissions = ['dashboard', 'livestock', 'poultry', 'feed', 'sales', 'expenses', 'staff', 'reports', 'settings'];
+    const trialDays = role === 'admin' ? 3650 : role === 'manager' ? 14 : 0;
+    const trialStart = trialDays > 0 ? new Date() : null;
+    const trialEnd = trialDays > 0 ? new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000) : null;
+    const isTrial = trialDays > 0;
 
     const user = new authModel({
       name,
       email,
+      farmName,
+      phone,
+      address,
+      city,
       password: hashPassword,
       role: role,
-      userType: 'manager',
+      userType: role === 'admin' ? 'admin' : 'manager',
       farmId: farmId.toString(),
       permissions: defaultPermissions,
       createdBy: null,
+      subscriptionStatus: isTrial ? 'trial' : 'inactive',
+      subscriptionType: isTrial ? 'trial' : 'none',
+      subscriptionStart: trialStart,
+      subscriptionEnd: trialEnd,
+      isSubscribed: isTrial,
     });
 
     const otp = String(Math.floor(100000 + Math.random() * 900000));
@@ -146,14 +161,14 @@ exports.register = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    const mailOption = {
-      from: process.env.SENDER_MAIL,
-      to: email,
-      subject: 'ACCOUNT VERIFICATION OTP',
-      text: `Hello ${name}, your verification otpCode is: ${otp} please verified your account using this otpcode`,
-    };
+    await sendNotification(email, 'OTP', {
+      userName: name,
+      otp
+    });
 
-    await trasporter.sendMail(mailOption);
+    await sendNotification(email, 'WELCOME', {
+      userName: name
+    });
 
     logAuthEvent('registration_success', user._id, user.farmId, req.ip, req.get('User-Agent'), { email });
 
@@ -164,16 +179,28 @@ exports.register = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        farmName: user.farmName,
+        phone: user.phone,
+        address: user.address,
+        city: user.city,
         role: user.role,
         userType: user.userType,
         farmId: user.farmId,
         permissions: user.permissions,
+        subscriptionStatus: user.subscriptionStatus,
+        subscriptionType: user.subscriptionType,
+        subscriptionStart: user.subscriptionStart,
+        subscriptionEnd: user.subscriptionEnd,
+        isSubscribed: user.isSubscribed,
       }
     });
   } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
     console.error('Error registering user:', error);
     logAuthEvent('registration_error', null, null, req.ip, req.get('User-Agent'), { error: error.message });
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    throw new ApiError(500, 'Internal server error');
   }
 };
 
@@ -185,25 +212,25 @@ exports.login = async (req, res) => {
       errors.array().forEach(error => {
         formattedErrors[error.param] = error.msg;
       });
-      return res.status(400).json({ success: false, message: 'Validation failed', errors: formattedErrors });
+      throw new ApiError(400, 'Validation failed', formattedErrors);
     }
-
     const { email, password } = req.body;
-
     const user = await authModel.findOne({ email });
     if (!user) {
       logAuthEvent('login_failed', null, null, req.ip, req.get('User-Agent'), { reason: 'user_not_found', email });
-      return res.status(404).json({ success: false, message: 'User not found' });
+      // return res.status(404).json({ success: false, message: 'User not found' });
+      throw new ApiError(404, 'User not found');
     }
 
     // Check if account is locked
     if (isAccountLocked(user)) {
       const remainingTime = Math.ceil((user.lockUntil - Date.now()) / 1000 / 60);
       logAuthEvent('login_failed', user._id, user.farmId, req.ip, req.get('User-Agent'), { reason: 'account_locked', remainingMinutes: remainingTime });
-      return res.status(423).json({
-        success: false,
-        message: `Account locked due to too many failed attempts. Try again in ${remainingTime} minutes.`
-      });
+      // return res.status(423).json({
+      //   success: false,
+      //   message: `Account locked due to too many failed attempts. Try again in ${remainingTime} minutes.`
+      // });
+      throw new ApiError(423, `Account locked due to too many failed attempts. Try again in ${remainingTime} minutes.`);
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -214,11 +241,13 @@ exports.login = async (req, res) => {
       if (user.loginAttempts >= 5) {
         user.lockUntil = Date.now() + 30 * 60 * 1000; // Lock for 30 minutes
         logAuthEvent('account_locked', user._id, user.farmId, req.ip, req.get('User-Agent'), { attempts: user.loginAttempts });
+        throw new ApiError(423, 'Account locked due to too many failed attempts. Try again later.');
       }
 
       await user.save();
       logAuthEvent('login_failed', user._id, user.farmId, req.ip, req.get('User-Agent'), { reason: 'invalid_password', attempts: user.loginAttempts });
-      return res.status(400).json({ success: false, message: 'Invalid Credentials' });
+      // return res.status(400).json({ success: false, message: 'Invalid Credentials' });
+      throw new ApiError(400, 'Invalid Credentials');
     }
 
     // Reset login attempts on successful login
@@ -265,16 +294,29 @@ exports.login = async (req, res) => {
           role: user.role,
           userType: user.userType,
           farmId: user.farmId,
+          farmName: user.farmName,
+          phone: user.phone,
+          address: user.address,
+          city: user.city,
           permissions: user.permissions,
+          isAccountVerified: user.isAccountVerified,
+          subscriptionStatus: user.subscriptionStatus,
+          subscriptionType: user.subscriptionType,
+          subscriptionStart: user.subscriptionStart,
+          subscriptionEnd: user.subscriptionEnd,
+          isSubscribed: user.isSubscribed,
         },
       });
     } catch (error) {
-      console.log(error);
-      logAuthEvent('login_error', null, null, req.ip, req.get('User-Agent'), { error: error.message });
-      res.status(500).json({ success: false, message: error.message });
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      console.log('CAUGHT ERROR');
+      console.log(error.message);
+      console.log(error.statusCode);
+      throw new ApiError(500, 'Internal server error');
     }
 };
-
 exports.refresh = async (req, res) => {
   try {
     const refreshTokenValue = req.cookies.refreshToken;
@@ -367,13 +409,16 @@ exports.refresh = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
       }
     });
   } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
     console.error('Refresh token error:', error);
     logAuthEvent('refresh_error', null, null, req.ip, req.get('User-Agent'), { error: error.message });
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    throw new ApiError(500, 'Internal server error');
   }
 };
 
@@ -383,15 +428,14 @@ exports.logout = async (req, res) => {
 
     // Delete refresh token from database if it exists
     if (refreshTokenValue) {
-      const refreshTokenDoc = await RefreshToken.findOne({
-        tokenHash: { $exists: true },
+      const refreshTokenDocs = await RefreshToken.find({
         expiresAt: { $gt: new Date() }
       });
-
-      if (refreshTokenDoc) {
-        const isValid = await refreshTokenDoc.verifyToken(refreshTokenValue);
+      for (const tokenDoc of refreshTokenDocs) {
+        const isValid = await tokenDoc.verifyToken(refreshTokenValue);
         if (isValid) {
-          await RefreshToken.findByIdAndDelete(refreshTokenDoc._id);
+          await RefreshToken.findByIdAndDelete(tokenDoc._id);
+          break;
         }
       }
     }
@@ -413,9 +457,12 @@ exports.logout = async (req, res) => {
 
     res.status(200).json({ success: true, message: "Logout Successful" });
   } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
     console.log(error);
     logAuthEvent('logout_error', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'), { error: error.message });
-    res.status(500).json({ success: false, message: error.message });
+    throw new ApiError(500, 'Internal server error');
   }
 };
 
@@ -424,48 +471,54 @@ exports.verifiedOtp = async (req, res) => {
   const userId = req.user.id
 
   if(!otp){
-    return res.status(400).json({message:'otp is required...'})
+    throw new ApiError(400, 'OTP is required');
   }
   try {
     const user = await authModel.findById(userId)
     if(!user){
-      return res.status(404).json({message:'user not found'})
+      throw new ApiError(404, 'User not found');
     }
     if(user.isAccountVerified === true){
-      return res.status(400).json({message:'Account Already Verified'})
+      throw new ApiError(400, 'Account Already Verified');
     }
   
     if(user.verificationOtpExpiresAt < Date.now()){
-      return res.status(400).json({message:'otp expired'})
+      throw new ApiError(400, 'OTP expired');
     }
     const isMatch = await bcrypt.compare(otp,user.verificationOtp)
     if(!isMatch){
-      return res.status(400).json({message:'invalid otp code'})
-    }else{
-      user.isAccountVerified = true,
-      user.verificationOtp = '',
-      user.verificationOtpExpiresAt = 0
+      throw new ApiError(400, 'Invalid OTP Code');
     }
-    await user.save()
-    res.status(200).json({message:'Account Verified Successful'})
 
+    user.isAccountVerified = true;
+    user.verificationOtp = '';
+    user.verificationOtpExpiresAt = 0;
+    await user.save();
+
+    return res.status(200).json({ success: true, message: 'Account Verified Successful' });
   } catch (error) {
+     if (error instanceof ApiError) {
+       throw error;
+     }
      console.log(error)
-    res.status(500).json({success:false, message:error.message})
+    throw new ApiError(500, 'Internal server error');
   }
 }
 
 exports.getUsers = async(req,res)=>{
   try {
     if (!req.user || (req.user.userType !== 'manager' && req.user.role !== 'admin')) {
-      return res.status(403).json({ success: false, message: 'Forbidden: Manager access only' })
+      throw new ApiError(403, 'Forbidden: Manager access only');
     }
     const query = req.user.role === 'admin' ? {} : { farmId: req.user.farmId }
     const users = await authModel.find(query).select('-password -verificationOtp -resetPassword -loginAttempts -lockUntil')
     return res.status(200).json({ success: true, users })
   } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
     console.log(error)
-    res.status(500).json({ success: false, message: error.message })
+    throw new ApiError(500, 'Internal server error');
   }
 }
 
@@ -475,27 +528,24 @@ exports.resendOtp = async(req,res)=>{
   try {
     const user = await authModel.findById(userId)
     if(!user){
-      return res.status(404).json({success:false, message:'user not found'})
+      throw new ApiError(404, 'User not found');
     }
     if(user.isAccountVerified === true){
-      return res.status(400).json({success:false, message:'Account Already Verified'})
+      throw new ApiError(400, 'Account Already Verified');
     }
     const otp = String(Math.floor(100000 + Math.random() * 900000))
     const otphash = await bcrypt.hash(otp,12)
     user.verificationOtp = otphash,
     user.verificationOtpExpiresAt = Date.now() + 10 * 60 * 1000
     await user.save()
-    const mailOption = {
-      from:process.env.SENDER_MAIL,
-      to:user.email,
-      subject:"Resend ACCOUNT VERIFICATION OTP",
-      text:`Hello ${user.name}, your verification otpCode is: ${otp} please verified your account using this otpcode`
-    }
-    await trasporter.sendMail(mailOption)
+    await sendNotification(user.email, 'OTP', {
+      userName: user.name,
+      otp
+    });
     res.status(200).json({success:true, message:'OTP Resend Successful'})
   } catch (error) {
     console.log(error)
-    res.status(500).json({success:false, message:error.message})
+    throw new ApiError(500, 'Internal server error');
   }
 }
 
@@ -503,29 +553,27 @@ exports.resendOtp = async(req,res)=>{
 exports.forgotPasswordOtp = async(req,res)=>{
   const {email} = req.body
   if(!email){
-    return res.status(400).json({message:'email is required...'})
+    throw new ApiError(400, 'Email is required');
   }
   try {
     const user = await authModel.findOne({email})
     if(!user){
-      return res.status(404).json({success:false, message:'user not found'})
+      // return res.status(404).json({success:false, message:'user not found'})
+      throw new ApiError(404, 'User not found');
     }
     const resetOtp = String(Math.floor(100000 + Math.random() * 900000))
    const resetOtpHash = await bcrypt.hash(resetOtp,12)
     user.resetPassword = resetOtpHash,
     user.resetPasswordExpiresAt = Date.now() + 10 * 60 * 1000
     await user.save()
-    const mailOption = {
-      from:process.env.SENDER_MAIL,
-      to:email,
-      subject:"Reset Password Otp Code",
-      text:`Your Reset Otp Code is :${resetOtp} Reset your password using this Otp code`
-    }
-    await trasporter.sendMail(mailOption)
+    await sendNotification(email, 'OTP', {
+      userName: user.name,
+      otp: resetOtp
+    });
     res.status(200).json({success:true, message:'Reset Password Send Successful..'})
   } catch (error) {
      console.log(error)
-    res.status(500).json({success:false, message:error.message})
+    throw new ApiError(500, 'Internal server error');
   }
 }
 
@@ -545,22 +593,22 @@ exports.resetPassword = async (req, res) => {
     const user = await authModel.findOne({ email });
     if (!user) {
       logAuthEvent('password_reset_failed', null, null, req.ip, req.get('User-Agent'), { reason: 'user_not_found' });
-      return res.status(404).json({ success: false, message: 'User not found' });
+      throw new ApiError(404, 'User not found');
     }
 
     const isMatch = await bcrypt.compare(otp, user.resetPassword);
     if (!isMatch) {
       logAuthEvent('password_reset_failed', user._id, user.farmId, req.ip, req.get('User-Agent'), { reason: 'invalid_otp' });
-      return res.status(400).json({ success: false, message: "Invalid OTP Code" });
+      throw new ApiError(400, 'Invalid OTP Code');
     }
 
     if (user.resetPasswordExpiresAt < Date.now()) {
       logAuthEvent('password_reset_failed', user._id, user.farmId, req.ip, req.get('User-Agent'), { reason: 'otp_expired' });
-      return res.status(400).json({ success: false, message: "Reset Password OTP Code Expired" });
+      throw new ApiError(400, 'Reset Password OTP Code Expired');
     }
 
     if (!user.resetPassword || user.resetPassword === '') {
-      return res.status(400).json({ success: false, message: "Please Request for Reset Password OTP Code" });
+      throw new ApiError(400, 'Please Request for Reset Password OTP Code');
     }
 
     const hashNewPassword = await bcrypt.hash(newPassword, 12);
@@ -573,8 +621,11 @@ exports.resetPassword = async (req, res) => {
 
     res.status(200).json({ success: true, message: "Password reset successful" });
   } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
     console.log(error);
     logAuthEvent('password_reset_error', null, null, req.ip, req.get('User-Agent'), { error: error.message });
-    res.status(500).json({ success: false, message: error.message });
+    throw new ApiError(500, 'Internal server error');
   }
 };

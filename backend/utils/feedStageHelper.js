@@ -1,5 +1,6 @@
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const POULTRY_TYPES = new Set(['broiler', 'layer'])
-const LIVESTOCK_TYPES = new Set(['cow', 'cattle', 'sheep', 'goat', 'horse', 'ram', 'bool'])
+const LIVESTOCK_TYPES = new Set(['cow', 'cattle', 'sheep', 'goat', 'horse', 'ram', 'bull'])
 
 const getPoultryFeedStage = (ageInDays) => {
   if (ageInDays <= 28) return 'Starter'
@@ -33,6 +34,24 @@ const calculateAge = (birthDate) => {
   const ageInDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
   const ageInWeeks = Math.floor(ageInDays / 7)
   return { ageInDays, ageInWeeks }
+}
+
+const getBirthDateFromAge = ({ ageInDays, ageInWeeks, purchaseDate }) => {
+  if (Number.isFinite(Number(ageInDays)) && Number(ageInDays) >= 0) {
+    const result = new Date()
+    result.setHours(0, 0, 0, 0)
+    result.setTime(result.getTime() - Number(ageInDays) * MS_PER_DAY)
+    return result
+  }
+
+  if (Number.isFinite(Number(ageInWeeks)) && Number(ageInWeeks) >= 0) {
+    const result = new Date()
+    result.setHours(0, 0, 0, 0)
+    result.setTime(result.getTime() - Number(ageInWeeks) * 7 * MS_PER_DAY)
+    return result
+  }
+
+  return purchaseDate ? new Date(purchaseDate) : new Date()
 }
 
 const normalizeFeedCategory = (rawCategory) => {
@@ -117,4 +136,4 @@ const getFeedForStage = async (Feed, animalType, feedStage) => {
   return feed
 }
 
-module.exports = { getFeedStage, calculateAge, getFeedForStage, parseFeedType, normalizeFeedCategory }
+module.exports = { getFeedStage, calculateAge, getBirthDateFromAge, getFeedForStage, parseFeedType, normalizeFeedCategory }

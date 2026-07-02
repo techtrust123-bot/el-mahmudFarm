@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit2, FiTrash2, FiSearch } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiDownload } from 'react-icons/fi';
 import MainLayout from '../layouts/MainLayout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import CurrencyInput from '../components/ui/CurrencyInput';
 import Select from '../components/ui/Select';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
-import Alert from '../components/ui/Alert';
+import { toast } from 'react-hot-toast';
 import { LIVESTOCK_TYPES, HEALTH_STATUS } from '../utils/constants';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import { downloadExport, getDefaultFilename } from '../utils/exportHelper';
 
 
 /**
@@ -25,7 +27,7 @@ const LivestockPage = () => {
   const [activeTab, setActiveTab] = useState('available');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [alert, setAlert] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
   const { axiosInstance } = useContext(AuthContext);
   const [livestockList, setLivestockList] = useState([]);
   const [availableLivestock, setAvailableLivestock] = useState([]);
@@ -38,6 +40,8 @@ const LivestockPage = () => {
     weight: '',
     healthStatus: '',
     purchaseDate: '',
+    ageInWeeks: '',
+    ageInDays: '',
     purchasePrice: '',
     type: '',
   });
@@ -73,12 +77,26 @@ const LivestockPage = () => {
       weight: '',
       healthStatus: '',
       purchaseDate: '',
+      ageInWeeks: '',
+      ageInDays: '',
       purchasePrice: '',
       type: '',
     });
     setEditingId(null);
     setErrors({});
     setIsModalOpen(true);
+  };
+
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      await downloadExport('livestock', axiosInstance, getDefaultFilename('livestock'));
+      toast.success('Livestock data exported successfully!');
+    } catch (error) {
+      toast.error(error.message || 'Failed to export livestock data');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleEdit = async (item) => {
@@ -91,11 +109,13 @@ const LivestockPage = () => {
       weight: item.weight,
       healthStatus: item.healthStatus,
       purchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : '',
+      ageInWeeks: item.ageInWeeks || '',
+      ageInDays: item.ageInDays || '',
       purchasePrice: item.purchasePrice,
       type: item.type,
     });
     } else {
-      setAlert({ type: 'error', message: 'Error fetching livestock details' });
+      toast.error('Error fetching livestock details');
       return;
     }
     setEditingId(item._id);
@@ -109,10 +129,10 @@ const LivestockPage = () => {
       setLivestockList((prev) => prev.filter((item) => item._id !== id));
       setAvailableLivestock((prev) => prev.filter((item) => item._id !== id));
       setSoldLivestock((prev) => prev.filter((item) => item._id !== id));
-      setAlert({ type: 'success', message: 'Livestock deleted successfully!' });
+      toast.success('Livestock deleted successfully!');
     } catch (error) {
       console.log(error);
-      setAlert({ type: 'error', message: 'Error deleting livestock' });
+      toast.error('Error deleting livestock');
     }
   };
 
@@ -130,6 +150,16 @@ const LivestockPage = () => {
 
   const handleSubmit = async(e) => {
     e.preventDefault();
+    const newErrors = {};
+    if (!formData.purchaseDate && !formData.ageInDays && !formData.ageInWeeks) {
+      newErrors.purchaseDate = 'Either purchase date or age in weeks/days is required';
+      if (!formData.ageInWeeks) newErrors.ageInWeeks = 'Enter age in weeks or days';
+      if (!formData.ageInDays) newErrors.ageInDays = 'Enter age in weeks or days';
+    }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
     try {
       let response;
       if (editingId) {
@@ -138,7 +168,7 @@ const LivestockPage = () => {
         response = await axiosInstance.post('/api/livestock/add-animal', formData);
       }
       if (response.data.success) {
-        setAlert({ type: "success", message: response.data.message });
+        toast.success(response.data.message || 'Livestock saved successfully');
         setFormData({
           tagNumber: '',
           breed: '',
@@ -146,6 +176,8 @@ const LivestockPage = () => {
           weight: '',
           healthStatus: '',
           purchaseDate: '',
+          ageInWeeks: '',
+          ageInDays: '',
           purchasePrice: '',
           type: '',
         });
@@ -161,7 +193,7 @@ const LivestockPage = () => {
       }
     } catch (error) {
       console.log(error);
-      setAlert({ type: "error", message: error.response?.data?.message || 'Error saving livestock' });
+      toast.error(error.response?.data?.message || 'Error saving livestock');
     }
   };
   useEffect(()=>{
@@ -236,20 +268,17 @@ const LivestockPage = () => {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Livestock Management</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">Manage and track your livestock inventory</p>
           </div>
-          <Button variant="primary" size="lg" onClick={handleAddNew} className="flex items-center gap-2">
-            <FiPlus size={20} />
-            Add Livestock
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="lg" onClick={handleExport} disabled={isExporting} className="flex items-center gap-2">
+              <FiDownload size={20} />
+              {isExporting ? 'Exporting...' : 'Export'}
+            </Button>
+            <Button variant="primary" size="lg" onClick={handleAddNew} className="flex items-center gap-2">
+              <FiPlus size={20} />
+              Add Livestock
+            </Button>
+          </div>
         </div>
-
-        {alert && (
-          <Alert
-            type={alert.type}
-            message={alert.message}
-            closeable
-            onClose={() => setAlert(null)}
-          />
-        )}
 
         {/* Tab Navigation */}
         <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700">
@@ -392,6 +421,24 @@ const LivestockPage = () => {
               required
             />
             <Input
+              label="Age (weeks)"
+              type="number"
+              name="ageInWeeks"
+              value={formData.ageInWeeks}
+              onChange={handleChange}
+              error={errors.ageInWeeks}
+              placeholder="Optional if purchase date is set"
+            />
+            <Input
+              label="Age (days)"
+              type="number"
+              name="ageInDays"
+              value={formData.ageInDays}
+              onChange={handleChange}
+              error={errors.ageInDays}
+              placeholder="Optional if purchase date is set"
+            />
+            <Input
               label="Weight (kg)"
               type="number"
               name="weight"
@@ -400,9 +447,8 @@ const LivestockPage = () => {
               error={errors.weight}
               required
             />
-            <Input
+            <CurrencyInput
               label="Purchase Price"
-              type="number"
               name="purchasePrice"
               value={formData.purchasePrice}
               onChange={handleChange}
