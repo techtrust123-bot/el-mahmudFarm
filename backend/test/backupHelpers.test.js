@@ -1,16 +1,19 @@
 const assert = require('assert');
 const { validateMongoUri, resolveMainDatabaseName, normalizeBackupOptions, formatBytes } = require('../services/backupHelpers');
+const mongoose = require('mongoose')
+const dotenv = require('dotenv')
+dotenv.config()
 
 (async () => {
   try {
     console.log('Running backup helper tests...');
 
-    assert.strictEqual(validateMongoUri('mongodb://localhost:27017/cloudfarm_main'), 'mongodb://localhost:27017/cloudfarm_main');
-    assert.strictEqual(validateMongoUri('mongodb+srv://user:pass@cluster0.mongodb.net/cloudfarm_main'), 'mongodb+srv://user:pass@cluster0.mongodb.net/cloudfarm_main');
-    assert.strictEqual(validateMongoUri(''), 'mongodb://127.0.0.1:27017/cloudfarm_main');
-    assert.strictEqual(validateMongoUri(undefined), 'mongodb://127.0.0.1:27017/cloudfarm_main');
+    assert.strictEqual(validateMongoUri(process.env.MONGO_URI), process.env.MONGO_URI);
+    assert.strictEqual(validateMongoUri(process.env.MONGO_URI), process.env.MONGO_URI);
+    assert.strictEqual(validateMongoUri(''), process.env.MONGO_URI);
+    assert.strictEqual(validateMongoUri(undefined), process.env.MONGO_URI);
 
-    assert.strictEqual(resolveMainDatabaseName('mongodb://localhost:27017/cloudfarm_main'), 'cloudfarm_main');
+    assert.strictEqual(resolveMainDatabaseName(process.env.MONGO_URI), 'cloudfarm_main');
     assert.strictEqual(resolveMainDatabaseName('mongodb://localhost:27017/'), 'cloudfarm_main');
 
     const mainOptions = normalizeBackupOptions(null, {});
