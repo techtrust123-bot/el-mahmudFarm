@@ -1,19 +1,27 @@
 const express = require('express');
-const {
-  createBackup,
-  listBackups,
-  restoreBackup,
-  cleanupBackups
-} = require('../controllers/backupController');
+const router = express.Router();
+const { runNow } = require('../jobs/backupJob');
 const { authMiddleware, isManager } = require('../middleweres/authMiddlewere');
 const { asyncHandler } = require('../middleware/errorHandler');
+const { listBackups,createBackup } = require('../controllers/backupController');
 
-const router = express.Router();
+/**
+ * POST /api/backup/create
+ * - Secured endpoint to create a new backup.
+ * - Requires authenticated manager/admin user.
+ */
+router.post('/create', authMiddleware, isManager, asyncHandler(createBackup));
 
-// Backup routes (restricted to authenticated users)
-router.post('/create', authMiddleware, asyncHandler(createBackup));
-router.get('/list', authMiddleware, asyncHandler(listBackups));
-router.post('/restore', authMiddleware, isManager, asyncHandler(restoreBackup));
-router.post('/cleanup', authMiddleware, isManager, asyncHandler(cleanupBackups));
+/**
+ * POST /api/backup/run
+ * - Secured endpoint to trigger manual backups.
+ * - Requires authenticated manager/admin user.
+ */
+router.post('/run', authMiddleware, isManager, asyncHandler(async (req, res) => {
+  // Trigger backup asynchronously but return accepted response quickly
+  runNow().catch(() => {});
+  res.status(202).json({ success: true, message: 'Backup triggered' });
+}));
+router.get('/list', authMiddleware, isManager,asyncHandler(listBackups) )
 
 module.exports = router;

@@ -21,10 +21,6 @@ const poultrySchema = new mongoose.Schema({
         type:Number,
         required:true
      },
-     joinDate:{
-        type:Date,
-        default:Date.now
-     },
      feedStage:{
         type:String,
         enum:['Starter','Grower','Finisher'],
@@ -40,10 +36,6 @@ const poultrySchema = new mongoose.Schema({
     purchasePrice:{
         type:Number,
         required:true
-    },
-    joinDate:{
-        type:Date,
-        default:Date.now
     },
     vaccinationStatus:{
         type:String,

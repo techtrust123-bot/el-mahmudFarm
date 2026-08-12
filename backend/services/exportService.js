@@ -1,189 +1,505 @@
 /**
  * Export Service
- * Exports data to CSV and other formats
+ * Exports data to CSV and plain text formats with metadata and reusable formatting.
  */
 
 const { Parser } = require('json2csv');
-const fs = require('fs');
-const path = require('path');
+const logger = require('../utils/logger');
+
+const CSV_MIME_TYPE = 'text/csv';
+const TEXT_MIME_TYPE = 'text/plain';
+
+const numberFormatter = new Intl.NumberFormat('en-NG', {
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 0
+});
 
 /**
- * Convert JSON to CSV
+ * Convert a value into a Date object, returning null for invalid values.
+ * @param {*} value
+ * @returns {Date|null}
  */
-const jsonToCSV = (data, filename) => {
-  try {
-    if (!Array.isArray(data) || data.length === 0) {
-      return null;
-    }
-
-    // Parse JSON to CSV
-    const parser = new Parser();
-    const csv = parser.parse(data);
-
-    return {
-      filename,
-      content: csv,
-      mimeType: 'text/csv'
-    };
-  } catch (error) {
-    console.error('Error converting to CSV:', error);
-    throw error;
+const parseDate = (value) => {
+  if (value instanceof Date) {
+    return Number.isNaN(value.valueOf()) ? null : value;
   }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.valueOf()) ? null : parsed;
 };
 
 /**
- * Export livestock data
+ * Format a date as YYYY-MM-DD.
+ * @param {*} value
+ * @returns {string}
  */
-const exportLivestock = (livestockData) => {
-  const formattedData = livestockData.map(animal => ({
-    Type: animal.type,
-    Breed: animal.breed,
-    Age: `${animal.age} years`,
-    Weight: `${animal.weight} kg`,
-    'Cost Price': `₦${animal.costPrice?.toLocaleString() || 0}`,
-    'Tag Number': animal.tagNumber || 'N/A',
-    'Health Status': animal.healthStatus || 'Good',
-    'Date Added': new Date(animal.createdAt).toLocaleDateString(),
-    Status: animal.status || 'Active'
-  }));
+const formatDate = (value) => {
+  const date = parseDate(value);
 
-  return jsonToCSV(formattedData, `livestock-${Date.now()}.csv`);
+  if (!date) {
+    return 'N/A';
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
 };
 
 /**
- * Export poultry data
+ * Format a timestamp for generated metadata.
+ * @param {Date} [date]
+ * @returns {string}
  */
-const exportPoultry = (poultryData) => {
-  const formattedData = poultryData.map(batch => ({
-    Type: batch.type,
-    Quantity: batch.quantity,
-    'Purchase Price': `₦${batch.purchasePrice?.toLocaleString() || 0}`,
-    'Purchase Date': batch.purchaseDate ? new Date(batch.purchaseDate).toLocaleDateString() : new Date(batch.joinDate).toLocaleDateString(),
-    'Vaccination Status': batch.vaccinationStatus || 'Unknown',
-    'Age (Days)': batch.ageInDays || 'N/A',
-    Status: batch.status || 'Active'
-  }));
+const formatTimestamp = (date = new Date()) => date.toISOString();
 
-  return jsonToCSV(formattedData, `poultry-${Date.now()}.csv`);
+/**
+ * Format a value as currency using the Nigerian Naira symbol.
+ * @param {*=} value
+ * @returns {string}
+ */
+const formatCurrency = (value) => {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount)) {
+    return '₦0';
+  }
+
+  return `₦${numberFormatter.format(amount)}`;
 };
 
 /**
- * Export sales data
+ * Format a numeric measurement with an optional unit.
+ * @param {*=} value
+ * @param {string} unit
+ * @returns {string}
  */
-const exportSales = (salesData) => {
-  const formattedData = salesData.map(sale => ({
-    'Reference': sale.itemSold || sale.invoiceId || sale.tagNumber || sale.batchId || sale.animalType || 'N/A',
-    Quantity: sale.quantitySold || sale.quantity || 0,
-    'Unit Price': `₦${(sale.pricePerUnit || sale.sellingPrice)?.toLocaleString() || 0}`,
-    'Total Amount': `₦${(sale.totalAmount || ((sale.quantitySold || sale.quantity || 0) * (sale.pricePerUnit || sale.sellingPrice || 0)))?.toLocaleString() || 0}`,
-    'Sale Date': sale.date ? new Date(sale.date).toLocaleDateString() : (sale.saleDate ? new Date(sale.saleDate).toLocaleDateString() : 'N/A'),
-    Description: sale.description || sale.itemSold || 'N/A'
-  }));
+const formatMeasurement = (value, unit = '') => {
+  const amount = Number(value);
 
-  return jsonToCSV(formattedData, `sales-${Date.now()}.csv`);
+  if (!Number.isFinite(amount)) {
+    return 'N/A';
+  }
+
+  return `${numberFormatter.format(amount)}${unit ? ` ${unit}` : ''}`;
 };
 
 /**
- * Export expenses data
+ * Format a ratio as percentage while avoiding divide-by-zero.
+ * @param {*=} part
+ * @param {*=} whole
+ * @returns {string}
  */
-const exportExpenses = (expenseData) => {
-  const formattedData = expenseData.map(expense => ({
-    Title: expense.title || '',
-    Category: expense.category || 'general',
-    Amount: `₦${expense.amount?.toLocaleString() || 0}`,
-    Description: expense.descriptions || expense.description || 'N/A',
-    'Expense Date': expense.date ? new Date(expense.date).toLocaleDateString() : 'N/A',
-    'Recorded By': expense.recordedBy || 'N/A'
-  }));
+const formatPercentage = (part, whole) => {
+  const numerator = Number(part);
+  const denominator = Number(whole);
 
-  return jsonToCSV(formattedData, `expenses-${Date.now()}.csv`);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
+    return '0.00%';
+  }
+
+  return `${((numerator / denominator) * 100).toFixed(2)}%`;
 };
 
 /**
- * Export feed data
+ * Return a safe string representation for missing values.
+ * @param {*} value
+ * @param {string} fallback
+ * @returns {string}
  */
-const exportFeed = (feedData) => {
-  const formattedData = feedData.map(feed => ({
-    'Feed Type': feed.feedType,
-    'Animal Type': feed.animalType,
-    'Current Quantity': `${feed.quantity} kg`,
-    'Unit Cost': `₦${(feed.unitCost || feed.cost)?.toLocaleString() || 0}`,
-    'Daily Consumption': `${feed.dailyConsumption || feed.consumption || 0} kg`,
-    'Total Cost': `₦${((feed.quantity || 0) * (feed.unitCost || feed.cost || 0))?.toLocaleString() || 0}`,
-    'Last Updated': feed.lastConsumptionUpdate ? new Date(feed.lastConsumptionUpdate).toLocaleDateString() : (feed.updatedAt ? new Date(feed.updatedAt).toLocaleDateString() : 'N/A')
-  }));
+const safeString = (value, fallback = 'N/A') => {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
 
-  return jsonToCSV(formattedData, `feed-${Date.now()}.csv`);
+  return String(value);
 };
 
 /**
- * Export financial summary
+ * Safely obtain nested values from an object path.
+ * @param {object} record
+ * @param {string} path
+ * @returns {*}
  */
-const exportFinancialSummary = (summaryData) => {
-  const formattedData = [{
-    Category: 'Total Revenue',
-    Amount: `₦${summaryData.totalRevenue?.toLocaleString() || 0}`,
-    Period: summaryData.period || 'Current Month'
+const getNestedValue = (record, path) => {
+  if (!record || typeof path !== 'string') {
+    return undefined;
+  }
+
+  return path.split('.').reduce((value, key) => (value && typeof value === 'object' ? value[key] : undefined), record);
+};
+
+/**
+ * Build a file name using a stable date string.
+ * @param {string} prefix
+ * @param {string} extension
+ * @returns {string}
+ */
+const createFilename = (prefix, extension = 'csv') => {
+  const now = new Date();
+  return `${prefix}_${formatDate(now)}.${extension}`;
+};
+
+/**
+ * Build a standard export payload that includes metadata.
+ * @param {object} params
+ * @param {string} params.filename
+ * @param {string} params.mimeType
+ * @param {string} params.content
+ * @param {number} params.recordCount
+ * @returns {{filename:string,mimeType:string,generatedAt:string,recordCount:number,fileSize:number,content:string}}
+ */
+const buildExportPayload = ({ filename, mimeType, content, recordCount }) => ({
+  filename,
+  mimeType,
+  generatedAt: formatTimestamp(),
+  recordCount,
+  fileSize: Buffer.byteLength(content || '', 'utf8'),
+  content
+});
+
+/**
+ * Validate that the input is an array. Empty arrays are accepted.
+ * @param {*} data
+ * @param {string} name
+ * @returns {Array}
+ */
+const validateArray = (data, name) => {
+  if (!Array.isArray(data)) {
+    const message = `${name} must be an array of records.`;
+    logger.warn(message, { value: data });
+    throw new TypeError(message);
+  }
+
+  return data;
+};
+
+/**
+ * Convert table rows into a CSV string.
+ * @param {Array<object>} rows
+ * @param {Array<string>} [fields]
+ * @returns {string}
+ */
+const convertRowsToCsv = (rows, fields) => {
+  if (!rows || rows.length === 0) {
+    return '';
+  }
+
+  const parserOptions = {};
+
+  if (Array.isArray(fields) && fields.length > 0) {
+    parserOptions.fields = fields;
+  }
+
+  const parser = new Parser(parserOptions);
+  return parser.parse(rows);
+};
+
+/**
+ * Create a row object from an input record and a mapping definition.
+ * @param {object} record
+ * @param {object} mapping
+ * @returns {object}
+ */
+const createRow = (record, mapping) => {
+  return Object.entries(mapping).reduce((row, [label, selector]) => {
+    const rawValue = typeof selector === 'function' ? selector(record) : getNestedValue(record, selector);
+    row[label] = safeString(rawValue);
+    return row;
+  }, {});
+};
+
+/**
+ * Create a CSV export from mapped rows.
+ * @param {Array<object>} records
+ * @param {object} mapping
+ * @param {string} filename
+ * @param {object} [options]
+ * @param {Array<string>} [options.fields]
+ * @returns {{filename:string,mimeType:string,generatedAt:string,recordCount:number,fileSize:number,content:string}}
+ */
+const createCsvExport = (records, mapping, filename, options = {}) => {
+  const validatedRecords = validateArray(records, 'records');
+  const rows = validatedRecords.map((record) => createRow(record, mapping));
+  const fieldOrder = Array.isArray(options.fields) && options.fields.length > 0 ? options.fields : Object.keys(mapping);
+  const content = convertRowsToCsv(rows, fieldOrder);
+
+  logger.info('CSV export generated', {
+    filename,
+    recordCount: rows.length,
+    fields: fieldOrder
+  });
+
+  return buildExportPayload({ filename, mimeType: CSV_MIME_TYPE, content, recordCount: rows.length });
+};
+
+/**
+ * Convert an array of plain objects to CSV and preserve metadata.
+ * @param {Array<object>} data
+ * @param {string} filename
+ * @param {object} [options]
+ * @param {Array<string>} [options.fields]
+ * @returns {{filename:string,mimeType:string,generatedAt:string,recordCount:number,fileSize:number,content:string}}
+ */
+const jsonToCSV = (data, filename, options = {}) => {
+  const validatedData = validateArray(data, 'data');
+  const fieldOrder = Array.isArray(options.fields) && options.fields.length > 0 ? options.fields : undefined;
+  const content = convertRowsToCsv(validatedData, fieldOrder);
+
+  logger.info('jsonToCSV conversion completed', {
+    filename,
+    recordCount: validatedData.length
+  });
+
+  return buildExportPayload({ filename, mimeType: CSV_MIME_TYPE, content, recordCount: validatedData.length });
+};
+
+const livestockMapping = {
+  Type: 'type',
+  Breed: 'breed',
+  Age: (record) => formatMeasurement(record.age, 'years'),
+  Weight: (record) => formatMeasurement(record.weight, 'kg'),
+  'Cost Price': (record) => formatCurrency(record.costPrice),
+  'Tag Number': (record) => safeString(record.tagNumber, 'N/A'),
+  'Health Status': (record) => safeString(record.healthStatus, 'Good'),
+  'Date Added': (record) => formatDate(record.createdAt),
+  Status: (record) => safeString(record.status, 'Active')
+};
+
+const poultryMapping = {
+  Type: 'type',
+  Quantity: (record) => formatMeasurement(record.quantity),
+  'Purchase Price': (record) => formatCurrency(record.purchasePrice),
+  'Purchase Date': (record) => formatDate(record.purchaseDate || record.joinDate),
+  'Vaccination Status': (record) => safeString(record.vaccinationStatus, 'Unknown'),
+  'Age (Days)': (record) => safeString(record.ageInDays, 'N/A'),
+  Status: (record) => safeString(record.status, 'Active')
+};
+
+const salesMapping = {
+  Reference: (record) => safeString(record.itemSold || record.invoiceId || record.tagNumber || record.batchId || record.animalType, 'N/A'),
+  Quantity: (record) => formatMeasurement(record.quantitySold ?? record.quantity ?? 0),
+  'Unit Price': (record) => formatCurrency(record.pricePerUnit ?? record.sellingPrice),
+  'Total Amount': (record) => {
+    const quantity = Number(record.quantitySold ?? record.quantity ?? 0);
+    const unitPrice = Number(record.pricePerUnit ?? record.sellingPrice ?? 0);
+    const total = Number(record.totalAmount ?? quantity * unitPrice);
+    return formatCurrency(total);
   },
-  {
-    Category: 'Total Expenses',
-    Amount: `₦${summaryData.totalExpenses?.toLocaleString() || 0}`,
-    Period: summaryData.period || 'Current Month'
-  },
-  {
-    Category: 'Net Profit',
-    Amount: `₦${(summaryData.totalRevenue - summaryData.totalExpenses)?.toLocaleString() || 0}`,
-    Period: summaryData.period || 'Current Month'
-  },
-  {
-    Category: 'Profit Margin',
-    Amount: `${(((summaryData.totalRevenue - summaryData.totalExpenses) / summaryData.totalRevenue) * 100).toFixed(2)}%`,
-    Period: summaryData.period || 'Current Month'
-  }];
+  'Sale Date': (record) => formatDate(record.date || record.saleDate),
+  Description: (record) => safeString(record.description || record.itemSold, 'N/A')
+};
 
-  return jsonToCSV(formattedData, `financial-summary-${Date.now()}.csv`);
+const expensesMapping = {
+  Title: (record) => safeString(record.title, ''),
+  Category: (record) => safeString(record.category, 'general'),
+  Amount: (record) => formatCurrency(record.amount),
+  Description: (record) => safeString(record.descriptions ?? record.description, 'N/A'),
+  'Expense Date': (record) => formatDate(record.date),
+  'Recorded By': (record) => safeString(record.recordedBy, 'N/A')
+};
+
+const feedMapping = {
+  'Feed Type': 'feedType',
+  'Animal Type': 'animalType',
+  'Current Quantity': (record) => formatMeasurement(record.quantity, 'kg'),
+  'Unit Cost': (record) => formatCurrency(record.unitCost ?? record.cost),
+  'Daily Consumption': (record) => formatMeasurement(record.dailyConsumption ?? record.consumption, 'kg'),
+  'Total Cost': (record) => {
+    const quantity = Number(record.quantity ?? 0);
+    const unitCost = Number(record.unitCost ?? record.cost ?? 0);
+    return formatCurrency(quantity * unitCost);
+  },
+  'Last Updated': (record) => formatDate(record.lastConsumptionUpdate || record.updatedAt)
 };
 
 /**
- * Generate comprehensive farm report
+ * Export livestock data to CSV.
+ * @param {Array<object>} livestockData
+ * @param {object} [options]
+ * @param {Array<string>} [options.fields]
+ * @returns {{filename:string,mimeType:string,generatedAt:string,recordCount:number,fileSize:number,content:string}}
  */
-const generateFarmReport = (reportData) => {
-  const reportContent = `
-CLOUDFARM COMPREHENSIVE REPORT
-Generated: ${new Date().toLocaleString()}
-Farm ID: ${reportData.farmId}
-Manager: ${reportData.managerName}
+const exportLivestock = (livestockData, options = {}) => {
+  const filename = createFilename('livestock');
+  return createCsvExport(livestockData, livestockMapping, filename, options);
+};
 
-=== LIVESTOCK SUMMARY ===
-Total Animals: ${reportData.livestock?.total || 0}
-By Type: ${JSON.stringify(reportData.livestock?.byType || {})}
+/**
+ * Export poultry data to CSV.
+ * @param {Array<object>} poultryData
+ * @param {object} [options]
+ * @param {Array<string>} [options.fields]
+ * @returns {{filename:string,mimeType:string,generatedAt:string,recordCount:number,fileSize:number,content:string}}
+ */
+const exportPoultry = (poultryData, options = {}) => {
+  const filename = createFilename('poultry');
+  return createCsvExport(poultryData, poultryMapping, filename, options);
+};
 
-=== POULTRY SUMMARY ===
-Total Birds: ${reportData.poultry?.total || 0}
-Broilers: ${reportData.poultry?.broilers || 0}
-Layers: ${reportData.poultry?.layers || 0}
+/**
+ * Export sales data to CSV.
+ * @param {Array<object>} salesData
+ * @param {object} [options]
+ * @param {Array<string>} [options.fields]
+ * @returns {{filename:string,mimeType:string,generatedAt:string,recordCount:number,fileSize:number,content:string}}
+ */
+const exportSales = (salesData, options = {}) => {
+  const filename = createFilename('sales');
+  return createCsvExport(salesData, salesMapping, filename, options);
+};
 
-=== FINANCIAL SUMMARY ===
-Total Revenue (Month): ₦${reportData.financials?.revenue?.toLocaleString() || 0}
-Total Expenses (Month): ₦${reportData.financials?.expenses?.toLocaleString() || 0}
-Net Profit: ₦${(reportData.financials?.revenue - reportData.financials?.expenses)?.toLocaleString() || 0}
+/**
+ * Export expenses data to CSV.
+ * @param {Array<object>} expenseData
+ * @param {object} [options]
+ * @param {Array<string>} [options.fields]
+ * @returns {{filename:string,mimeType:string,generatedAt:string,recordCount:number,fileSize:number,content:string}}
+ */
+const exportExpenses = (expenseData, options = {}) => {
+  const filename = createFilename('expenses');
+  return createCsvExport(expenseData, expensesMapping, filename, options);
+};
 
-=== FEED STATUS ===
-Total Feed Inventory: ${reportData.feed?.totalQuantity || 0} kg
-Low Stock Items: ${reportData.feed?.lowStockItems || 0}
+/**
+ * Export feed data to CSV.
+ * @param {Array<object>} feedData
+ * @param {object} [options]
+ * @param {Array<string>} [options.fields]
+ * @returns {{filename:string,mimeType:string,generatedAt:string,recordCount:number,fileSize:number,content:string}}
+ */
+const exportFeed = (feedData, options = {}) => {
+  const filename = createFilename('feed');
+  return createCsvExport(feedData, feedMapping, filename, options);
+};
 
-=== STAFF ===
-Total Staff: ${reportData.staff?.total || 0}
-Active: ${reportData.staff?.active || 0}
+/**
+ * Export financial summary data to CSV.
+ * @param {object} summaryData
+ * @returns {{filename:string,mimeType:string,generatedAt:string,recordCount:number,fileSize:number,content:string}}
+ */
+const exportFinancialSummary = (summaryData = {}) => {
+  const filename = createFilename('financial-summary');
+  const revenue = Number(summaryData.totalRevenue ?? 0);
+  const expenses = Number(summaryData.totalExpenses ?? 0);
+  const profit = revenue - expenses;
+  const profitMargin = formatPercentage(profit, revenue);
 
-Generated by CloudFarm - Your Digital Farm Management System
-  `;
+  const rows = [
+    {
+      Category: 'Total Revenue',
+      Amount: formatCurrency(revenue),
+      Period: safeString(summaryData.period, 'Current Month')
+    },
+    {
+      Category: 'Total Expenses',
+      Amount: formatCurrency(expenses),
+      Period: safeString(summaryData.period, 'Current Month')
+    },
+    {
+      Category: 'Net Profit',
+      Amount: formatCurrency(profit),
+      Period: safeString(summaryData.period, 'Current Month')
+    },
+    {
+      Category: 'Profit Margin',
+      Amount: profitMargin,
+      Period: safeString(summaryData.period, 'Current Month')
+    }
+  ];
 
-  return {
-    filename: `farm-report-${Date.now()}.txt`,
-    content: reportContent.trim(),
-    mimeType: 'text/plain'
-  };
+  const content = convertRowsToCsv(rows, ['Category', 'Amount', 'Period']);
+  return buildExportPayload({ filename, mimeType: CSV_MIME_TYPE, content, recordCount: rows.length });
+};
+
+/**
+ * Create a textual report section.
+ * @param {string} title
+ * @param {Array<{label:string,value:string}>} rows
+ * @returns {string}
+ */
+const createReportSection = (title, rows) => {
+  const lines = [`=== ${title} ===`, ...rows.map((row) => `${row.label}: ${row.value}`)];
+  return lines.join('\n');
+};
+
+/**
+ * Convert objects and arrays into readable text.
+ * @param {*} value
+ * @returns {string}
+ */
+const formatReportValue = (value) => {
+  if (value === null || value === undefined) {
+    return 'N/A';
+  }
+
+  if (typeof value === 'object') {
+    return JSON.stringify(value, null, 2);
+  }
+
+  return String(value);
+};
+
+/**
+ * Generate a farm report as a plain text export.
+ * @param {object} reportData
+ * @returns {{filename:string,mimeType:string,generatedAt:string,recordCount:number,fileSize:number,content:string}}
+ */
+const generateFarmReport = (reportData = {}) => {
+  const filename = createFilename('farm-report', 'txt');
+  const livestockTotal = Number(reportData.livestock?.total ?? 0);
+  const poultryTotal = Number(reportData.poultry?.total ?? 0);
+  const layers = Number(reportData.poultry?.layers ?? 0);
+  const broilers = Number(reportData.poultry?.broilers ?? 0);
+  const revenue = Number(reportData.financials?.revenue ?? 0);
+  const expenses = Number(reportData.financials?.expenses ?? 0);
+  const netProfit = revenue - expenses;
+
+  const sections = [
+    createReportSection('LIVESTOCK SUMMARY', [
+      { label: 'Total Animals', value: formatMeasurement(livestockTotal) },
+      { label: 'By Type', value: formatReportValue(reportData.livestock?.byType || {}) }
+    ]),
+    createReportSection('POULTRY SUMMARY', [
+      { label: 'Total Birds', value: formatMeasurement(poultryTotal) },
+      { label: 'Broilers', value: formatMeasurement(broilers) },
+      { label: 'Layers', value: formatMeasurement(layers) }
+    ]),
+    createReportSection('FINANCIAL SUMMARY', [
+      { label: 'Total Revenue (Month)', value: formatCurrency(revenue) },
+      { label: 'Total Expenses (Month)', value: formatCurrency(expenses) },
+      { label: 'Net Profit', value: formatCurrency(netProfit) },
+      { label: 'Profit Margin', value: formatPercentage(netProfit, revenue) }
+    ]),
+    createReportSection('FEED STATUS', [
+      { label: 'Total Feed Inventory', value: formatMeasurement(reportData.feed?.totalQuantity ?? 0, 'kg') },
+      { label: 'Low Stock Items', value: formatMeasurement(reportData.feed?.lowStockItems ?? 0) }
+    ]),
+    createReportSection('STAFF', [
+      { label: 'Total Staff', value: formatMeasurement(reportData.staff?.total ?? 0) },
+      { label: 'Active', value: formatMeasurement(reportData.staff?.active ?? 0) }
+    ])
+  ];
+
+  const content = [
+    'CLOUDFARM COMPREHENSIVE REPORT',
+    `Generated: ${formatTimestamp()}`,
+    `Farm ID: ${safeString(reportData.farmId, 'Unknown')}`,
+    `Manager: ${safeString(reportData.managerName, 'Unknown')}`,
+    '',
+    ...sections,
+    '',
+    'Generated by CloudFarm - Your Digital Farm Management System'
+  ].join('\n');
+
+  logger.info('Farm report generated', {
+    filename,
+    farmId: reportData.farmId,
+    recordCount: 1
+  });
+
+  return buildExportPayload({ filename, mimeType: TEXT_MIME_TYPE, content, recordCount: 1 });
 };
 
 module.exports = {

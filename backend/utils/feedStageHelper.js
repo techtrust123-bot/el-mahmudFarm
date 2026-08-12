@@ -1,13 +1,20 @@
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const POULTRY_TYPES = new Set(['broiler', 'layer'])
 const LIVESTOCK_TYPES = new Set(['cow', 'cattle', 'sheep', 'goat', 'horse', 'ram', 'bull'])
+const STAGE_PATTERNS = {
+  Starter: /(super starter|starter|chick mash)/i,
+  Grower: /(grower|grower mash)/i,
+  Finisher: /(finisher|layer mash)/i,
+}
 
+// This function determines the feed stage based on the age in days and the type of animal. It uses different thresholds for poultry and livestock to categorize them into 'Starter', 'Grower', or 'Finisher' stages.
 const getPoultryFeedStage = (ageInDays) => {
-  if (ageInDays <= 28) return 'Starter'
-  if (ageInDays <= 56) return 'Grower'
+  if (ageInDays <= 29) return 'Starter'
+  if (ageInDays <= 57) return 'Grower'
   return 'Finisher'
 }
 
+// This function determines the feed stage for livestock based on age in days. It categorizes livestock into 'Starter', 'Grower', or 'Finisher' stages using different thresholds compared to poultry.
 const getLivestockFeedStage = (ageInDays) => {
   if (ageInDays <= 120) return 'Starter'
   if (ageInDays <= 240) return 'Grower'
@@ -27,9 +34,9 @@ const getFeedStage = (ageInDays, animalType) => {
   return getPoultryFeedStage(ageInDays)
 }
 
-const calculateAge = (birthDate) => {
+const calculateAge = (purchaseDate) => {
   const now = new Date()
-  const birth = new Date(birthDate)
+  const birth = new Date(purchaseDate)
   const diffMs = now - birth
   const ageInDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
   const ageInWeeks = Math.floor(ageInDays / 7)
@@ -81,59 +88,93 @@ const parseFeedType = (rawFeedType) => {
   return { animalType, poultryType, feedCategory }
 }
 
-const getFeedForStage = async (Feed, animalType, feedStage) => {
-  if (!animalType && !feedStage) {
-    return await Feed.findOne()
+const getFeedForStage = async (Feed, animalType, feedStage, options = {}) => {
+  const normalizedAnimalType = String(animalType || '').trim().toLowerCase()
+  const normalizedStage = String(feedStage || '').trim()
+  const allowFallback = Boolean(options.allowFallback)
+
+  if (!normalizedAnimalType || !normalizedStage) {
+    return null
   }
 
-  if (!animalType) {
-    return await Feed.findOne({ feedType: { $regex: new RegExp(feedStage, 'i') } })
-  }
+  const stageRegex = STAGE_PATTERNS[normalizedStage] || new RegExp(normalizedStage, 'i')
 
-  if (!feedStage) {
-    return await Feed.findOne({ feedType: { $regex: new RegExp(`^${animalType}`, 'i') } })
-  }
-
-  const stagePatterns = {
-    Starter: /(super starter|starter|chick mash)/i,
-    Grower: /(grower|grower mash)/i,
-    Finisher: /(finisher|layer mash)/i,
-  }
-  const stageRegex = stagePatterns[feedStage] || new RegExp(feedStage, 'i')
-
-  let feed = await Feed.findOne({
+  const exactFeed = await Feed.findOne({
     $and: [
-      { feedType: { $regex: new RegExp(`^${animalType}`, 'i') } },
-      { feedType: stageRegex }
-    ]
+      {
+        $or: [
+          { animalType: { $regex: new RegExp(`^${normalizedAnimalType}$`, 'i') } },
+          { feedType: { $regex: new RegExp(`^${normalizedAnimalType}`, 'i') } },
+        ],
+      },
+      {
+        $or: [
+          { feedCategory: { $regex: new RegExp(`^${normalizedStage}$`, 'i') } },
+          { feedType: stageRegex },
+        ],
+      },
+    ],
   })
 
-  if (!feed) {
-    feed = await Feed.findOne({
-      $and: [
-        {
-          $or: [
-            { animalType: { $regex: new RegExp(`^${animalType}$`, 'i') } },
-            { feedType: { $regex: new RegExp(`^${animalType}`, 'i') } }
-          ]
-        },
-        {
-          $or: [
-            { feedCategory: { $regex: stageRegex } },
-            { feedType: stageRegex }
-          ]
-        }
-      ]
+  if (exactFeed) {
+    return exactFeed
+  }
+
+  if (allowFallback) {
+    return await Feed.findOne({
+      $or: [
+        { animalType: { $regex: new RegExp(`^${normalizedAnimalType}$`, 'i') } },
+        { feedType: { $regex: new RegExp(`^${normalizedAnimalType}`, 'i') } },
+      ],
     })
   }
 
-  if (!feed) {
-    feed = await Feed.findOne({
-      feedType: { $regex: new RegExp(`^${animalType}`, 'i') }
-    })
-  }
-
-  return feed
+  return null
 }
 
-module.exports = { getFeedStage, calculateAge, getBirthDateFromAge, getFeedForStage, parseFeedType, normalizeFeedCategory }
+const getPoultryFeedStagePeriods = (startAgeInDays, endAgeInDays) => {
+    const startAge = Math.max(Number(startAgeInDays) || 0, 0)
+    const endAge = Math.max(Number(endAgeInDays) || 0, startAge)
+
+    if (endAge < startAge) {
+        return []
+    }
+
+    const stages = [
+        {
+            stage: 'Starter',
+            startDay: 0,
+            endDay: 29,
+        },
+        {
+            stage: 'Grower',
+            startDay: 29,
+            endDay: 57,
+        },
+        {
+            stage: 'Finisher',
+            startDay: 57,
+            endDay: Infinity,
+        },
+    ]
+
+    const periods = []
+
+    for (const stage of stages) {
+        const periodStart = Math.max(startAge, stage.startDay)
+        const periodEnd = Math.min(endAge, stage.endDay)
+
+        if (periodEnd >= periodStart) {
+            periods.push({
+                stage: stage.stage,
+                startAgeInDays: periodStart,
+                endAgeInDays: periodEnd,
+                days: periodEnd - periodStart,
+            })
+        }
+    }
+
+    return periods
+}
+
+module.exports = { getFeedStage, calculateAge, getBirthDateFromAge, getFeedForStage, parseFeedType, normalizeFeedCategory, getPoultryFeedStagePeriods }

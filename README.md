@@ -34,7 +34,12 @@ CloudFarm is a farm management application with separate backend and frontend co
    ```bash
    npm install
    ```
-3. Start the backend server:
+3. Ensure required environment variables are set in `.env`:
+   - `MONGO_URI`
+   - `JWT_SECRET`
+   - `JWT_REFRESH_SECRET`
+   - `FRONTEND_URL`
+4. Start the backend server:
    ```bash
    npm start
    ```

@@ -276,7 +276,7 @@ async function createBackup(target = null, options = {}) {
 
       for (const databaseName of databasesToBackup) {
         await runMongoTool('mongodump', ['--uri', mongoUri, '--db', databaseName, '--out', backupPath, '--gzip'], {
-          timeout: 1800000
+          // timeout: 1800000
         });
       }
 

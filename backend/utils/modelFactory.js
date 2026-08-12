@@ -4,6 +4,7 @@ const livestockSchema = require('../schemas/livestock');
 const sellsSchema = require('../schemas/sells');
 const expensesSchema = require('../schemas/expenses');
 const staffSchema = require('../schemas/staff');
+const { getAuditLogModel } = require('./auditModelFactory');
 
 /**
  * Get all farm models bound to a specific connection
@@ -19,6 +20,7 @@ function getModels(connection) {
   const Expenses = connection.models.Expenses || connection.model('Expenses', expensesSchema);
   const Staff = connection.models.Staff || connection.model('Staff', staffSchema);
   const Counter = connection.models.Counter || connection.model('Counter', require('../schemas/counter'));
+  const AuditLog = connection.models.AuditLog || getAuditLogModel(connection);
 
   return {
     Feed,
@@ -28,6 +30,7 @@ function getModels(connection) {
     Expenses,
     Staff,
     Counter,
+    AuditLog,
   };
 }
 

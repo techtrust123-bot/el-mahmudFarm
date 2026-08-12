@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000',
+  baseURL: import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000',
   withCredentials: true,
 });
 
@@ -25,14 +25,16 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config || {};
+    const authErrorCode = error.response?.data?.code;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      if (error.response.data.code === 'TOKEN_EXPIRED') {
+      if (authErrorCode === 'TOKEN_EXPIRED') {
         if (isRefreshing) {
           return new Promise(function(resolve, reject) {
             failedQueue.push({ resolve, reject });
           }).then(token => {
+            originalRequest.headers = originalRequest.headers || {};
             originalRequest.headers['Authorization'] = 'Bearer ' + token;
             return axiosInstance(originalRequest);
           }).catch(err => {
@@ -46,7 +48,7 @@ axiosInstance.interceptors.response.use(
         return new Promise(function(resolve, reject) {
           axiosInstance.post('/api/auth/refresh')
             .then(({ data }) => {
-              processQueue(null);
+              processQueue(null, data?.token || null);
               resolve(axiosInstance(originalRequest));
             })
             .catch((err) => {
@@ -58,7 +60,14 @@ axiosInstance.interceptors.response.use(
               isRefreshing = false;
             });
         });
-      } else if (error.response.data.code === 'NO_TOKEN' || error.response.data.code === 'INVALID_TOKEN') {
+      }
+
+      if (
+        authErrorCode === 'NO_TOKEN' ||
+        authErrorCode === 'INVALID_TOKEN' ||
+        authErrorCode === 'REFRESH_TOKEN_INVALID' ||
+        authErrorCode === 'TOKEN_EXPIRED'
+      ) {
         forceLogout();
       }
     }
@@ -67,8 +76,8 @@ axiosInstance.interceptors.response.use(
       error.response?.status === 403 &&
       ['NOT_SUBSCRIBED', 'SUBSCRIPTION_EXPIRED'].includes(error.response.data.code)
     ) {
-      window.location.href = '/payment'
-      return Promise.reject(error)
+      window.location.replace('/payment');
+      return Promise.reject(error);
     }
 
     return Promise.reject(error);
@@ -76,8 +85,15 @@ axiosInstance.interceptors.response.use(
 );
 
 const forceLogout = () => {
+  if (window.isRedirecting) return;
+  window.isRedirecting = true;
+
   localStorage.clear();
-  window.location.href = '/login';
+  sessionStorage.clear();
+
+  if (window.location.pathname !== '/login') {
+    window.location.replace('/login?reason=session_expired');
+  }
 };
 
 export default axiosInstance;

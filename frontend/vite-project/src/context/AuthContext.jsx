@@ -67,6 +67,9 @@ export const AuthProvider = (props) =>{
       setIsLogin(false);
       setAuthChecked(false);
       setSessionWarning(false);
+      if (window.location.pathname !== '/login') {
+        window.location.replace('/login');
+      }
     }
   };
 

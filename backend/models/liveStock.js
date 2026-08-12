@@ -5,7 +5,7 @@ const liveStockSchema = new mongoose.Schema({
     },
     type:{
         type:String,
-        enum:['cattle','cow','sheep','goat','house','ram','bool'],
+        enum:['cattle','cow','sheep','goat','horse','ram','bull'],
         required:true
     },
     tagNumber:{
@@ -30,10 +30,10 @@ const liveStockSchema = new mongoose.Schema({
         type:String,
         required:true
     },
-    joinDate:{
-        type:Date,
-        default:Date.now
-    },
+    // joinDate:{
+    //     type:Date,
+    //     default:Date.now
+    // },
     healthStatus:{
         type:String,
         required:true
@@ -69,10 +69,7 @@ const liveStockSchema = new mongoose.Schema({
         type:Number,
         default: 1
     },
-    birthDay:{
-        type:Date,
-        default:Date.now
-    },
+ 
     ageInDays:{
         type:Number,
         default:0

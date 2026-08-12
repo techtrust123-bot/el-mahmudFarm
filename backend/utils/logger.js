@@ -16,11 +16,16 @@ const logger = createLogger({
     format.splat(),
     format.json()
   ),
+
+  // This handle were logs were sent
   transports: [
+    // show logs in terminal
     new transports.Console({
       format: format.combine(
+        // change info color
         format.colorize(),
         format.printf(({ level, message, timestamp, ...meta }) => {
+          // this check wether extra info exist
           const metaString = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
           return `${timestamp} [${level}]: ${message} ${metaString}`;
         })

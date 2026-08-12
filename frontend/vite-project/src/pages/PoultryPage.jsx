@@ -38,8 +38,8 @@ const PoultryPage = () => {
     vaccinationStatus: '',
     feedConsumption: '',
     purchaseDate: '',
-    ageInWeeks: '',
-    ageInDays: '',
+    // ageInWeeks: '',
+    // ageInDays: '',
     mortality: '',
     poultryConsumePerkg:'',
     purchasePrice: '',
@@ -103,8 +103,8 @@ const PoultryPage = () => {
       vaccinationStatus: '',
       poultryConsumePerkg: '',
       purchaseDate: '',
-      ageInWeeks: '',
-      ageInDays: '',
+      // ageInWeeks: '',
+      // ageInDays: '',
       mortality: '',
       purchasePrice: '',
     });
@@ -135,8 +135,8 @@ const PoultryPage = () => {
         quantity: item.quantity,
         vaccinationStatus: item.vaccinationStatus,
         purchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : '',
-        ageInWeeks: item.ageInWeeks || '',
-        ageInDays: item.ageInDays || '',
+        // ageInWeeks: item.ageInWeeks || '',
+        // ageInDays: item.ageInDays || '',
         mortality: item.mortality || '',
         purchasePrice: item.purchasePrice || '',
       });
@@ -187,10 +187,10 @@ const PoultryPage = () => {
       }
     });
 
-    if (!formData.purchaseDate && !formData.ageInDays && !formData.ageInWeeks) {
+    if (!formData.purchaseDate) {
       newErrors.purchaseDate = 'Either purchase date or age in weeks/days is required';
-      if (!formData.ageInWeeks) newErrors.ageInWeeks = 'Enter age in weeks or days';
-      if (!formData.ageInDays) newErrors.ageInDays = 'Enter age in weeks or days';
+      // if (!formData.ageInWeeks) newErrors.ageInWeeks = 'Enter age in weeks or days';
+      // if (!formData.ageInDays) newErrors.ageInDays = 'Enter age in weeks or days';
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -213,8 +213,8 @@ const PoultryPage = () => {
           quantity: '',
           vaccinationStatus: '',
           purchaseDate: '',
-          ageInWeeks: '',
-          ageInDays: '',
+          // ageInWeeks: '',
+          // ageInDays: '',
           mortality: '',
           purchasePrice: '',
         });
@@ -380,17 +380,7 @@ const PoultryPage = () => {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
-            <Input
-              label="Batch ID"
-              type="text"
-              name="batchId"
-              value={formData.batchId}
-              onChange={handleChange}
-              error={errors.batchId}
-              disabled={!editingId}
-              title={!editingId ? "Batch ID is auto-generated" : ""}
-              required
-            />
+           
             
             <Select
               label="Type"
@@ -446,24 +436,7 @@ const PoultryPage = () => {
               error={errors.vaccinationStatus}
               required
             />
-            <Input
-              label="Age (weeks)"
-              type="number"
-              name="ageInWeeks"
-              value={formData.ageInWeeks}
-              onChange={handleChange}
-              error={errors.ageInWeeks}
-              placeholder="Optional if purchase date is set"
-            />
-            <Input
-              label="Age (days)"
-              type="number"
-              name="ageInDays"
-              value={formData.ageInDays}
-              onChange={handleChange}
-              error={errors.ageInDays}
-              placeholder="Optional if purchase date is set"
-            />
+           
           </div>
 
           {editingId && (

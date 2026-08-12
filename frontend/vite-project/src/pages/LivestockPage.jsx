@@ -40,8 +40,6 @@ const LivestockPage = () => {
     weight: '',
     healthStatus: '',
     purchaseDate: '',
-    ageInWeeks: '',
-    ageInDays: '',
     purchasePrice: '',
     type: '',
   });
@@ -77,8 +75,6 @@ const LivestockPage = () => {
       weight: '',
       healthStatus: '',
       purchaseDate: '',
-      ageInWeeks: '',
-      ageInDays: '',
       purchasePrice: '',
       type: '',
     });
@@ -109,8 +105,6 @@ const LivestockPage = () => {
       weight: item.weight,
       healthStatus: item.healthStatus,
       purchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : '',
-      ageInWeeks: item.ageInWeeks || '',
-      ageInDays: item.ageInDays || '',
       purchasePrice: item.purchasePrice,
       type: item.type,
     });
@@ -151,10 +145,9 @@ const LivestockPage = () => {
   const handleSubmit = async(e) => {
     e.preventDefault();
     const newErrors = {};
-    if (!formData.purchaseDate && !formData.ageInDays && !formData.ageInWeeks) {
+    if (!formData.purchaseDate) {
       newErrors.purchaseDate = 'Either purchase date or age in weeks/days is required';
-      if (!formData.ageInWeeks) newErrors.ageInWeeks = 'Enter age in weeks or days';
-      if (!formData.ageInDays) newErrors.ageInDays = 'Enter age in weeks or days';
+      
     }
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -176,8 +169,6 @@ const LivestockPage = () => {
           weight: '',
           healthStatus: '',
           purchaseDate: '',
-          ageInWeeks: '',
-          ageInDays: '',
           purchasePrice: '',
           type: '',
         });
@@ -419,24 +410,6 @@ const LivestockPage = () => {
               onChange={handleChange}
               error={errors.age}
               required
-            />
-            <Input
-              label="Age (weeks)"
-              type="number"
-              name="ageInWeeks"
-              value={formData.ageInWeeks}
-              onChange={handleChange}
-              error={errors.ageInWeeks}
-              placeholder="Optional if purchase date is set"
-            />
-            <Input
-              label="Age (days)"
-              type="number"
-              name="ageInDays"
-              value={formData.ageInDays}
-              onChange={handleChange}
-              error={errors.ageInDays}
-              placeholder="Optional if purchase date is set"
             />
             <Input
               label="Weight (kg)"

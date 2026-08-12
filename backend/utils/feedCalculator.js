@@ -9,17 +9,17 @@ const normalizeDate = (value) => {
 };
 
 // This function calculates the number of days a poultry batch or livestock has been on the farm based on its join date or purchase date. It normalizes the input date and compares it to the current date, returning at least 1 day to avoid zero or negative values.
-const getDaysOnFarm = (joinDate) => {
-  // This variable contains the normalized join date of the poultry batch or livestock. It ensures that the date is valid and defaults to the current date if not provided or invalid.
-  const start = normalizeDate(joinDate);
+const getDaysOnFarm = (purchaseDate) => {
+  // This variable contains the normalized purchase date of the poultry batch or livestock. It ensures that the date is valid and defaults to the current date if not provided or invalid.
+  const start = normalizeDate(purchaseDate);
 
-  // This variable contains the current date. It is used to calculate the difference in days between the join date and today.
+  // This variable contains the current date. It is used to calculate the difference in days between the purchase date and today.
   const today = new Date();
 
-  // This variables removes hours, minutes, seconds, and milliseconds from both the current date and the join date to ensure that the calculation is based solely on full days. This prevents partial days from affecting the result.
+  // This variables removes hours, minutes, seconds, and milliseconds from both the current date and the purchase date to ensure that the calculation is based solely on full days. This prevents partial days from affecting the result.
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const startOfJoin = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  // This variable calculates the difference in days between the current date and the join date by subtracting the two normalized dates and dividing by the number of milliseconds in a day. It uses Math.floor to round down to the nearest whole number, ensuring that only full days are counted. The result is then compared to 1 using Math.max to ensure that at least 1 day is returned, preventing zero or negative values.
+  // This variable calculates the difference in days between the current date and the purchase date by subtracting the two normalized dates and dividing by the number of milliseconds in a day. It uses Math.floor to round down to the nearest whole number, ensuring that only full days are counted. The result is then compared to 1 using Math.max to ensure that at least 1 day is returned, preventing zero or negative values.
   const days = Math.floor((startOfToday - startOfJoin) / MS_PER_DAY);
   // This function returns the maximum of the calculated days and 1, ensuring that the result is always at least 1 day. This is important for scenarios where a poultry batch or livestock has just joined the farm, as it prevents calculations from resulting in zero or negative values, which could lead to errors in feed consumption calculations or other related metrics.
   return Math.max(days, 1);

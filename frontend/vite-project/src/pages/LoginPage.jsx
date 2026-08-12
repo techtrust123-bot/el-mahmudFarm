@@ -1,5 +1,5 @@
-import React, { useContext, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useContext, useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
@@ -12,11 +12,22 @@ import axiosInstance from '../utils/axiosInstance';
  */
 const LoginPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
   const [alert, setAlert] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const { setIsLogin, getUserData } = useContext(AuthContext)
+
+  useEffect(() => {
+    const reason = searchParams.get('reason');
+    if (reason === 'session_expired') {
+      setAlert({
+        type: 'warning',
+        message: 'Your session has expired. Please sign in again.'
+      });
+    }
+  }, [searchParams]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -39,7 +50,7 @@ const LoginPage = () => {
       await getUserData(true);
       navigate('/dashboard');
     } else {
-      setAlert({ type: 'error', message: response.data.message || 'Login failed' });
+      setAlert({ type: 'error', message: error.response?.data?.message || 'Login failed' });
     }
     setIsLoading(false);
   }
@@ -56,7 +67,7 @@ const LoginPage = () => {
             : validationErrors[field];
         });
         setErrors(formattedErrors);
-        setAlert({ type: 'error', message: 'Please fix the errors below' });
+        setAlert({ type: 'error', message: error.response?.data?.message });
       } else {
         setAlert({ type: 'error', message: error.response?.data?.message || 'Login failed' });
       }

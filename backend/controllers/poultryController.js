@@ -1,13 +1,15 @@
-// const Poultry = require('../models/poultry')
-// const Feed = require('../models/feed')
+
 const { recalculatePoultry } = require('./feedController')
 const { calculateBatchConsumption } = require('../utils/feedCalculator')
+const ApiError = require('../utils/ApiError')
 const {
   getFeedStage,
   calculateAge,
   getBirthDateFromAge,
   getFeedForStage,
 } = require('../utils/feedStageHelper')
+const logger = require('../utils/logger')
+const historicakFeed = require('../utils/historicalFeedCalculationHelper.js')
 const { sendNotification } = require('../services/emailService')
 
 exports.createPoultry = async (req, res) => {
@@ -22,13 +24,27 @@ exports.createPoultry = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Batch ID already exists...' })
         }
 
-        const birthDate = getBirthDateFromAge({ ageInDays, ageInWeeks, purchaseDate })
-        const { ageInDays: resolvedAgeInDays, ageInWeeks: resolvedAgeInWeeks } = calculateAge(birthDate)
-        const feedStage = getFeedStage(resolvedAgeInDays, type)
+        const { ageInDays: resolvedAgeInDays, ageInWeeks: resolvedAgeInWeeks } =
+        calculateAge(purchaseDate)
 
-        const feed = await getFeedForStage(Feed, type, feedStage)
-        if (!feed) {
-            return res.status(404).json({ success: false, message: 'Appropriate feed not found for this poultry type and age stage.' })
+        const currentFeedStage = getFeedStage(resolvedAgeInDays, type)
+
+        const currentFeed = await getFeedForStage(
+             Feed,
+            type,
+            currentFeedStage
+        )
+
+        if (!currentFeed) {
+             throw new ApiError(
+              404,
+            `No ${type} ${currentFeedStage} feed is configured for this farm.`,
+        {
+            animalType: type,
+            feedStage: currentFeedStage,
+            batchId,
+                }
+            )
         }
 
         const adjustedQuantity = mortality ? Number(quantity) - Number(mortality) : Number(quantity)
@@ -36,46 +52,56 @@ exports.createPoultry = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Quantity must be greater than mortality' })
         }
 
+        const historicalFeed = await calculateHistoricalPoultryFeed({
+            Feed,
+            animalType: type,
+            purchaseDate,
+            quantity: adjustedQuantity,
+        })
+
         const totalPurchaseCost = Number(purchasePrice) || 0
         const initialCostPerPoultry = adjustedQuantity > 0 ? totalPurchaseCost / adjustedQuantity : 0
-        const yesterday = new Date(new Date().getTime() - 24 * 60 * 60 * 1000)
+        const totalCost = totalPurchaseCost + historicalFeed.totalFeedCost
+        const costPerPoultry = totalCost / adjustedQuantity
         const newPoultry = new Poultry({
             batchId,
             type,
             status: 'available',
             quantity: adjustedQuantity,
-            joinDate: new Date(),
             purchaseDate: new Date(purchaseDate || new Date()),
-            lastFeedUpdate: yesterday,
+            lastFeedUpdate: new Date(),
             vaccinationStatus,
             mortality: mortality || 0,
             purchasePrice: totalPurchaseCost,
-            totalFeedConsumed: 0,
-            totalCost: totalPurchaseCost,
-            costPerPoultry: initialCostPerPoultry,
-            poultryConsumePerkg: 0,
-            feedCostPerPoultry: 0,
-            totalFeedCost: 0,
-            totalCostPerPoultry: initialCostPerPoultry,
-            feedStage,
-            birthDay: birthDate,
+            totalFeedConsumed: historicalFeed.totalFeedConsumed,
+            totalCost: totalPurchaseCost + historicalFeed.totalFeedCost,
+            costPerPoultry: adjustedQuantity > 0
+                ? totalCost / adjustedQuantity
+                : 0,
+            poultryConsumePerBird: historicalFeed.poultryConsumePerBird,
+            feedCostPerPoultry: historicalFeed.feedCostPerPoultry,
+            totalFeedCost: historicalFeed.totalFeedCost,
+            totalCostPerPoultry: totalCost / adjustedQuantity || 0,
+            feedStage:currentFeedStage,
             ageInDays: resolvedAgeInDays,
             ageInWeeks: resolvedAgeInWeeks,
-            currentFeedStage: feedStage,
-            currentFeedType: feed.feedType,
-            currentFeedName: feed.feedName,
-            feedHistory: [
+            currentFeedStage,
+            currentFeedType: currentFeed.feedType,
+            currentFeedName: currentFeed.feedName,
+            feedHistory: historicalFeed.feedHistory || [
                 {
-                    feedStage,
-                    feedName: feed.feedName,
-                    feedType: feed.feedType,
-                    feedCategory: feed.feedCategory,
-                    poultryConsumePerkg: 0,
-                    feedCostPerPoultry: 0,
-                    totalFeedCost: 0,
-                    totalCost: totalPurchaseCost,
-                    costPerPoultry: initialCostPerPoultry,
-                    totalCostPerPoultry: initialCostPerPoultry,
+                    currentFeedStage,
+                    currentFeedName: currentFeed.feedName,
+                    currentFeedType: currentFeed.feedType,
+                    feedCategory: currentFeed.feedCategory,
+                    poultryConsumePerBird: historicalFeed.poultryConsumePerBird,
+                    feedCostPerPoultry: historicalFeed.feedCostPerPoultry,
+                    totalFeedCost: historicalFeed.totalFeedCost,
+                    totalCost: totalPurchaseCost + historicalFeed.totalFeedCost,
+                    costPerPoultry: adjustedQuantity > 0
+                            ? (totalPurchaseCost + historicalFeed.totalFeedCost) / adjustedQuantity
+                            : 0,
+                    totalCostPerPoultry: totalCost / adjustedQuantity || 0,
                 }
             ]
         })
@@ -90,7 +116,7 @@ exports.createPoultry = async (req, res) => {
             })
         }
 
-        await recalculatePoultry(feed, req.farmModels)
+        await recalculatePoultry(currentFeed, req.farmModels)
         res.status(201).json({ success: true, message: 'Poultry created successfully...' })
     } catch (error) {
         console.log(error)

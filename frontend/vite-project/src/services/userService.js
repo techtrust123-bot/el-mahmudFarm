@@ -55,7 +55,7 @@ const userService = {
    * Change password
    */
   changePassword: async (passwordData) => {
-    try {\n      const response = await axios.post(`${API_BASE_URL}/user/change-password`, passwordData, {
+    try {const response = await axios.post(`${API_BASE_URL}/user/change-password`, passwordData, {
         withCredentials: true
       });
       return response.data;

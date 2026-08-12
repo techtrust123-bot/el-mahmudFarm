@@ -26,15 +26,15 @@ const exportLivestock = asyncHandler(async (req, res) => {
 
     const csvData = exportService.exportLivestock(livestock);
 
-    // Log the export
     await createAuditLog('EXPORT', 'livestock', {
       userId,
       farmId,
       req
     });
 
-    res.header('Content-Type', 'text/csv');
+    res.header('Content-Type', csvData.mimeType);
     res.header('Content-Disposition', `attachment; filename="${csvData.filename}"`);
+    res.header('Content-Length', csvData.fileSize);
     res.send(csvData.content);
   } catch (error) {
     throw new ApiError(500, 'Failed to export livestock data', error);
@@ -64,8 +64,9 @@ const exportPoultry = asyncHandler(async (req, res) => {
       req
     });
 
-    res.header('Content-Type', 'text/csv');
+    res.header('Content-Type', csvData.mimeType);
     res.header('Content-Disposition', `attachment; filename="${csvData.filename}"`);
+    res.header('Content-Length', csvData.fileSize);
     res.send(csvData.content);
   } catch (error) {
     throw new ApiError(500, 'Failed to export poultry data', error);
@@ -95,8 +96,9 @@ const exportSales = asyncHandler(async (req, res) => {
       req
     });
 
-    res.header('Content-Type', 'text/csv');
+    res.header('Content-Type', csvData.mimeType);
     res.header('Content-Disposition', `attachment; filename="${csvData.filename}"`);
+    res.header('Content-Length', csvData.fileSize);
     res.send(csvData.content);
   } catch (error) {
     throw new ApiError(500, 'Failed to export sales data', error);
@@ -126,8 +128,9 @@ const exportExpenses = asyncHandler(async (req, res) => {
       req
     });
 
-    res.header('Content-Type', 'text/csv');
+    res.header('Content-Type', csvData.mimeType);
     res.header('Content-Disposition', `attachment; filename="${csvData.filename}"`);
+    res.header('Content-Length', csvData.fileSize);
     res.send(csvData.content);
   } catch (error) {
     throw new ApiError(500, 'Failed to export expenses data', error);
@@ -157,8 +160,9 @@ const exportFeed = asyncHandler(async (req, res) => {
       req
     });
 
-    res.header('Content-Type', 'text/csv');
+    res.header('Content-Type', csvData.mimeType);
     res.header('Content-Disposition', `attachment; filename="${csvData.filename}"`);
+    res.header('Content-Length', csvData.fileSize);
     res.send(csvData.content);
   } catch (error) {
     throw new ApiError(500, 'Failed to export feed data', error);
@@ -235,8 +239,9 @@ const exportFarmReport = asyncHandler(async (req, res) => {
       req
     });
 
-    res.header('Content-Type', 'text/plain');
+    res.header('Content-Type', report.mimeType);
     res.header('Content-Disposition', `attachment; filename="${report.filename}"`);
+    res.header('Content-Length', report.fileSize);
     res.send(report.content);
   } catch (error) {
     throw new ApiError(500, 'Failed to generate farm report', error);

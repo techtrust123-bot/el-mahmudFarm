@@ -1,6 +1,6 @@
 const express = require('express')
 const { createLiveStock, getLivestocks, getAvailableLivestock, getSoldLivestock, getLiveStockById, edit, remove } = require('../controllers/livestockController')
-const { authMiddleware, checkPermission } = require('../middleweres/authMiddlewere')
+const { authMiddleware, checkPermission,isManager } = require('../middleweres/authMiddlewere')
 const { checkSubscription } = require('../middleware/subscriptionMiddleware')
 const { attachFarmDB } = require("../middleware/dbMiddleware")
 const { validate } = require('../middleweres/validation')
@@ -51,7 +51,8 @@ router.get('/:id',
 )
 
 router.put('/edit/:id', 
-  authMiddleware, 
+  authMiddleware,
+  isManager, 
   checkSubscription, 
   attachFarmDB, 
   checkPermission('livestock'), 
@@ -61,6 +62,7 @@ router.put('/edit/:id',
 
 router.delete('/:id', 
   authMiddleware, 
+  isManager,
   checkSubscription, 
   attachFarmDB, 
   checkPermission('livestock'), 

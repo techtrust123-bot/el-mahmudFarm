@@ -29,7 +29,7 @@ const validate = (validations) => {
       success: false,
       message: 'Validation failed',
       errors: formattedErrors,
-      debug: errorArray // Include raw errors for debugging
+      ...(process.env.NODE_ENV === 'development' && { debug: errorArray }) // Include raw errors for debugging
     });
   };
 };

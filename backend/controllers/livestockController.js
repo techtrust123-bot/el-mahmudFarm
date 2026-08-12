@@ -2,6 +2,7 @@
 // const Feed = require('../models/feed.js')
 const { recalculateLivestock, recalculateLivestockForTypeAndStage } = require('./feedController')
 const { calculateLivestockConsumption } = require('../utils/feedCalculator')
+const ApiError = require('../utils/ApiError')
 const {
   getFeedStage,
   calculateAge,
@@ -9,6 +10,7 @@ const {
   getFeedForStage,
   parseFeedType,
 } = require('../utils/feedStageHelper')
+const logger = require('../utils/logger')
 const { sendNotification } = require('../services/emailService')
 
 exports.createLiveStock = async(req,res)=>{
@@ -28,8 +30,21 @@ exports.createLiveStock = async(req,res)=>{
         const feedStage = getFeedStage(resolvedAgeInDays, type)
 
         const feed = await getFeedForStage(Feed, type, feedStage)
-        if(!feed){
-            return res.status(404).json({success:false,message:"Appropriate feed not found for this livestock type and age stage..."})
+        if (!feed) {
+            const errorMessage = `No ${type} ${feedStage} feed is configured for this farm.`
+            logger.error('Missing required feed for livestock creation.', {
+                farmId: req.user?.farmId || req.farmId || null,
+                animalType: type,
+                feedStage,
+                animalId: tagNumber,
+                message: errorMessage,
+            })
+            throw new ApiError(404, errorMessage, {
+                animalType: type,
+                feedStage,
+                animalId: tagNumber,
+                farmId: req.user?.farmId || req.farmId || null,
+            })
         }
 
         const quantity = Number(req.body.quantity) > 0 ? Number(req.body.quantity) : 1;

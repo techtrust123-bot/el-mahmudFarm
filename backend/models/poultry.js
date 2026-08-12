@@ -44,10 +44,6 @@ const poultrySchema = new mongoose.Schema({
         type:Number,
         required:true
     },
-    joinDate:{
-        type:Date,
-        default:Date.now
-    },
     vaccinationStatus:{
         type:String,
         required:true
@@ -56,9 +52,10 @@ const poultrySchema = new mongoose.Schema({
         type:Number,
         default:0
     },
+    // chane may occur
     lastFeedUpdate:{
         type:Date,
-        default:Date.now
+        // default:Date.now
     },
     totalCost:{
         type:Number,
@@ -68,7 +65,7 @@ const poultrySchema = new mongoose.Schema({
         type:Number,
         default:0
     },
-    poultryConsumePerkg:{
+    poultryConsumePerBird:{
         type:Number,
         default:0
     },
@@ -94,7 +91,7 @@ const poultrySchema = new mongoose.Schema({
     //  },
     birthDay:{
         type:Date,
-        default:Date.now
+        
     },
     ageInDays:{
         type:Number,
@@ -121,12 +118,14 @@ const poultrySchema = new mongoose.Schema({
             feedName: String,
             feedType: String,
             feedCategory: String,
-            poultryConsumePerkg: Number,
+            poultryConsumePerBird: Number,
             feedCostPerPoultry: Number,
             totalFeedCost: Number,
             totalCost: Number,
             costPerPoultry: Number,
             totalCostPerPoultry: Number,
+            quantity:Number,
+            newQuantity,
             // startDay: Number,
             // endDay: Number,
             recordedAt: { type: Date, default: Date.now }

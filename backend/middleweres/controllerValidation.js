@@ -9,7 +9,7 @@ const { body, check } = require('express-validator');
 const livestockValidation = [
   body('type')
     .notEmpty().withMessage('Animal type is required')
-    .isIn(['cattle', 'cow', 'sheep', 'goat', 'house', 'ram'])
+    .isIn(['cattle', 'cow', 'sheep', 'goat', 'horse', 'ram', 'bull'])
     .withMessage('Invalid animal type'),
   
   body('breed')
@@ -70,17 +70,17 @@ const feedValidation = [
   
   body('animalType')
     .notEmpty().withMessage('Animal type is required')
-    .isIn(['broiler', 'layer', 'cattle', 'cow', 'sheep', 'goat', 'horse', 'ram', 'bool'])
+    .isIn(['broiler', 'layer', 'cattle', 'cow', 'sheep', 'goat', 'horse', 'ram', 'bull'])
     .withMessage('Invalid animal type'),
   
   body('quantity')
     .notEmpty().withMessage('Quantity is required')
-    .isFloat({ min: 0 })
+    .isFloat({ min: 0, max: 999999999.99 })
     .withMessage('Quantity must be a valid positive number'),
   
   body('cost')
     .notEmpty().withMessage('Cost is required')
-    .isFloat({ min: 0 })
+    .isFloat({ min: 0, max: 999999999.99 })
     .withMessage('Cost must be a valid positive number'),
 
   body('supplier')
@@ -105,17 +105,17 @@ const feedValidation = [
 
   body('feedPricePerkg')
     .optional({ checkFalsy: true })
-    .isFloat({ min: 0 })
+    .isFloat({ min: 0, max: 999999999.99 })
     .withMessage('Feed price per kg must be a valid positive number'),
 
   body('totalPoultryFeedConsumedPerday')
     .optional({ checkFalsy: true })
-    .isFloat({ min: 0 })
+    .isFloat({ min: 0, max: 999999999.99 })
     .withMessage('Total poultry feed consumed per day must be a valid positive number'),
 
   body('totalLivestockFeedConsumedPerday')
     .optional({ checkFalsy: true })
-    .isFloat({ min: 0 })
+    .isFloat({ min: 0, max: 999999999.99 })
     .withMessage('Total livestock feed consumed per day must be a valid positive number')
 ];
 
@@ -159,7 +159,7 @@ const salesValidation = [
 
   body('buyerContact')
     .optional({ checkFalsy: true })
-    .isLength({ min: 7, max: 20 })
+    .isLength({ min: 7, max: 11 })
     .withMessage('Buyer contact must be a valid phone number'),
 
   body('status')

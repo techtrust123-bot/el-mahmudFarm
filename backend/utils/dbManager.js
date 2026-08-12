@@ -1,186 +1,486 @@
 const mongoose = require('mongoose');
-const winston = require('winston');
 const dns = require('dns');
-const { URL } = require('url');
+const logger = require('../utils/logger');
 
-async function resolveSrvMongoUri(uri) {
-  if (!uri || !uri.startsWith('mongodb+srv://')) {
-    // return uri; This check is important to ensure that the function only attempts to resolve SRV records for valid MongoDB SRV URIs. If the URI is not a valid SRV URI, it simply returns the original URI without attempting any DNS resolution.
-    return uri;
-  }
+const MAX_CONNECTION_CACHE = Number(process.env.FARM_CONNECTION_CACHE_MAX || 500);
+const MAX_FARM_ID_LENGTH = Number(process.env.FARM_ID_MAX || 64);
+const FARM_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+const MONGO_URI_PATTERN = /^(mongodb(?:\+srv)?:\/\/)(?:([^@\/]+)@)?([^\/?]+)(?:\/([^?]*))?(?:\?(.*))?$/i;
+const CONNECT_RETRY_MAX = Math.max(1, Number(process.env.MONGO_CONNECT_RETRY_MAX || 4));
+const CONNECT_RETRY_BASE_MS = Math.max(1000, Number(process.env.MONGO_CONNECT_RETRY_BASE_MS || 1000));
 
-  // This tell it to use Cloudflare's and Google's public DNS servers for resolving the SRV records. This can help avoid issues with local DNS configurations that might not resolve SRV records correctly.
-  dns.setServers(['1.1.1.1', '8.8.8.8']); 
+const connections = new Map();
+const pendingConnections = new Map();
+const accessOrder = new Map();
+const uriMetadataCache = new Map();
+const farmUriCache = new Map();
 
-  // This line uses the URL constructor to parse the MongoDB URI. It extracts components like the hostname, pathname (which contains the database name), username, and password. This is necessary for constructing a new URI after resolving the SRV records.
-  const parsed = new URL(uri);  
-
-  const host = parsed.hostname;
-  const dbName = parsed.pathname.startsWith('/') ? parsed.pathname.slice(1) : parsed.pathname;
-  const auth = parsed.username
-    ? `${encodeURIComponent(parsed.username)}:${encodeURIComponent(parsed.password)}@`
-    : '';
-
-  try {
-    // This line uses the dns.promises API to resolve the SRV records for the MongoDB service. It constructs the SRV query string using the hostname extracted from the URI. The result is an array of SRV records, each containing information about the target host and port for the MongoDB service.
-    const srvRecords = await dns.promises.resolveSrv(`_mongodb._tcp.${host}`);
-
-    // This line maps the resolved SRV records to a list of host:port strings
-    const hosts = srvRecords.map((record) => `${record.name}:${record.port}`).join(',');
-    return `mongodb://${auth}${hosts}/${dbName}${parsed.search}`;
-  } catch (error) {
-    // If SRV resolution fails, return the original SRV URI
-    console.warn(`SRV resolution failed for ${host}, using original SRV URI:`, error.message);
-    return uri;
+class MongoManagerError extends Error {
+  constructor(code, statusCode, message, cause) {
+    super(message);
+    this.name = this.constructor.name;
+    this.code = code;
+    this.statusCode = statusCode;
+    if (cause) this.cause = cause;
+    Error.captureStackTrace(this, this.constructor);
   }
 }
 
-function buildFarmUri(mongoUri, farmId) {
-  const dbName = `farm_${farmId}`;
-  return mongoUri.replace(/\/([^/?]+)(\?|$)/, `/${dbName}$2`);
+class InvalidMongoUriError extends MongoManagerError {
+  constructor(message, cause) {
+    super('INVALID_MONGO_URI', 400, message, cause);
+  }
 }
 
-// Logger instance
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [new winston.transports.Console()]
-});
+class InvalidFarmIdError extends MongoManagerError {
+  constructor(message, cause) {
+    super('INVALID_FARM_ID', 400, message, cause);
+  }
+}
 
-module.exports = {
-  resolveSrvMongoUri,
-  buildFarmUri,
-  logger
+class DatabaseConnectionError extends MongoManagerError {
+  constructor(message, cause) {
+    super('DATABASE_CONNECTION_ERROR', 500, message, cause);
+  }
+}
+
+class ConnectionTimeoutError extends MongoManagerError {
+  constructor(message, cause) {
+    super('CONNECTION_TIMEOUT_ERROR', 504, message, cause);
+  }
+}
+
+const normalizeFarmId = (rawFarmId) => {
+  if (typeof rawFarmId !== 'string') {
+    return null;
+  }
+
+  const farmId = rawFarmId.trim();
+  if (!farmId || farmId.length > MAX_FARM_ID_LENGTH || !FARM_ID_PATTERN.test(farmId)) {
+    return null;
+  }
+
+  return farmId;
 };
 
-// Cache for active farm connections, and without this thousands of connections will be created and never closed, leading to resource exhaustion and potential application crashes. This cache ensures that each farm has a single active connection that can be reused across requests, improving performance and resource management.
-const connections = new Map();
+const validateFarmId = (rawFarmId) => {
+  const normalized = normalizeFarmId(rawFarmId);
+  if (!normalized) {
+    throw new InvalidFarmIdError('Farm identifier is invalid. Allowed characters are a-z, A-Z, 0-9, underscore, and hyphen.');
+  }
+  return normalized;
+};
 
-// This map tracks pending connection promises for each farm ID. When multiple requests for the same farm arrive simultaneously, this map ensures that only one connection attempt is made, and all requests wait for that single promise to resolve. This prevents the creation of multiple connections for the same farm during high concurrency, which can lead to resource exhaustion and improve overall application stability.
-const pendingConnections = new Map()
+const touchConnection = (farmId) => {
+  if (accessOrder.has(farmId)) {
+    accessOrder.delete(farmId);
+  }
+  accessOrder.set(farmId, Date.now());
+};
 
-
-/**
- * Get the base MongoDB URI without the database name
-//  * @param {string} mongoUri - Full MongoDB URI
-//  * @returns {string} Base URI
- */
-
-
-/**
- * Get or create a connection to a farm's database
-//  * @param {string} farmId - The farm ID
-//  * @returns {Promise<mongoose.Connection>} Farm database connection
- */
-const getFarmConnection = async (farmId) => {
-  // Return already connected farm connection
-  if (connections.has(farmId)) {
-    const connection = connections.get(farmId);
-    if (connection.readyState === 1) {
-      return connection;
-    }
-
-    try {
-      await connection.close();
-    } catch (_) {}
-    connections.delete(farmId);
+const evictStaleConnectionIfNeeded = async () => {
+  if (connections.size <= MAX_CONNECTION_CACHE) {
+    return;
   }
 
-  if (pendingConnections.has(farmId)) {
-    return pendingConnections.get(farmId);
+  const oldestFarmId = accessOrder.keys().next().value;
+  if (!oldestFarmId) {
+    return;
   }
 
-  const connectionPromise = createFarmConnection(farmId);
-  pendingConnections.set(farmId, connectionPromise);
+  const connectionToClose = connections.get(oldestFarmId);
+  accessOrder.delete(oldestFarmId);
+  connections.delete(oldestFarmId);
 
   try {
-    const connection = await connectionPromise;
-    pendingConnections.delete(farmId);
-    return connection;
+    await connectionToClose.close();
+    logger.info('Evicted farm database connection from cache', { farmId: oldestFarmId });
   } catch (error) {
-    pendingConnections.delete(farmId);
-    throw error;
+    logger.warn('Failed to close evicted farm database connection', {
+      farmId: oldestFarmId,
+      error: error?.message
+    });
+  }
+};
+
+const parseMongoUri = (mongoUri) => {
+  if (typeof mongoUri !== 'string' || !mongoUri.trim()) {
+    throw new InvalidMongoUriError('MongoDB connection URI must be a non-empty string.');
+  }
+
+  const cached = uriMetadataCache.get(mongoUri);
+  if (cached) {
+    return cached;
+  }
+
+  const match = mongoUri.match(MONGO_URI_PATTERN);
+  if (!match) {
+    throw new InvalidMongoUriError('MongoDB URI is malformed. Expected mongodb:// or mongodb+srv:// with host(s) and a database name.');
+  }
+
+  const [, prefix, auth, hosts, database = '', query = ''] = match;
+
+  if (!hosts || !hosts.trim()) {
+    throw new InvalidMongoUriError('MongoDB URI must include one or more host entries.');
+  }
+
+  if (!database) {
+    throw new InvalidMongoUriError('MongoDB URI must include a database name.');
+  }
+
+  const metadata = {
+    prefix: prefix.toLowerCase(),
+    auth: auth || '',
+    hosts,
+    database,
+    query
+  };
+
+  uriMetadataCache.set(mongoUri, metadata);
+  return metadata;
+};
+
+const maskQueryString = (query) => {
+  if (!query) {
+    return '';
+  }
+
+  return query
+    .split('&')
+    .map((pair) => {
+      const [key] = pair.split('=');
+      if (/password|pass|secret|auth|token|credential/i.test(key)) {
+        return `${key}=***`;
+      }
+      return pair;
+    })
+    .join('&');
+};
+
+const maskMongoUri = (mongoUri) => {
+  try {
+    const { prefix, auth, hosts, database, query } = parseMongoUri(mongoUri);
+    const maskedAuth = auth ? `${auth.split(':')[0]}:***@` : '';
+    const maskedQuery = query ? `?${maskQueryString(query)}` : '';
+    return `${prefix}${maskedAuth}${hosts}/${database}${maskedQuery}`;
+  } catch (_) {
+    return 'mongodb://<masked-uri>';
+  }
+};
+
+const getConnectionStateLabel = (readyState) => {
+  switch (readyState) {
+    case 0:
+      return 'disconnected';
+    case 1:
+      return 'connected';
+    case 2:
+      return 'connecting';
+    case 3:
+      return 'disconnecting';
+    default:
+      return 'unknown';
+  }
+};
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getConnectionOptions = () => ({
+  maxPoolSize: Number(process.env.MONGO_POOL_MAX || 20),
+  minPoolSize: Number(process.env.MONGO_POOL_MIN || 2),
+  serverSelectionTimeoutMS: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 10000),
+  socketTimeoutMS: Number(process.env.MONGO_SOCKET_TIMEOUT_MS || 45000),
+  connectTimeoutMS: Number(process.env.MONGO_CONNECT_TIMEOUT_MS || 10000),
+  heartbeatFrequencyMS: Number(process.env.MONGO_HEARTBEAT_FREQUENCY_MS || 30000),
+  retryWrites: true
+});
+
+const discardConnection = async (farmId, connection) => {
+  connections.delete(farmId);
+  accessOrder.delete(farmId);
+
+  if (connection && typeof connection.close === 'function') {
+    try {
+      await connection.close();
+      logger.info('Discarded stale farm connection', { farmId });
+    } catch (closeError) {
+      logger.warn('Unable to close stale farm connection', {
+        farmId,
+        error: closeError?.message
+      });
+    }
+  }
+};
+
+const buildFarmUri = (mongoUri, farmId) => {
+  try {
+    if (!mongoUri || typeof mongoUri !== 'string' || !mongoUri.trim()) {
+      throw new InvalidMongoUriError('buildFarmUri() requires a non-empty MONGO_URI string.');
+    }
+
+    const normalizedFarmId = validateFarmId(farmId);
+    const parsed = parseMongoUri(mongoUri);
+    const cacheKey = `${mongoUri}::${normalizedFarmId}`;
+    const cached = farmUriCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const authSegment = parsed.auth ? `${parsed.auth}@` : '';
+    const querySegment = parsed.query ? `?${parsed.query}` : '';
+    const farmUri = `${parsed.prefix}${authSegment}${parsed.hosts}/${normalizedFarmId}${querySegment}`;
+
+    logger.info('buildFarmUri() URI replacement', {
+      originalMaskedUri: maskMongoUri(mongoUri),
+      replacementMaskedUri: maskMongoUri(farmUri),
+      farmId: normalizedFarmId
+    });
+
+    farmUriCache.set(cacheKey, farmUri);
+    return farmUri;
+  } catch (error) {
+    logger.error('buildFarmUri() failed', {
+      error: error?.message,
+      farmId: farmId,
+      originalMaskedUri: maskMongoUri(mongoUri)
+    });
+    throw error instanceof MongoManagerError
+      ? error
+      : new InvalidMongoUriError('buildFarmUri() could not rewrite the MongoDB URI for the requested farm.', error);
+  }
+};
+
+const resolveSrvMongoUri = async (mongoUri) => {
+  const parsed = parseMongoUri(mongoUri);
+  if (parsed.prefix !== 'mongodb+srv://') {
+    return mongoUri;
+  }
+
+  const hostCandidate = parsed.hosts.split(',')[0];
+  if (!hostCandidate || !hostCandidate.trim()) {
+    throw new InvalidMongoUriError('MongoDB SRV URI must include a valid host entry.');
+  }
+
+  try {
+    const resolver = new dns.promises.Resolver();
+    resolver.setServers(['1.1.1.1', '8.8.8.8']);
+    const hostOnly = hostCandidate.split(':')[0];
+
+    const srvRecords = await resolver.resolveSrv(`_mongodb._tcp.${hostOnly}`);
+    if (!srvRecords || srvRecords.length === 0) {
+      throw new InvalidMongoUriError('SRV lookup returned no MongoDB hosts.');
+    }
+
+    const resolvedHosts = srvRecords.map((record) => `${record.name}:${record.port}`).join(',');
+    const authSegment = parsed.auth ? `${parsed.auth}@` : '';
+    const querySegment = parsed.query ? `?${parsed.query}` : '';
+    return `mongodb://${authSegment}${resolvedHosts}/${parsed.database}${querySegment}`;
+  } catch (error) {
+    logger.warn('SRV resolution failed, returning original MongoDB URI', {
+      error: error?.message,
+      maskedUri: maskMongoUri(mongoUri)
+    });
+    return mongoUri;
   }
 };
 
 const createFarmConnection = async (farmId) => {
-    let mongoUri = process.env.MONGO_URI;
-    if (!mongoUri) throw new Error('MONGO_URI environment variable is not set')
+  const normalizedFarmId = validateFarmId(farmId);
+  const rawMongoUri = process.env.MONGO_URI;
+  if (!rawMongoUri) {
+    throw new InvalidMongoUriError('MONGO_URI environment variable is required.');
+  }
 
-      mongoUri = await resolveSrvMongoUri(mongoUri);
+  const effectiveMongoUri = await resolveSrvMongoUri(rawMongoUri);
+  const farmUri = buildFarmUri(effectiveMongoUri, normalizedFarmId);
+  const maskedUri = maskMongoUri(farmUri);
+  const connectOptions = getConnectionOptions();
 
-    const farmUri = buildFarmUri(mongoUri, farmId)
-    logger.info(`Connecting to farm database: farm_${farmId}`)
+  logger.info('Creating farm database connection', {
+    farmId: normalizedFarmId,
+    maskedUri,
+    connectionOptions: {
+      maxPoolSize: connectOptions.maxPoolSize,
+      minPoolSize: connectOptions.minPoolSize,
+      connectTimeoutMS: connectOptions.connectTimeoutMS,
+      serverSelectionTimeoutMS: connectOptions.serverSelectionTimeoutMS
+    }
+  });
 
-    const connection = mongoose.createConnection(farmUri, {
-        maxPoolSize: 10,                   // ✅ increased pool size
-        minPoolSize: 2,                    // ✅ keep minimum connections alive
-        serverSelectionTimeoutMS: 10000,
-        socketTimeoutMS: 45000,
-        connectTimeoutMS: 10000,
-        heartbeatFrequencyMS: 30000,       // ✅ check connection health every 30s
-        retryWrites: true,
-    })
+  let connection = null;
+  let lastError = null;
+  const startTime = Date.now();
+
+  for (let attempt = 1; attempt <= CONNECT_RETRY_MAX; attempt += 1) {
+    connection = mongoose.createConnection(farmUri, connectOptions);
 
     try {
-        await connection.asPromise()
+      await connection.asPromise();
+      const durationMs = Date.now() - startTime;
+      logger.info('Farm database connection established', {
+        farmId: normalizedFarmId,
+        maskedUri,
+        connectionState: getConnectionStateLabel(connection.readyState),
+        connectDurationMs: durationMs,
+        attempt
+      });
+      break;
     } catch (error) {
-        try { await connection.close() } catch (_) {}
-        throw new Error(`Failed to connect to farm_${farmId}: ${error.message}`)
+      lastError = error;
+      const isFinalAttempt = attempt >= CONNECT_RETRY_MAX;
+      const retryDelayMs = CONNECT_RETRY_BASE_MS * Math.pow(2, attempt - 1);
+      logger.warn('Farm database connection attempt failed', {
+        farmId: normalizedFarmId,
+        maskedUri,
+        attempt,
+        connectionState: getConnectionStateLabel(connection.readyState),
+        error: error?.message,
+        nextRetryInMs: isFinalAttempt ? null : retryDelayMs
+      });
+
+      await discardConnection(normalizedFarmId, connection);
+
+      if (isFinalAttempt) {
+        if (/timeout|timed out|ETIMEDOUT/i.test(error?.message || '')) {
+          throw new ConnectionTimeoutError('Timed out connecting to farm database.', error);
+        }
+        throw new DatabaseConnectionError('Failed to connect to farm database after retries.', error);
+      }
+
+      await wait(retryDelayMs);
+    }
+  }
+
+  if (!connection || connection.readyState !== 1) {
+    throw new DatabaseConnectionError('Failed to establish farm database connection.', lastError);
+  }
+
+  connection.on('connected', () => {
+    logger.info('Farm database connection event: connected', {
+      farmId: normalizedFarmId,
+      connectionState: getConnectionStateLabel(connection.readyState)
+    });
+  });
+
+  connection.on('error', (error) => {
+    logger.error('Farm database connection event: error', {
+      farmId: normalizedFarmId,
+      error: error?.message,
+      connectionState: getConnectionStateLabel(connection.readyState)
+    });
+  });
+
+  connection.on('disconnected', async () => {
+    logger.warn('Farm database connection event: disconnected', {
+      farmId: normalizedFarmId,
+      connectionState: getConnectionStateLabel(connection.readyState)
+    });
+    await discardConnection(normalizedFarmId, connection);
+  });
+
+  connection.on('reconnected', () => {
+    logger.info('Farm database connection event: reconnected', {
+      farmId: normalizedFarmId,
+      connectionState: getConnectionStateLabel(connection.readyState)
+    });
+    connections.set(normalizedFarmId, connection);
+    touchConnection(normalizedFarmId);
+  });
+
+  connections.set(normalizedFarmId, connection);
+  touchConnection(normalizedFarmId);
+  await evictStaleConnectionIfNeeded();
+  return connection;
+};
+
+const getFarmConnection = async (farmId) => {
+  const normalizedFarmId = validateFarmId(farmId);
+  const cachedConnection = connections.get(normalizedFarmId);
+
+  if (cachedConnection) {
+    if (cachedConnection.readyState === 1) {
+      touchConnection(normalizedFarmId);
+      logger.info('Reusing cached farm database connection', {
+        farmId: normalizedFarmId,
+        connectionState: getConnectionStateLabel(cachedConnection.readyState)
+      });
+      return cachedConnection;
     }
 
-    // ✅ Set up listeners after connection confirmed
-    connection.on('error', (err) => {
-        logger.error(`Farm database error for farm_${farmId}: ${err.message}`)
-        connections.delete(farmId)
-    })
+    logger.warn('Stale cached farm connection detected, refreshing', {
+      farmId: normalizedFarmId,
+      connectionState: getConnectionStateLabel(cachedConnection.readyState)
+    });
+    await discardConnection(normalizedFarmId, cachedConnection);
+  }
 
-    connection.on('disconnected', () => {
-        logger.info(`Farm database disconnected: farm_${farmId}`)
-        connections.delete(farmId)
-    })
+  if (pendingConnections.has(normalizedFarmId)) {
+    logger.info('Awaiting existing farm connection promise', { farmId: normalizedFarmId });
+    return pendingConnections.get(normalizedFarmId);
+  }
 
-    connection.on('reconnected', () => {
-        logger.info(`Farm database reconnected: farm_${farmId}`)
-        connections.set(farmId, connection)  // ✅ restore to cache on reconnect
-    })
+  const connectionPromise = createFarmConnection(normalizedFarmId);
+  pendingConnections.set(normalizedFarmId, connectionPromise);
 
-    logger.info(`Farm database connected: farm_${farmId}`)
-    connections.set(farmId, connection)
-    return connection
-}
-
-const closeFarmConnection = async (farmId) => {
-  if (connections.has(farmId)) {
-    const connection = connections.get(farmId);
-    await connection.close();
-    connections.delete(farmId);
-    logger.info(`Farm database connection closed: farm_${farmId}`);
+  try {
+    return await connectionPromise;
+  } finally {
+    pendingConnections.delete(normalizedFarmId);
   }
 };
 
-const getActiveConnections = () => {
-  return Array.from(connections.keys());
+const closeFarmConnection = async (farmId) => {
+  const normalizedFarmId = normalizeFarmId(farmId);
+  if (!normalizedFarmId) {
+    return;
+  }
+
+  const connection = connections.get(normalizedFarmId);
+  if (!connection) {
+    return;
+  }
+
+  try {
+    await connection.close();
+    logger.info('Farm database connection closed', { farmId: normalizedFarmId });
+  } catch (error) {
+    logger.warn('Error closing farm database connection', {
+      farmId: normalizedFarmId,
+      error: error?.message
+    });
+  }
+
+  connections.delete(normalizedFarmId);
+  accessOrder.delete(normalizedFarmId);
 };
+
+const getActiveConnections = () => Array.from(connections.keys());
+
 const closeAllConnections = async () => {
-    const promises = Array.from(connections.entries()).map(([farmId, connection]) =>
-        connection.close()
-            .then(() => logger.info(`Closed farm database: farm_${farmId}`))
-            .catch(err => logger.error(`Error closing farm_${farmId}: ${err.message}`))
-    )
-    await Promise.all(promises)
-    connections.clear()
-    logger.info('All farm database connections closed')
-}
+  const closures = Array.from(connections.entries()).map(async ([farmId, connection]) => {
+    try {
+      await connection.close();
+      logger.info('Closed farm database connection', { farmId });
+    } catch (error) {
+      logger.warn('Failed to close farm database connection', {
+        farmId,
+        error: error?.message
+      });
+    }
+  });
+
+  await Promise.all(closures);
+  connections.clear();
+  accessOrder.clear();
+  pendingConnections.clear();
+  logger.info('All farm database connections closed');
+};
 
 module.exports = {
   getFarmConnection,
   closeFarmConnection,
   getActiveConnections,
   closeAllConnections,
-  buildFarmUri,
   resolveSrvMongoUri,
+  buildFarmUri
 };
