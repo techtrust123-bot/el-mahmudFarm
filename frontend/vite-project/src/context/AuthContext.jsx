@@ -5,7 +5,7 @@ import axiosInstance from '../utils/axiosInstance';
 export const AuthContext = createContext()
 
 export const AuthProvider = (props) =>{
-  const backendUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+  const backendUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'
   const [isLogin, setIsLogin] = useState(false)
   const [userData, setUserData] = useState(null)
   const [loading, setLoading] = useState(true)

@@ -1,6 +1,7 @@
 const path = require('path');
 const dotenv = require('dotenv');
-dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+dotenv.config();
+// dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -14,7 +15,7 @@ const winston = require('winston');
 const morgan = require('morgan');
 const DailyRotateFile = require('winston-daily-rotate-file');
 const { resolveSrvMongoUri } = require('./utils/dbManager');
-require('./services/scheduleBackup');
+// require('../services/scheduleBackup');
 
 const dns = require("dns");
 dns.setServers(["1.1.1.1", "8.8.8.8"]);

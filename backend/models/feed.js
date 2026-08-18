@@ -28,11 +28,13 @@ const feedSchema = new mongoose.Schema({
     },
     poultryDailyConsumption:{
         type:Number,
-        default:0
+        default:0,
+        maxLength: 4
     },
     livestockDailyConsumption:{
         type:Number,
-        default:0
+        default:0,
+        maxLength: 4
     },
     totalPoultryFeedConsumedPerday:{
         type:Number,

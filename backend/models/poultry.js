@@ -21,7 +21,6 @@ const poultrySchema = new mongoose.Schema({
      },
      quantity:{
         type:Number,
-        default:0,
         required:true
      },
     //  joinDate:{
@@ -125,7 +124,7 @@ const poultrySchema = new mongoose.Schema({
             costPerPoultry: Number,
             totalCostPerPoultry: Number,
             quantity:Number,
-            newQuantity,
+            newQuantity: Number,
             // startDay: Number,
             // endDay: Number,
             recordedAt: { type: Date, default: Date.now }

@@ -2,6 +2,7 @@ const {
     getPoultryFeedStagePeriods,
     getFeedForStage,
 } = require('./feedStageHelper.js')
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 
 /**
@@ -87,92 +88,7 @@ const calculateHistoricalPoultryFeed = async ({
 
     const feedHistory = []
 
-    // for (const period of stagePeriods) {
-    //     const feedStage = period.stage
-    //     const feedStageKey =
-    //         `${String(animalType).trim().toLowerCase()}:${feedStage}`
-
-    //      const feed = feedStageMap.get(feedStageKey)
-    //     if (!feed) {
-    //         throw new ApiError(
-    //             404,
-    //             `No ${animalType} ${feedStage} feed is configured for this farm.`,
-
-    //             {
-    //                 animalType,
-    //                 feedStage,
-    //                 purchaseDate,
-    //             }
-    //         )
-    //     }
-
-    //     const dailyRate =
-    //         Math.max(
-    //             Number(feed.poultryDailyConsumption) || 0,
-    //             0
-    //         )
-
-    //     const pricePerKg =
-    //         Math.max(
-    //             Number(feed.feedPricePerkg) || 0,
-    //             0
-    //         )
-
-    //     const stageFeedConsumedPerBird =
-    //         dailyRate * period.days
-
-    //     const stageFeedCostPerBird =
-    //         stageFeedConsumedPerBird * pricePerKg
-
-    //     const stageTotalFeedConsumed =
-    //         stageFeedConsumedPerBird * safeQuantity
-
-    //     const stageTotalFeedCost =
-    //         stageFeedCostPerBird * safeQuantity
-
-    //     totalFeedConsumedPerBird +=
-    //         stageFeedConsumedPerBird
-
-    //     totalFeedCostPerBird +=
-    //         stageFeedCostPerBird
-
-    //     feedHistory.push({
-    //         feedStage,
-    //         feedName: feed.feedName,
-    //         feedType: feed.feedType,
-    //         feedCategory: feed.feedCategory,
-
-    //         poultryConsumePerkg:
-    //             stageFeedConsumedPerBird,
-
-    //         feedCostPerPoultry:
-    //             stageFeedCostPerBird,
-
-    //         totalFeedCost:
-    //             stageTotalFeedCost,
-
-    //         totalCost:
-    //             stageTotalFeedCost,
-
-    //         costPerPoultry:
-    //             stageFeedCostPerBird,
-
-    //         totalCostPerPoultry:
-    //             stageFeedCostPerBird,
-
-    //         startAgeInDays:
-    //             period.startAgeInDays,
-
-    //         endAgeInDays:
-    //             period.endAgeInDays,
-
-    //         days:
-    //             period.days,
-
-    //         recordedAt:
-    //             today,
-    //     })
-    // }
+    
     for (const period of stagePeriods) {
     const feedStage = period.stage
 
@@ -194,10 +110,16 @@ const calculateHistoricalPoultryFeed = async ({
         )
     }
 
-    const dailyRate = Math.max(
-        Number(feed.poultryDailyConsumption) || 0,
+    const totalDailyFeed = Math.max(
+        Number(feed.totalPoultryFeedConsumedPerday) || 0,
         0
     )
+
+    const dailyFeedPerBird =
+            safeQuantity > 0
+                ? totalDailyFeed / safeQuantity
+                : 0
+    
 
     const pricePerKg = Math.max(
         Number(feed.feedPricePerkg) || 0,
@@ -205,7 +127,7 @@ const calculateHistoricalPoultryFeed = async ({
     )
 
     const stageFeedConsumedPerBird =
-        dailyRate * period.days
+        dailyFeedPerBird * period.days
 
     const stageFeedCostPerBird =
         stageFeedConsumedPerBird * pricePerKg
@@ -262,6 +184,9 @@ const calculateHistoricalPoultryFeed = async ({
     const totalFeedConsumed =
         totalFeedConsumedPerBird * safeQuantity
 
+        const totalFeedCost =
+            totalFeedCostPerBird * safeQuantity
+
     return {
         totalFeedConsumed,
 
@@ -271,8 +196,7 @@ const calculateHistoricalPoultryFeed = async ({
         feedCostPerPoultry:
             totalFeedCostPerBird,
 
-        totalFeedCost:
-            totalFeedCostPerBird * safeQuantity,
+        totalFeedCost,
 
         feedHistory,
     }

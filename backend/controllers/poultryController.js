@@ -1,5 +1,5 @@
 
-const { recalculatePoultry } = require('./feedController')
+const { recalculatePoultry } = require('../services/feedConsumptionService.js')
 const { calculateBatchConsumption } = require('../utils/feedCalculator')
 const ApiError = require('../utils/ApiError')
 const {
@@ -9,7 +9,7 @@ const {
   getFeedForStage,
 } = require('../utils/feedStageHelper')
 const logger = require('../utils/logger')
-const historicakFeed = require('../utils/historicalFeedCalculationHelper.js')
+const calculateHistoricalPoultryFeed = require('../utils/historicalFeedCalculationHelper.js')
 const { sendNotification } = require('../services/emailService')
 
 exports.createPoultry = async (req, res) => {
@@ -61,7 +61,7 @@ exports.createPoultry = async (req, res) => {
 
         const totalPurchaseCost = Number(purchasePrice) || 0
         const initialCostPerPoultry = adjustedQuantity > 0 ? totalPurchaseCost / adjustedQuantity : 0
-        const totalCost = totalPurchaseCost + historicalFeed.totalFeedCost
+        const totalCost =  historicalFeed.totalFeedCost
         const costPerPoultry = totalCost / adjustedQuantity
         const newPoultry = new Poultry({
             batchId,
@@ -75,9 +75,10 @@ exports.createPoultry = async (req, res) => {
             purchasePrice: totalPurchaseCost,
             totalFeedConsumed: historicalFeed.totalFeedConsumed,
             totalCost: totalPurchaseCost + historicalFeed.totalFeedCost,
-            costPerPoultry: adjustedQuantity > 0
-                ? totalCost / adjustedQuantity
-                : 0,
+            costPerPoultry,
+            // costPerPoultry: adjustedQuantity > 0
+            //     ? totalCost / adjustedQuantity
+            //     : 0,
             poultryConsumePerBird: historicalFeed.poultryConsumePerBird,
             feedCostPerPoultry: historicalFeed.feedCostPerPoultry,
             totalFeedCost: historicalFeed.totalFeedCost,
@@ -98,9 +99,9 @@ exports.createPoultry = async (req, res) => {
                     feedCostPerPoultry: historicalFeed.feedCostPerPoultry,
                     totalFeedCost: historicalFeed.totalFeedCost,
                     totalCost: totalPurchaseCost + historicalFeed.totalFeedCost,
-                    costPerPoultry: adjustedQuantity > 0
-                            ? (totalPurchaseCost + historicalFeed.totalFeedCost) / adjustedQuantity
-                            : 0,
+                    // costPerPoultry: adjustedQuantity > 0
+                    //         ? (totalPurchaseCost + historicalFeed.totalFeedCost) / adjustedQuantity
+                    //         : 0,
                     totalCostPerPoultry: totalCost / adjustedQuantity || 0,
                 }
             ]

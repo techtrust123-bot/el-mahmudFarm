@@ -164,7 +164,7 @@ const getPoultryFeedStagePeriods = (startAgeInDays, endAgeInDays) => {
         const periodStart = Math.max(startAge, stage.startDay)
         const periodEnd = Math.min(endAge, stage.endDay)
 
-        if (periodEnd >= periodStart) {
+        if (periodEnd > periodStart) {
             periods.push({
                 stage: stage.stage,
                 startAgeInDays: periodStart,

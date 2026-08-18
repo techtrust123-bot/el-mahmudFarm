@@ -143,7 +143,7 @@ exports.addFeed = async(req,res)=>{
             livestockDailyConsumption: Number(livestockDailyConsumption || 0),
             totalPoultryFeedConsumedPerday: Number(totalPoultryFeedConsumedPerday || 0),
             totalLivestockFeedConsumedPerday: Number(totalLivestockFeedConsumedPerday || 0),
-            lastConsumptionUpdate: new Date(purchaseDate),
+            lastConsumptionUpdate: new Date(),
             feedPricePerkg,
             totalDailyConsumption,
             feedName,

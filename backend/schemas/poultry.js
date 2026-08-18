@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 
 const poultrySchema = new mongoose.Schema({
+    farmId:{
+        type:String
+    },
     batchId:{
         type:String,
         required:true,
@@ -45,6 +48,10 @@ const poultrySchema = new mongoose.Schema({
         type:Number,
         default:0
     },
+    lastFeedUpdate:{
+        type:Date,
+        // default:Date.now
+    },
     totalCost:{
         type:Number,
         default:0
@@ -53,7 +60,7 @@ const poultrySchema = new mongoose.Schema({
         type:Number,
         default:0
     },
-    poultryConsumePerkg:{
+    poultryConsumePerBird:{
         type:Number,
         default:0
     },
@@ -73,10 +80,10 @@ const poultrySchema = new mongoose.Schema({
         type:Number,
         default:0
     },
-    birthDay:{
-        type:Date,
-        default:Date.now
-    },
+    // birthDay:{
+    //     type:Date,
+    //     default:Date.now
+    // },
     ageInDays:{
         type:Number,
         default:0
@@ -102,12 +109,14 @@ const poultrySchema = new mongoose.Schema({
             feedName: String,
             feedType: String,
             feedCategory: String,
-            poultryConsumePerkg: Number,
+            poultryConsumePerBird: Number,
             feedCostPerPoultry: Number,
             totalFeedCost: Number,
             totalCost: Number,
             costPerPoultry: Number,
             totalCostPerPoultry: Number,
+            quantity:Number,
+            newQuantity: Number,
             recordedAt: { type: Date, default: Date.now }
         }
     ],

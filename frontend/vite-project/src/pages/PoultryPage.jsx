@@ -41,7 +41,7 @@ const PoultryPage = () => {
     // ageInWeeks: '',
     // ageInDays: '',
     mortality: '',
-    poultryConsumePerkg:'',
+    poultryConsumePerBird:'',
     purchasePrice: '',
     costPerPoultry: '',
   });
@@ -101,7 +101,7 @@ const PoultryPage = () => {
       type: '',
       quantity: '',
       vaccinationStatus: '',
-      poultryConsumePerkg: '',
+      poultryConsumePerBird: '',
       purchaseDate: '',
       // ageInWeeks: '',
       // ageInDays: '',
@@ -261,7 +261,7 @@ const PoultryPage = () => {
         return <Badge variant={value === 'vaccinated' ? 'success' : 'warning'}>{status?.label}</Badge>;
       },
     },
-    { key: 'poultryConsumePerkg', label: 'Feed (kg)' },
+    { key: 'poultryConsumePerBird', label: 'Feed (kg)' },
   ];
 
   return (
