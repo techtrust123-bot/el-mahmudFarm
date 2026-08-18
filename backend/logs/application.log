@@ -10274,3 +10274,9 @@
 {"level":"info","message":"Backup job received SIGINT","timestamp":"2026-08-18 09:05:11"}
 {"level":"info","message":"Backup job: Redis not configured or ioredis not installed, using in-memory lock fallback","timestamp":"2026-08-18 09:18:20"}
 {"level":"info","message":"Backup scheduler configured","schedule":"0 2 * * *","timestamp":"2026-08-18 09:18:20"}
+{"level":"info","message":"Backup job: Redis not configured or ioredis not installed, using in-memory lock fallback","timestamp":"2026-08-18 09:19:23"}
+{"level":"info","message":"Backup scheduler configured","schedule":"0 2 * * *","timestamp":"2026-08-18 09:19:23"}
+{"level":"info","message":"Backup job: Redis not configured or ioredis not installed, using in-memory lock fallback","timestamp":"2026-08-18 09:50:22"}
+{"level":"info","message":"Backup scheduler configured","schedule":"0 2 * * *","timestamp":"2026-08-18 09:50:22"}
+{"level":"info","message":"Backup job: Redis not configured or ioredis not installed, using in-memory lock fallback","timestamp":"2026-08-18 09:56:52"}
+{"level":"info","message":"Backup scheduler configured","schedule":"0 2 * * *","timestamp":"2026-08-18 09:56:52"}
