@@ -1,39 +1,16 @@
 const {
     getPoultryFeedStagePeriods,
+    getLivestockFeedStagePeriods,
     getFeedForStage,
 } = require('./feedStageHelper.js')
+const ApiError = require('./ApiError')
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
-
-
-/**
- * Calculates historical poultry feed consumption and cost.
- *
- * IMPORTANT:
- * CloudFarm uses purchaseDate as the starting point
- * for poultry age/feed accounting.
- *
- * Example:
- *
- * purchaseDate = 70 days ago
- * quantity     = 100 birds
- *
- * The function calculates:
- *
- * Starter consumption
- * + Grower consumption
- * + Finisher consumption
- *
- * It also calculates the corresponding feed costs.
- *
- * This function DOES NOT use birthDay.
- *
- * This function DOES NOT allow fallback to another feed stage.
- */
 
 const calculateHistoricalPoultryFeed = async ({
     Feed,
     animalType,
     purchaseDate,
+    purchasePrice,
     quantity,
 }) => {
     const safeQuantity = Math.max(Number(quantity) || 0, 0)
@@ -42,7 +19,6 @@ const calculateHistoricalPoultryFeed = async ({
         return {
             totalFeedConsumed: 0,
             poultryConsumePerBird: 0,
-            poultryConsumePerkg: 0,
             feedCostPerPoultry: 0,
             totalFeedCost: 0,
             feedHistory: [],
@@ -51,6 +27,11 @@ const calculateHistoricalPoultryFeed = async ({
 
     const purchase = new Date(purchaseDate)
     const today = new Date()
+    const purchasePriceNum = Number(purchasePrice) || 0
+
+    if (purchasePriceNum < 0) {
+        throw new Error('Invalid poultry purchasePrice.')
+    }
 
     if (Number.isNaN(purchase.getTime())) {
         throw new Error('Invalid poultry purchaseDate.')
@@ -76,7 +57,6 @@ const calculateHistoricalPoultryFeed = async ({
         return {
             totalFeedConsumed: 0,
             poultryConsumePerBird: 0,
-            poultryConsumePerkg: 0,
             feedCostPerPoultry: 0,
             totalFeedCost: 0,
             feedHistory: [],
@@ -88,7 +68,7 @@ const calculateHistoricalPoultryFeed = async ({
 
     const feedHistory = []
 
-    
+
     for (const period of stagePeriods) {
     const feedStage = period.stage
 
@@ -119,21 +99,21 @@ const calculateHistoricalPoultryFeed = async ({
             safeQuantity > 0
                 ? totalDailyFeed / safeQuantity
                 : 0
-    
+
 
     const pricePerKg = Math.max(
         Number(feed.feedPricePerkg) || 0,
         0
     )
 
+    const stagePurchasePricePerBird = 
+    purchasePriceNum / safeQuantity;
+
     const stageFeedConsumedPerBird =
         dailyFeedPerBird * period.days
 
     const stageFeedCostPerBird =
         stageFeedConsumedPerBird * pricePerKg
-
-    const stageTotalFeedConsumed =
-        stageFeedConsumedPerBird * safeQuantity
 
     const stageTotalFeedCost =
         stageFeedCostPerBird * safeQuantity
@@ -159,14 +139,8 @@ const calculateHistoricalPoultryFeed = async ({
         totalFeedCost:
             stageTotalFeedCost,
 
-        totalCost:
-            stageTotalFeedCost,
-
         costPerPoultry:
-            stageFeedCostPerBird,
-
-        totalCostPerPoultry:
-            stageFeedCostPerBird,
+            totalFeedCostPerBird + stagePurchasePricePerBird,
 
         startAgeInDays:
             period.startAgeInDays,
@@ -202,5 +176,174 @@ const calculateHistoricalPoultryFeed = async ({
     }
 }
 
+const calculateHistoricalLivestockFeed = async ({
+    Feed,
+    animalType,
+    purchaseDate,
+    quantity,
+    purchasePrice,
+}) => {
+    const safeQuantity = Math.max(Number(quantity) || 0, 0)
 
-module.exports = calculateHistoricalPoultryFeed
+    if (!Feed || !animalType || !purchaseDate || safeQuantity <= 0) {
+        return {
+            totalFeedConsumed: 0,
+            livestockFeedConsumed: 0,
+            feedCostPerLivestock: 0,
+            totalFeedCost: 0,
+            feedHistory: [],
+        }
+    }
+
+    const purchase = new Date(purchaseDate)
+    const today = new Date()
+    const purchasePriceNum = Number(purchasePrice) || 0
+
+    if (purchasePriceNum < 0) {
+        throw new Error('Invalid livestock purchasePrice.')
+    }
+
+    if (Number.isNaN(purchase.getTime())) {
+        throw new Error('Invalid livestock purchaseDate.')
+    }
+
+    if (purchase > today) {
+        throw new Error('Livestock purchaseDate cannot be in the future.')
+    }
+
+    // Calculate how many days the livestock has been in the farm.
+    const elapsedDays = Math.max(
+        Math.floor((today - purchase) / MS_PER_DAY),
+        0
+    )
+
+
+   const stagePeriods = getLivestockFeedStagePeriods(
+    0,
+    elapsedDays
+    )
+
+    if (stagePeriods.length === 0) {
+        return {
+            totalFeedConsumed: 0,
+            livestockFeedConsumed: 0,
+            feedCostPerLivestock: 0,
+            totalFeedCost: 0,
+            feedHistory: [],
+        }
+    }
+
+    let totalFeedConsumedforLivestock = 0
+    let totalFeedCostforLivestock = 0
+
+    const feedHistory = []
+
+    
+    for (const period of stagePeriods) {
+    const feedStage = period.stage
+
+    const feed = await getFeedForStage(
+        Feed,
+        animalType,
+        feedStage
+    )
+
+    if (!feed) {
+        throw new ApiError(
+            404,
+            `No ${animalType} ${feedStage} feed is configured for this farm.`,
+            {
+                animalType,
+                feedStage,
+                purchaseDate,
+            }
+        )
+    }
+
+    const totalDailyFeed = Math.max(
+        Number(feed.totalLivestockFeedConsumedPerday) || 0,
+        0
+    )
+
+    const dailyFeedforLivestock =
+            safeQuantity > 0
+                ? totalDailyFeed / safeQuantity
+                : 0
+    
+
+    const pricePerKg = Math.max(
+        Number(feed.feedPricePerkg) || 0,
+        0
+    )
+
+    const stagePurchasePriceforLivestock = 
+    purchasePriceNum / safeQuantity;
+
+    const stageFeedConsumedforLivestock =
+        dailyFeedforLivestock * period.days
+
+    const stageFeedCostforLivestock =
+        stageFeedConsumedforLivestock * pricePerKg
+
+    const stageTotalFeedCost =
+        stageFeedCostforLivestock * safeQuantity
+
+    totalFeedConsumedforLivestock +=
+        stageFeedConsumedforLivestock
+
+    totalFeedCostforLivestock +=
+        stageFeedCostforLivestock
+
+    feedHistory.push({
+        feedStage,
+        feedName: feed.feedName,
+        feedType: feed.feedType,
+        feedCategory: feed.feedCategory,
+
+        livestockFeedConsumed:
+            stageFeedConsumedforLivestock,
+
+        feedCostPerLivestock:
+            stageFeedCostforLivestock,
+
+        totalFeedCost:
+            stageTotalFeedCost,
+
+            costPrice:
+            stageTotalFeedCost + stagePurchasePriceforLivestock,
+
+        startAgeInDays:
+            period.startAgeInDays,
+
+        endAgeInDays:
+            period.endAgeInDays,
+
+        days:
+            period.days,
+
+        recordedAt: today,
+    })
+}
+
+    const totalFeedConsumed =
+        totalFeedConsumedforLivestock * safeQuantity
+
+        const totalFeedCost =
+            totalFeedCostforLivestock * safeQuantity
+
+    return {
+        totalFeedConsumed,
+
+        livestockFeedConsumed:
+            totalFeedConsumedforLivestock,
+
+        feedCostPerLivestock:
+            totalFeedCostforLivestock,
+
+        totalFeedCost,
+
+        feedHistory,
+    }
+}
+
+module.exports = { calculateHistoricalPoultryFeed,calculateHistoricalLivestockFeed }

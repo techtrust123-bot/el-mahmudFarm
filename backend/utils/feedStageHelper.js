@@ -177,4 +177,50 @@ const getPoultryFeedStagePeriods = (startAgeInDays, endAgeInDays) => {
     return periods
 }
 
-module.exports = { getFeedStage, calculateAge, getBirthDateFromAge, getFeedForStage, parseFeedType, normalizeFeedCategory, getPoultryFeedStagePeriods }
+
+const getLivestockFeedStagePeriods = (startAgeInDays, endAgeInDays) => {
+    const startAge = Math.max(Number(startAgeInDays) || 0, 0)
+    const endAge = Math.max(Number(endAgeInDays) || 0, startAge)
+
+    if (endAge < startAge) {
+        return []
+    }
+
+    const stages = [
+        {
+            stage: 'Starter',
+            startDay: 0,
+            endDay: 120,
+        },
+        {
+            stage: 'Grower',
+            startDay: 120,
+            endDay: 240,
+        },
+        {
+            stage: 'Finisher',
+            startDay: 240,
+            endDay: Infinity,
+        },
+    ]
+
+    const periods = []
+
+    for (const stage of stages) {
+        const periodStart = Math.max(startAge, stage.startDay)
+        const periodEnd = Math.min(endAge, stage.endDay)
+
+        if (periodEnd > periodStart) {
+            periods.push({
+                stage: stage.stage,
+                startAgeInDays: periodStart,
+                endAgeInDays: periodEnd,
+                days: periodEnd - periodStart,
+            })
+        }
+    }
+
+    return periods
+}
+
+module.exports = { getFeedStage, calculateAge, getBirthDateFromAge, getFeedForStage, parseFeedType, normalizeFeedCategory, getPoultryFeedStagePeriods,getLivestockFeedStagePeriods }

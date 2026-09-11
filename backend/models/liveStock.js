@@ -27,13 +27,9 @@ const liveStockSchema = new mongoose.Schema({
         required:true
     },
     purchaseDate:{
-        type:String,
+        type:Date,
         required:true
     },
-    // joinDate:{
-    //     type:Date,
-    //     default:Date.now
-    // },
     healthStatus:{
         type:String,
         required:true
@@ -53,10 +49,13 @@ const liveStockSchema = new mongoose.Schema({
     },
     lastFeedUpdate:{
         type:Date,
-        default:Date.now
     },
     livestockFeedConsumed:{
         type:Number
+    },
+    totalCostforLivestock:{
+        type:Number,
+        default:0
     },
     totalCost:{
         type:Number
@@ -89,6 +88,14 @@ const liveStockSchema = new mongoose.Schema({
     currentFeedName:{
         type:String,
     },
+    feedCostPerLivestock:{
+        type:Number,
+        default:0
+    },
+    totalFeedCost:{
+        type:Number,
+        default:0
+    },
     feedHistory: [
         {
             feedStage: String,
@@ -96,7 +103,7 @@ const liveStockSchema = new mongoose.Schema({
             feedType: String,
             feedCategory: String,
             livestockFeedConsumed: Number,
-            feedCostPerAnimal: Number,
+            feedCostPerLivestock: Number,
             totalFeedCost: Number,
             totalCost: Number,
             costPrice: Number,

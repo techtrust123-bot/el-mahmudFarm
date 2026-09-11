@@ -1,6 +1,6 @@
 import React, { useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiMenu, FiX, FiBell, FiUser, FiLogOut, FiMoon, FiSun } from 'react-icons/fi';
+import { FiMenu, FiX, FiBell, FiUser, FiLogOut, FiMoon, FiSun, FiCpu } from 'react-icons/fi';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
 import axios from 'axios';
@@ -10,7 +10,7 @@ import Alert from '../ui/Alert';
 /**
  * Top Navigation Bar Component
  */
-const Navbar = ({ toggleSidebar, sidebarOpen }) => {
+const Navbar = ({ toggleSidebar, sidebarOpen, onOpenCalculator }) => {
   const navigate = useNavigate();
   const { isDark, toggleTheme } = useTheme();
   const { logout } = useAuth();
@@ -47,6 +47,17 @@ const Navbar = ({ toggleSidebar, sidebarOpen }) => {
 
         {/* Right side - Icons and Profile */}
         <div className="ml-auto flex items-center gap-6">
+          {/* Calculator */}
+          <button
+            type="button"
+            onClick={onOpenCalculator}
+            className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+            title="Calculator"
+            aria-label="Open Calculator"
+          >
+            <FiCpu size={20} />
+          </button>
+
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}

@@ -80,10 +80,6 @@ const poultrySchema = new mongoose.Schema({
         type:Number,
         default:0
     },
-    // birthDay:{
-    //     type:Date,
-    //     default:Date.now
-    // },
     ageInDays:{
         type:Number,
         default:0

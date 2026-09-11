@@ -1,9 +1,12 @@
 const mongoose = require('mongoose');
 
 const liveStockSchema = new mongoose.Schema({
+    farmId:{
+        type:String
+    },
     type:{
         type:String,
-        enum:['cattle','cow','sheep','goat','house','ram','bool'],
+        enum:['cattle','cow','sheep','goat','house','ram','bull'],
         required:true
     },
     tagNumber:{
@@ -25,12 +28,8 @@ const liveStockSchema = new mongoose.Schema({
         required:true
     },
     purchaseDate:{
-        type:String,
-        required:true
-    },
-    joinDate:{
         type:Date,
-        default:Date.now
+        required:true
     },
     healthStatus:{
         type:String,
@@ -49,6 +48,9 @@ const liveStockSchema = new mongoose.Schema({
         type:Number,
         default:0
     },
+    lastFeedUpdate:{
+        type:Date,
+    },
     livestockFeedConsumed:{
         type:Number
     },
@@ -62,10 +64,6 @@ const liveStockSchema = new mongoose.Schema({
     quantity:{
         type:Number,
         default: 1
-    },
-    birthDay:{
-        type:Date,
-        default:Date.now
     },
     ageInDays:{
         type:Number,
@@ -86,6 +84,14 @@ const liveStockSchema = new mongoose.Schema({
     currentFeedName:{
         type:String,
     },
+     feedCostPerLivestock:{
+        type:Number,
+        default:0
+    },
+    totalFeedCost:{
+        type:Number,
+        default:0
+    },
     feedHistory: [
         {
             feedStage: String,
@@ -93,7 +99,7 @@ const liveStockSchema = new mongoose.Schema({
             feedType: String,
             feedCategory: String,
             livestockFeedConsumed: Number,
-            feedCostPerAnimal: Number,
+            feedCostPerLivestock: Number,
             totalFeedCost: Number,
             totalCost: Number,
             costPrice: Number,

@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import Sidebar from '../components/common/Sidebar';
 import Navbar from '../components/common/Navbar';
 import SessionWarningBanner from '../components/common/SessionWarningBanner';
+import CalculatorModal from '../components/calculator/CalculatorModal';
 
 /**
  * Main Layout Component - Wraps all route pages
  */
 const MainLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -36,7 +38,13 @@ const MainLayout = ({ children }) => {
       {/* Main content */}
       <div className="flex flex-col flex-1 md:ml-64">
         {/* Navbar */}
-        <Navbar toggleSidebar={toggleSidebar} sidebarOpen={sidebarOpen} />
+        <Navbar
+          toggleSidebar={toggleSidebar}
+          sidebarOpen={sidebarOpen}
+          onOpenCalculator={() => setIsCalculatorOpen(true)}
+        />
+
+        <CalculatorModal isOpen={isCalculatorOpen} onClose={() => setIsCalculatorOpen(false)} />
 
         {/* Page content */}
         <main className="flex-1 overflow-auto pt-16">

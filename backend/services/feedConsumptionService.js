@@ -115,7 +115,8 @@ const createPoultryBulkOperation = (
   const quantity = Math.max(toSafeNumber(bird.quantity), 0)
   const existingFeedConsumed = Math.max(toSafeNumber(bird.totalFeedConsumed), 0)
   const existingPurchasePrice = Math.max(toSafeNumber(bird.purchasePrice), 0)
-  const pricePerKg = Math.max(toSafeNumber(feedToUse.feedPricePerkg), 0)
+  const existingTotalFeedCost = Math.max(toSafeNumber(bird.totalFeedCost),0)
+ 
 
   /*
    * Determine lastFeedUpdate precedence:
@@ -140,11 +141,15 @@ const createPoultryBulkOperation = (
   const incrementalTotalFeed = incrementalFeedPerBird * quantity
 
   const nextFeedConsumed = existingFeedConsumed + incrementalTotalFeed
+  const pricePerKg = Math.max(toSafeNumber(feedToUse.feedPricePerkg),0)
+  const incrementalFeedCostPerBird =incrementalFeedPerBird * pricePerKg
+  const incrementalTotalFeedCost =incrementalTotalFeed * pricePerKg
+  const nextTotalFeedCost = existingTotalFeedCost + incrementalTotalFeedCost
   const perBirdConsumed = quantity > 0 ? nextFeedConsumed / quantity : 0
 
-  const feedCostPerPoultry = perBirdConsumed * pricePerKg
-  const totalFeedCost = perBirdConsumed * quantity * pricePerKg
-  const totalCost = existingPurchasePrice + totalFeedCost
+  const feedCostPerPoultry = quantity > 0 ? nextTotalFeedCost / quantity: 0
+  // const totalFeedCost = perBirdConsumed * quantity * pricePerKg
+  const totalCost = existingPurchasePrice + nextTotalFeedCost
   const costPerPoultry = quantity > 0 ? totalCost / quantity : 0
 
   const updateData = {
@@ -161,7 +166,7 @@ const createPoultryBulkOperation = (
   poultryConsumePerBird: perBirdConsumed,
 
   feedCostPerPoultry,
-  totalFeedCost,
+  totalFeedCost: nextTotalFeedCost,
 
   totalCost,
   costPerPoultry,
@@ -181,44 +186,47 @@ const createPoultryBulkOperation = (
 }
 
 
-const createLivestockBulkOperation = (animal, feedToUse, ageInDays, currentFeedStage, today) => {
-  const defaultLastUpdate = animal.totalFeedConsumed > 0 ? today : (animal.lastFeedUpdate || animal.joinDate || animal.purchaseDate || today)
-  const lastFeedUpdate = animal.lastFeedUpdate ? normalizeDate(animal.lastFeedUpdate) : normalizeDate(defaultLastUpdate)
-  const daysSinceLastUpdate = getDaysBetween(lastFeedUpdate, today)
+const createLivestockBulkOperation = (animal, feedToUse, ageInDays,ageInWeeks, currentFeedStage, today) => {
+  const defaultLastUpdate = animal.lastFeedUpdate || animal.purchaseDate || today
+  const lastFeedUpdate = startOfDay(normalizeDate(defaultLastUpdate))
+  const currentDay = startOfDay(normalizeDate(today))
+  const daysSinceLastUpdate = Math.max(getDaysBetween(lastFeedUpdate, currentDay),0)
   const quantity = Math.max(toSafeNumber(animal.quantity), 0)
-  const dailyRate = toSafeNumber(feedToUse.livestockDailyConsumption)
-  const pricePerKg = toSafeNumber(feedToUse.feedPricePerkg)
+  const dailyRate = Math.max(toSafeNumber(feedToUse.livestockDailyConsumption),0)
+  const pricePerKg = Math.max(toSafeNumber(feedToUse.feedPricePerkg),0)
   const existingFeedConsumed = toSafeNumber(animal.totalFeedConsumed)
   const existingPurchasePrice = toSafeNumber(animal.purchasePrice)
+  const existingTotalFeedCost = Math.max(toSafeNumber(animal.totalFeedCost),0)
 
-  const deltaDays = daysSinceLastUpdate > 0
-    ? daysSinceLastUpdate
-    : (existingFeedConsumed === 0 ? Math.max(toSafeNumber(animal.ageInDays), 0) : 0)
-
-  let nextFeedConsumed = existingFeedConsumed
-  if (deltaDays > 0) {
-    const incrementalPerAnimal = dailyRate * deltaDays
+  
+  
+    const incrementalPerAnimal = dailyRate * daysSinceLastUpdate
     const incrementalTotalFeed = incrementalPerAnimal * quantity
-    nextFeedConsumed = existingFeedConsumed + incrementalTotalFeed
-  }
+    const nextFeedConsumed = existingFeedConsumed + incrementalTotalFeed
+
+    const incrementalTotalFeedCost =incrementalTotalFeed * pricePerKg
+    const nextTotalFeedCost = existingTotalFeedCost + incrementalTotalFeedCost
 
   const perAnimalConsumed = quantity > 0 ? nextFeedConsumed / quantity : 0
-  const costPrice = perAnimalConsumed * pricePerKg
-  const totalFeedCost = perAnimalConsumed * quantity * pricePerKg
-  const totalCost = existingPurchasePrice + totalFeedCost
+  const feedCostPerLivestock = quantity > 0 ? nextTotalFeedCost / quantity : 0
+ 
+  const totalCost = existingPurchasePrice + nextTotalFeedCost
   const updateData = {
     ageInDays,
+    ageInWeeks,
     feedStage: currentFeedStage,
     currentFeedType: feedToUse.feedType,
     currentFeedName: feedToUse.feedName,
     totalFeedConsumed: nextFeedConsumed,
     livestockFeedConsumed: perAnimalConsumed,
-    costPrice,
+    feedCostPerLivestock,
+    totalFeedCost:nextTotalFeedCost,
+    costPrice:totalCost,
     totalCost,
   }
 
   if (daysSinceLastUpdate > 0) {
-    updateData.lastFeedUpdate = today
+    updateData.lastFeedUpdate = currentDay
   }
 
   return {
@@ -229,6 +237,15 @@ const createLivestockBulkOperation = (animal, feedToUse, ageInDays, currentFeedS
       },
     },
   }
+}
+
+const createEggBulkOperation = (egg, dailyEgg, price,damage)=>{
+  const poultryType = egg.PoultryType
+  const avgDailyEgg = Math.max(toSafeNumber(dailyEgg.avgDailyEgg), 0)
+  const salePrice = Math.max(toSafeNumber(price.salePrice), 0)
+  const damageEgg = Math.max(toSafeNumber(damage.damageEgg), 0)
+  
+  
 }
 
 const buildFeedStageMap = async (Feed, animalType) => {
@@ -385,12 +402,16 @@ const recalculateLivestock = async (feed, farmModels) => {
     if (!livestockType) return
 
     const animals = await LiveStock.find({ type: livestockType, status: { $ne: 'sold' } })
-    if (!animals || animals.length === 0) return
+    if (!animals || animals.length === 0) {
+      logger.info('Poultry recalculation skipped because no active poultry records were found.',{
+        livestockType,
+        feedId:feed?._id
+      })
+    }
 
     const stageAnimals = feed.feedCategory ? getStageRecords(animals, feed.feedCategory) : animals
-    const stageAnimalCount = stageAnimals.reduce((sum, animal) => sum + Math.max(toSafeNumber(animal.quantity), 0), 0)
-    const totalAnimalCount = animals.reduce((sum, animal) => sum + Math.max(toSafeNumber(animal.quantity), 0), 0)
-    const totalAnimals = stageAnimalCount > 0 ? stageAnimalCount : totalAnimalCount
+    const totalAnimals = stageAnimals.reduce((sum, animal) => sum + Math.max(toSafeNumber(animal.quantity), 0), 0)
+
 
     if (totalAnimals <= 0) {
       await Feed.findByIdAndUpdate(
@@ -434,8 +455,8 @@ const recalculateLivestock = async (feed, farmModels) => {
     const operations = []
 
     for (const animal of livestockToUpdate) {
-      const birthDate = animal.birthDay || animal.purchaseDate || new Date()
-      const { ageInDays } = calculateAge(birthDate)
+      const purchaseDate = animal.purchaseDate || today
+      const { ageInDays, ageInWeeks } = calculateAge(purchaseDate)
       const currentFeedStage = getFeedStage(ageInDays, animal.type)
       const feedStageKey = `${String(animal.type || livestockType).toLowerCase()}:${currentFeedStage || 'default'}`
       const feedForStage = feedStageMap.get(feedStageKey)
@@ -460,7 +481,7 @@ const recalculateLivestock = async (feed, farmModels) => {
 
       const feedToUse = feedForStage
 
-      operations.push(createLivestockBulkOperation(animal, feedToUse, ageInDays, currentFeedStage, today))
+      operations.push(createLivestockBulkOperation(animal, feedToUse, ageInDays,ageInWeeks, currentFeedStage, today))
 
       if (operations.length >= BULK_WRITE_BATCH_SIZE) {
         await LiveStock.bulkWrite(operations)

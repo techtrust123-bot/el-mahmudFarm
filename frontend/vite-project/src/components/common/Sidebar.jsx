@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { FiMenu, FiX, FiHome, FiPackage, FiUsers, FiSettings } from 'react-icons/fi';
+import { FiMenu, FiX, FiHome, FiPackage, FiUsers, FiSettings, FiDatabase } from 'react-icons/fi';
 import { GiCow, GiChicken, GiPayMoney } from 'react-icons/gi';
 import { TbCurrencyNaira } from 'react-icons/tb';
 
@@ -26,6 +26,7 @@ const Sidebar = ({ isOpen }) => {
     { path: '/dashboard', label: 'Dashboard', icon: FiHome, permission: 'dashboard' },
     { path: '/livestock', label: 'Livestock', icon: GiCow, permission: 'livestock' },
     { path: '/poultry', label: 'Poultry', icon: GiChicken, permission: 'poultry' },
+    { path: '/egg-inventory', label: 'Egg Inventory', icon: FiDatabase, permission: 'poultry' },
     { path: '/feed', label: 'Feed', icon: FiPackage, permission: 'feed' },
     { path: '/sales', label: 'Sales', icon: TbCurrencyNaira, permission: 'sales' },
     { path: '/expenses', label: 'Expenses', icon: GiPayMoney, permission: 'expenses' },

@@ -39,6 +39,7 @@ import ForgotPasswordPage from '../pages/ForgotPasswordPage';
 import ForbiddenPage from '../pages/ForbiddenPage';
 import ResetOtp from '../pages/ResetOtp';
 import SupportPage from '../pages/SupportPage';
+import EggInventoryPage from '../pages/EggInventoryPage';
 
 /**
  * Routes Configuration
@@ -79,6 +80,15 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute requiredPermission="poultry">
                 <PoultryPage/>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/egg-inventory"
+          element={
+            <ProtectedRoute requiredPermission="poultry">
+              <EggInventoryPage />
             </ProtectedRoute>
           }
         />

@@ -9,7 +9,7 @@ const {
   getFeedForStage,
 } = require('../utils/feedStageHelper')
 const logger = require('../utils/logger')
-const calculateHistoricalPoultryFeed = require('../utils/historicalFeedCalculationHelper.js')
+const {calculateHistoricalPoultryFeed} = require('../utils/historicalFeedCalculationHelper.js')
 const { sendNotification } = require('../services/emailService')
 
 exports.createPoultry = async (req, res) => {
@@ -60,8 +60,8 @@ exports.createPoultry = async (req, res) => {
         })
 
         const totalPurchaseCost = Number(purchasePrice) || 0
-        const initialCostPerPoultry = adjustedQuantity > 0 ? totalPurchaseCost / adjustedQuantity : 0
-        const totalCost =  historicalFeed.totalFeedCost
+        const purchPricePerBird = adjustedQuantity > 0 ? totalPurchaseCost / adjustedQuantity : 0
+        const totalCost =  totalPurchaseCost + historicalFeed.totalFeedCost
         const costPerPoultry = totalCost / adjustedQuantity
         const newPoultry = new Poultry({
             batchId,
@@ -99,6 +99,7 @@ exports.createPoultry = async (req, res) => {
                     feedCostPerPoultry: historicalFeed.feedCostPerPoultry,
                     totalFeedCost: historicalFeed.totalFeedCost,
                     totalCost: totalPurchaseCost + historicalFeed.totalFeedCost,
+                    costPerPoultry: costPerPoultry,
                     // costPerPoultry: adjustedQuantity > 0
                     //         ? (totalPurchaseCost + historicalFeed.totalFeedCost) / adjustedQuantity
                     //         : 0,
@@ -131,7 +132,7 @@ exports.getPoultry = async (req, res) => {
         const poultryList = await Poultry.find()
 
         const data = poultryList.map((bird) => {
-            const birthDate = bird.birthDay || bird.purchaseDate || new Date()
+            const birthDate = bird.purchaseDate || new Date()
             const { ageInDays, ageInWeeks } = calculateAge(birthDate)
             const currentFeedStage = getFeedStage(ageInDays, bird.type)
             return {
@@ -154,7 +155,7 @@ exports.getAvailablePoultry = async (req, res) => {
         const poultryList = await Poultry.find({ status: 'available' })
 
         const data = poultryList.map((bird) => {
-            const birthDate = bird.birthDay || bird.purchaseDate || new Date()
+            const birthDate = bird.purchaseDate || new Date()
             const { ageInDays, ageInWeeks } = calculateAge(birthDate)
             const currentFeedStage = getFeedStage(ageInDays, bird.type)
             return {
@@ -177,7 +178,7 @@ exports.getSoldPoultry = async (req, res) => {
         const poultryList = await Poultry.find({ status: 'sold' })
 
         const data = poultryList.map((bird) => {
-            const birthDate = bird.birthDay || bird.purchaseDate || new Date()
+            const birthDate = bird.purchaseDate || new Date()
             const { ageInDays, ageInWeeks } = calculateAge(birthDate)
             const currentFeedStage = getFeedStage(ageInDays, bird.type)
             return {
@@ -207,82 +208,339 @@ exports.getPoultryById = async (req, res) => {
         res.status(500).json({ success: false, message: error.message })
     }
 }
-const updatePoultryBatch = async (poultry, farmModels) => {
-    const { Feed, Poultry } = farmModels
-    const birthDate = poultry.birthDay || poultry.purchaseDate || new Date()
-    const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-    const currentFeedStage = getFeedStage(ageInDays, poultry.type)
-    const feed = await getFeedForStage(Feed, poultry.type, currentFeedStage)
-    if (!feed) {
-        return poultry
-    }
 
-    const quantity = Number(poultry.quantity)
-    if (!quantity || quantity <= 0) return poultry
 
-    const poultryConsumePerkg = Number(feed.consumption) / quantity
-    const totalQuantity = quantity - (Number(poultry.mortality) || 0)
-    const feedCostPerPoultry = Number(feed.feedPricePerkg) * poultryConsumePerkg
-    const totalFeedCost = feedCostPerPoultry * totalQuantity
-    const totalCost = Number(poultry.purchasePrice) + totalFeedCost
-    const costPerPoultry = totalCost / quantity
-    const totalCostPerPoultry = Number(poultry.purchasePrice) / totalQuantity + feedCostPerPoultry
-
-    return await Poultry.findByIdAndUpdate(
-        poultry._id,
-        {
-            ageInDays,
-            ageInWeeks,
-            currentFeedStage,
-            currentFeedType: feed.feedType,
-            currentFeedName: feed.feedName,
-            feedStage: currentFeedStage,
-            poultryConsumePerkg,
-            feedCostPerPoultry,
-            totalFeedCost,
-            totalCost,
-            costPerPoultry,
-            totalCostPerPoultry,
-            quantity: totalQuantity,
-        },
-        { returnDocument: 'after' }
-    )
-}
-
-exports.editPoultry = async(req,res)=>{
-    const { Poultry } = req.farmModels
+exports.editPoultry = async (req, res) => {
+    const { Poultry, Feed } = req.farmModels
     const id = req.params.id
+
     try {
-        const existingPoultry = await Poultry.findOne({ _id: id })
-        if(!existingPoultry){
-            return res.status(404).json({message:"poultry not found..."})
+        const existingPoultry = await Poultry.findById(id)
+
+        if (!existingPoultry) {
+            return res.status(404).json({
+                success: false,
+                message: 'Poultry not found.'
+            })
         }
 
-        const purchaseDate = req.body.purchaseDate ? new Date(req.body.purchaseDate) : existingPoultry.purchaseDate
-        const birthDate = getBirthDateFromAge({
-          ageInDays: req.body.ageInDays,
-          ageInWeeks: req.body.ageInWeeks,
-          purchaseDate: purchaseDate || existingPoultry.birthDay || existingPoultry.purchaseDate,
-        })
-        const { ageInDays: resolvedAgeInDays, ageInWeeks: resolvedAgeInWeeks } = calculateAge(birthDate)
+        // ---------------------------------------------------------
+        // 1. Resolve editable values
+        // ---------------------------------------------------------
+
+        const purchaseDate = req.body.purchaseDate
+            ? new Date(req.body.purchaseDate)
+            : new Date(existingPoultry.purchaseDate)
+
+        if (Number.isNaN(purchaseDate.getTime())) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid purchase date.'
+            })
+        }
+
+        if (purchaseDate > new Date()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Purchase date cannot be in the future.'
+            })
+        }
+
+        const type =
+            req.body.type ||
+            existingPoultry.type
+
+        const requestedQuantity =
+            req.body.quantity != null
+                ? Number(req.body.quantity)
+                : Number(existingPoultry.quantity)
+
+        const mortality =
+            req.body.mortality != null
+                ? Number(req.body.mortality)
+                : Number(existingPoultry.mortality || 0)
+
+        if (
+            !Number.isFinite(requestedQuantity) ||
+            requestedQuantity <= 0
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: 'Quantity must be greater than zero.'
+            })
+        }
+
+        if (
+            !Number.isFinite(mortality) ||
+            mortality < 0
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: 'Mortality cannot be negative.'
+            })
+        }
+
+        const adjustedQuantity =
+            requestedQuantity - mortality
+
+        if (adjustedQuantity <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Quantity must be greater than mortality.'
+            })
+        }
+
+        // ---------------------------------------------------------
+        // 2. Determine whether feed history must be recalculated
+        // ---------------------------------------------------------
+
+        const oldPurchaseDate =
+            new Date(existingPoultry.purchaseDate)
+
+        const purchaseDateChanged =
+            oldPurchaseDate.getTime() !==
+            purchaseDate.getTime()
+
+        const oldQuantity =
+            Number(existingPoultry.quantity) || 0
+
+        const quantityChanged =
+            oldQuantity !== adjustedQuantity
+
+        const typeChanged =
+            existingPoultry.type !== type
+
+        const mortalityChanged =
+            Number(existingPoultry.mortality || 0) !==
+            mortality
+
+        const needsHistoricalRecalculation =
+            purchaseDateChanged ||
+            quantityChanged ||
+            typeChanged ||
+            mortalityChanged
+
+        // ---------------------------------------------------------
+        // 3. Calculate current age from purchaseDate ONLY
+        // ---------------------------------------------------------
+
+        const {
+            ageInDays,
+            ageInWeeks
+        } = calculateAge(purchaseDate)
+
+        const currentFeedStage =
+            getFeedStage(
+                ageInDays,
+                type
+            )
+
+        const currentFeed =
+            await getFeedForStage(
+                Feed,
+                type,
+                currentFeedStage
+            )
+
+        if (!currentFeed) {
+            throw new ApiError(
+                404,
+                `No ${type} ${currentFeedStage} feed is configured for this farm.`,
+                {
+                    animalType: type,
+                    feedStage: currentFeedStage,
+                    poultryId: id
+                }
+            )
+        }
+
+        // ---------------------------------------------------------
+        // 4. Start with existing historical values
+        // ---------------------------------------------------------
+
+        let totalFeedConsumed =
+            Number(existingPoultry.totalFeedConsumed) || 0
+
+        let poultryConsumePerBird =
+            Number(existingPoultry.poultryConsumePerBird) || 0
+
+        let feedCostPerPoultry =
+            Number(existingPoultry.feedCostPerPoultry) || 0
+
+        let totalFeedCost =
+            Number(existingPoultry.totalFeedCost) || 0
+
+        let feedHistory =
+            existingPoultry.feedHistory || []
+
+        // ---------------------------------------------------------
+        // 5. Recalculate historical feed ONLY when necessary
+        // ---------------------------------------------------------
+
+        if (needsHistoricalRecalculation) {
+            const historicalFeed =
+                await calculateHistoricalPoultryFeed({
+                    Feed,
+                    animalType: type,
+                    purchaseDate,
+                    quantity: adjustedQuantity
+                })
+
+            totalFeedConsumed =
+                historicalFeed.totalFeedConsumed
+
+            poultryConsumePerBird =
+                historicalFeed.poultryConsumePerBird
+
+            feedCostPerPoultry =
+                historicalFeed.feedCostPerPoultry
+
+            totalFeedCost =
+                historicalFeed.totalFeedCost
+
+            feedHistory =
+                historicalFeed.feedHistory
+
+        }
+
+        // ---------------------------------------------------------
+        // 6. Purchase price
+        // ---------------------------------------------------------
+
+        const purchasePrice =
+            req.body.purchasePrice != null
+                ? Number(req.body.purchasePrice)
+                : Number(existingPoultry.purchasePrice || 0)
+
+        if (
+            !Number.isFinite(purchasePrice) ||
+            purchasePrice < 0
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: 'Purchase price must be a valid non-negative number.'
+            })
+        }
+
+        // ---------------------------------------------------------
+        // 7. Calculate total cost
+        // ---------------------------------------------------------
+
+        const totalCost =
+            purchasePrice +
+            totalFeedCost
+
+        const costPerPoultry =
+            adjustedQuantity > 0
+                ? totalCost / adjustedQuantity
+                : 0
+
+        const totalCostPerPoultry =
+            costPerPoultry
+
+        // ---------------------------------------------------------
+        // 8. Update only the fields that should change
+        // ---------------------------------------------------------
 
         const updateData = {
             ...req.body,
+
+            type,
+
+            quantity: adjustedQuantity,
+
+            mortality,
+
             purchaseDate,
-            birthDay: birthDate,
-            ageInDays: resolvedAgeInDays,
-            ageInWeeks: resolvedAgeInWeeks,
+
+            purchasePrice,
+
+            ageInDays,
+
+            ageInWeeks,
+
+            feedStage:
+                currentFeedStage,
+
+            currentFeedStage,
+
+            currentFeedType:
+                currentFeed.feedType,
+
+            currentFeedName:
+                currentFeed.feedName,
+
+            totalFeedConsumed,
+
+            poultryConsumePerBird,
+
+            feedCostPerPoultry,
+
+            totalFeedCost,
+
+            totalCost,
+
+            costPerPoultry,
+
+            totalCostPerPoultry,
+
+            feedHistory
         }
 
-        const editedPoultry = await Poultry.findByIdAndUpdate(id, updateData, { returnDocument: 'after' })
-        await updatePoultryBatch(editedPoultry, req.farmModels)
+        /*
+         * Historical calculation already covers everything
+         * from purchaseDate up to now.
+         *
+         * Therefore, after a historical recalculation,
+         * today's date becomes the new starting point for
+         * future incremental calculations.
+         */
+        if (needsHistoricalRecalculation) {
+            updateData.lastFeedUpdate =
+                new Date()
+        }
 
-        res.status(200).json({success:true,message:"poultry updated successfully..."})
+        // ---------------------------------------------------------
+        // 9. IMPORTANT: save only ONCE
+        // ---------------------------------------------------------
+
+        const editedPoultry =
+            await Poultry.findByIdAndUpdate(
+                id,
+                updateData,
+                {
+                    returnDocument: 'after',
+                    runValidators: true
+                }
+            )
+
+        return res.status(200).json({
+            success: true,
+            message: 'Poultry updated successfully.',
+            data: editedPoultry
+        })
+
     } catch (error) {
-        console.log(error)
-        res.status(500).json({ success: false, message: error.message || "error while updating poultry" })
+        logger.error(
+            'Failed to edit poultry.',
+            {
+                poultryId: id,
+                error: error.message,
+                stack: error.stack
+            }
+        )
+
+        return res.status(
+            error.statusCode || 500
+        ).json({
+            success: false,
+            message:
+                error.message ||
+                'Error while updating poultry.'
+        })
     }
 }
+
 
 exports.removePoultry = async(req,res)=>{
     const { Poultry, Feed } = req.farmModels
@@ -298,7 +556,7 @@ exports.removePoultry = async(req,res)=>{
         res.status(200).json({success:true,message:"Poultry deleted sucessfull.."})
     } catch (error) {
         console.log(error)
-        res.status(500).json({message:error.message || "error while updating poultry"})
+        res.status(500).json({message:error.message || "error while deleting poultry"})
     }
 }
 

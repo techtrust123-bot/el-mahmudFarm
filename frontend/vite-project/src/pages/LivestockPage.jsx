@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiDownload } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiDownload, FiClock } from 'react-icons/fi';
 import MainLayout from '../layouts/MainLayout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -10,6 +10,7 @@ import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
+import HistoricalDataModal from '../components/feedHistory/HistoricalDataModal';
 import { toast } from 'react-hot-toast';
 import { LIVESTOCK_TYPES, HEALTH_STATUS } from '../utils/constants';
 import { useContext } from 'react';
@@ -27,6 +28,8 @@ const LivestockPage = () => {
   const [activeTab, setActiveTab] = useState('available');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [selectedHistoricalRecord, setSelectedHistoricalRecord] = useState(null);
+  const [isHistoricalModalOpen, setIsHistoricalModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const { axiosInstance } = useContext(AuthContext);
   const [livestockList, setLivestockList] = useState([]);
@@ -128,6 +131,16 @@ const LivestockPage = () => {
       console.log(error);
       toast.error('Error deleting livestock');
     }
+  };
+
+  const handleOpenHistoricalData = (row) => {
+    setSelectedHistoricalRecord(row);
+    setIsHistoricalModalOpen(true);
+  };
+
+  const handleCloseHistoricalData = () => {
+    setSelectedHistoricalRecord(null);
+    setIsHistoricalModalOpen(false);
   };
 
   const handleChange = (e) => {
@@ -351,8 +364,21 @@ const LivestockPage = () => {
             data={filteredLivestock}
             loading={loading}
             actions={(row) => [
+              <Button
+                key="history"
+                type="button"
+                variant="ghost"
+                size="sm"
+                title="View Historical Data"
+                aria-label="View Historical Data"
+                onClick={() => handleOpenHistoricalData(row)}
+                className="inline-flex items-center justify-center gap-1 rounded-md border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 focus:ring-blue-500 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+              >
+                <FiClock size={14} />
+                <span className="hidden sm:inline">History</span>
+              </Button>,
               <Button key="edit" variant="outline" size="sm" onClick={() => handleEdit(row)} className="flex items-center gap-1">
-                <FiEdit2 size={14} />
+                <FiEdit2 size={13} />
                 Edit
               </Button>,
               <Button key="delete" variant="danger" size="sm" onClick={() => handleDelete(row._id)} className="flex items-center gap-1">
@@ -362,7 +388,13 @@ const LivestockPage = () => {
             ]}
           />
         </Card>
-       
+
+        <HistoricalDataModal
+          isOpen={isHistoricalModalOpen}
+          onClose={handleCloseHistoricalData}
+          data={selectedHistoricalRecord}
+          type="livestock"
+        />
       </div>
 
       {/* Add/Edit Modal */}

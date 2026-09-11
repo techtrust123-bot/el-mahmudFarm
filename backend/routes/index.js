@@ -15,5 +15,6 @@ router.use('/dashboard', require('./dashboardRoute'))
 router.use('/export', require('./exportRoute'))
 router.use('/backup', require('./backupRoute'))
 router.use('/ai', require('./aiRoute'))
+router.use('/egg', require('./eggRoute'))
 
 module.exports = router

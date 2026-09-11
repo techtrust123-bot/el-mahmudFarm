@@ -4,6 +4,7 @@ const livestockSchema = require('../schemas/livestock');
 const sellsSchema = require('../schemas/sells');
 const expensesSchema = require('../schemas/expenses');
 const staffSchema = require('../schemas/staff');
+const eggSchema = require('../schemas/egg')
 const { getAuditLogModel } = require('./auditModelFactory');
 
 /**
@@ -16,6 +17,7 @@ function getModels(connection) {
   const Feed = connection.models.Feed || connection.model('Feed', feedSchema);
   const Poultry = connection.models.Poultry || connection.model('Poultry', poultrySchema);
   const LiveStock = connection.models.LiveStock || connection.model('LiveStock', livestockSchema);
+  const Egg = connection.models.Egg || connection.model('Egg', eggSchema);
   const Sells = connection.models.Sells || connection.model('Sells', sellsSchema);
   const Expenses = connection.models.Expenses || connection.model('Expenses', expensesSchema);
   const Staff = connection.models.Staff || connection.model('Staff', staffSchema);
@@ -26,6 +28,7 @@ function getModels(connection) {
     Feed,
     Poultry,
     LiveStock,
+    Egg,
     Sells,
     Expenses,
     Staff,

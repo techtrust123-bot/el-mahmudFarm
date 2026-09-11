@@ -23,10 +23,6 @@ const poultrySchema = new mongoose.Schema({
         type:Number,
         required:true
      },
-    //  joinDate:{
-    //     type:Date,
-    //     default:Date.now
-    //  },
      feedStage:{
         type:String,
         enum:['Starter','Grower','Finisher'],
@@ -84,10 +80,10 @@ const poultrySchema = new mongoose.Schema({
         type:Number,
         default:0
     },
-    // totalQuantity:{
-    //     type:Number,
-    //     default:0
-    //  },
+    purchasePricePerBird:{
+        type:Number,
+        default:0
+     },
     birthDay:{
         type:Date,
         
@@ -125,8 +121,6 @@ const poultrySchema = new mongoose.Schema({
             totalCostPerPoultry: Number,
             quantity:Number,
             newQuantity: Number,
-            // startDay: Number,
-            // endDay: Number,
             recordedAt: { type: Date, default: Date.now }
         }
     ],

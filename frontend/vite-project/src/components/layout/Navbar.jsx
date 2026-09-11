@@ -1,11 +1,11 @@
-import { FiMenu, FiBell, FiUser, FiLogOut, FiMoon, FiSun, FiX } from 'react-icons/fi';
+import { FiMenu, FiBell, FiUser, FiLogOut, FiMoon, FiSun, FiX, FiCalculator } from 'react-icons/fi';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
 
 /**
  * Top Navigation Bar Component
  */
-const Navbar = ({ toggleSidebar, sidebarOpen }) => {
+const Navbar = ({ toggleSidebar, sidebarOpen, onOpenCalculator }) => {
   const { logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
@@ -26,6 +26,16 @@ const Navbar = ({ toggleSidebar, sidebarOpen }) => {
 
         {/* Right - Icons and Profile */}
         <div className="ml-auto flex items-center gap-4">
+          <button
+            type="button"
+            onClick={onOpenCalculator}
+            className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+            title="Calculator"
+            aria-label="Open Calculator"
+          >
+            <FiCalculator size={20} />
+          </button>
+
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
