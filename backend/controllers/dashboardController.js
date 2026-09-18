@@ -7,6 +7,38 @@ const { asyncHandler } = require('../middleware/errorHandler');
 const ApiError = require('../utils/ApiError');
 const { sendSuccess } = require('../utils/apiResponse');
 const { getEmailActivity } = require('../services/emailService');
+const authModel = require('../models/auth');
+const { getFarmConnection } = require('../utils/dbManager');
+const { getModels } = require('../utils/modelFactory');
+
+const getAdminSalesSummary = async (req, res) => {
+  if (req.user?.role !== 'admin' && req.user?.userType !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Admin access required.' });
+  }
+
+  try {
+    const farmIds = await authModel.distinct('farmId', { farmId: { $nin: [null, ''] } });
+    const summaries = await Promise.all(farmIds.map(async (farmId) => {
+      try {
+        const connection = await getFarmConnection(String(farmId));
+        const { Sells } = getModels(connection);
+        const [summary] = await Sells.aggregate([
+          { $group: { _id: null, totalRevenue: { $sum: { $ifNull: ['$totalAmount', { $multiply: [{ $ifNull: ['$quantitySold', 0] }, { $ifNull: ['$pricePerUnit', 0] }] }] } }, marketplaceSales: { $sum: 1 } } },
+        ]);
+        return summary || { totalRevenue: 0, marketplaceSales: 0 };
+      } catch (error) {
+        return { totalRevenue: 0, marketplaceSales: 0 };
+      }
+    }));
+
+    return res.json({ success: true, data: summaries.reduce((total, summary) => ({
+      totalRevenue: total.totalRevenue + Number(summary.totalRevenue || 0),
+      marketplaceSales: total.marketplaceSales + Number(summary.marketplaceSales || 0),
+    }), { totalRevenue: 0, marketplaceSales: 0 }) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Unable to load admin sales summary.' });
+  }
+};
 
 /**
  * Get dashboard overview
@@ -314,6 +346,7 @@ const getEmailActivityOverview = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  getAdminSalesSummary,
   getDashboardOverview,
   getKPI,
   getLivestockAnalysis,

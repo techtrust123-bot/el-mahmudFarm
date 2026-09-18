@@ -3,22 +3,30 @@
  * Handles all payment-related API calls
  */
 
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import axiosInstance from '../utils/axiosInstance';
 
 const paymentService = {
   /**
    * Initialize payment
    */
-  initializePayment: async (paymentData) => {
+  initializePayment: async ({ plan, billingCycle }) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/payment/initialize`, paymentData, {
-        withCredentials: true
+      const response = await axiosInstance.post('/api/payment/initialize', {
+        plan,
+        billingCycle,
       });
       return response.data;
     } catch (error) {
       throw error.response?.data || { success: false, message: 'Failed to initialize payment' };
+    }
+  },
+
+  initializeUpgrade: async (plan) => {
+    try {
+      const response = await axiosInstance.post('/api/payment/upgrade', { plan });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { success: false, message: 'Failed to initialize upgrade' };
     }
   },
 
@@ -27,9 +35,7 @@ const paymentService = {
    */
   verifyPayment: async (reference) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/payment/verify`, { reference }, {
-        withCredentials: true
-      });
+      const response = await axiosInstance.get(`/api/payment/verify/${encodeURIComponent(reference)}`);
       return response.data;
     } catch (error) {
       throw error.response?.data || { success: false, message: 'Failed to verify payment' };
@@ -37,31 +43,26 @@ const paymentService = {
   },
 
   /**
-   * Get payment history
+   * Get payment status
    */
-  getHistory: async (filters = {}) => {
+  getStatus: async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/payment/history`, {
-        params: filters,
-        withCredentials: true
-      });
+      const response = await axiosInstance.get('/api/payment/status');
       return response.data;
     } catch (error) {
-      throw error.response?.data || { success: false, message: 'Failed to fetch payment history' };
+      throw error.response?.data || { success: false, message: 'Failed to fetch subscription status' };
     }
   },
 
   /**
-   * Get subscription status
+   * Get payment history
    */
-  getSubscriptionStatus: async () => {
+  getHistory: async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/payment/subscription-status`, {
-        withCredentials: true
-      });
+      const response = await axiosInstance.get('/api/payment/history');
       return response.data;
     } catch (error) {
-      throw error.response?.data || { success: false, message: 'Failed to fetch subscription status' };
+      throw error.response?.data || { success: false, message: 'Failed to fetch payment history' };
     }
   },
 
@@ -70,9 +71,7 @@ const paymentService = {
    */
   cancelSubscription: async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/payment/cancel-subscription`, {}, {
-        withCredentials: true
-      });
+      const response = await axiosInstance.post('/api/payment/cancel-subscription');
       return response.data;
     } catch (error) {
       throw error.response?.data || { success: false, message: 'Failed to cancel subscription' };

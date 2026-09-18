@@ -76,7 +76,7 @@ axiosInstance.interceptors.response.use(
       error.response?.status === 403 &&
       ['NOT_SUBSCRIBED', 'SUBSCRIPTION_EXPIRED'].includes(error.response.data.code)
     ) {
-      window.location.replace('/payment');
+      window.location.replace('/subscription');
       return Promise.reject(error);
     }
 

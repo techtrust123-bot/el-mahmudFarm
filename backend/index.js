@@ -7,7 +7,6 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const MongoStore = require('rate-limit-mongo');
 const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
 const compression = require('compression');
@@ -15,12 +14,10 @@ const winston = require('winston');
 const morgan = require('morgan');
 const DailyRotateFile = require('winston-daily-rotate-file');
 const { resolveSrvMongoUri } = require('./utils/dbManager');
-// require('../services/scheduleBackup');
 
 const dns = require("dns");
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
-// const index = require('./routes/index.js');
-// const {router} = require('./routes/index.js')
+
 const cookie = require('cookie-parser');
 
 
@@ -62,6 +59,78 @@ const logger = winston.createLogger({
   ]
 });
 
+const createMongoRateLimitStore = (collectionName, windowMs) => {
+  let collectionPromise;
+
+  const getCollection = async () => {
+    await mongoose.connection.asPromise();
+
+    if (!collectionPromise) {
+      collectionPromise = (async () => {
+        const collection = mongoose.connection.db.collection(collectionName);
+        await collection.createIndex({ resetTime: 1 }, { expireAfterSeconds: 0 });
+        return collection;
+      })();
+    }
+
+    return collectionPromise;
+  };
+
+  return {
+    localKeys: true,
+    async increment(key) {
+      const collection = await getCollection();
+      const now = new Date();
+      const resetTime = new Date(now.getTime() + windowMs);
+      const record = await collection.findOneAndUpdate(
+        { _id: key },
+        [
+          {
+            $set: {
+              totalHits: {
+                $cond: [
+                  { $gt: ['$resetTime', now] },
+                  { $add: [{ $ifNull: ['$totalHits', 0] }, 1] },
+                  1
+                ]
+              },
+              resetTime: {
+                $cond: [
+                  { $gt: ['$resetTime', now] },
+                  '$resetTime',
+                  { $literal: resetTime }
+                ]
+              }
+            }
+          }
+        ],
+        { upsert: true, returnDocument: 'after' }
+      );
+      const value = record?.value || record;
+
+      return {
+        totalHits: value.totalHits,
+        resetTime: value.resetTime
+      };
+    },
+    async decrement(key) {
+      const collection = await getCollection();
+      await collection.updateOne(
+        { _id: key, totalHits: { $gt: 0 } },
+        { $inc: { totalHits: -1 } }
+      );
+    },
+    async resetKey(key) {
+      const collection = await getCollection();
+      await collection.deleteOne({ _id: key });
+    },
+    async resetAll() {
+      const collection = await getCollection();
+      await collection.deleteMany({});
+    }
+  };
+};
+
 // Connect to main database for auth
 (async () => {
   try {
@@ -81,15 +150,7 @@ const logger = winston.createLogger({
     process.exit(1);
   }
 })();
-// (async () => {
-//   try {
-//     const mongoUri = await mongoose.connect(process.env.MONGO_URI);
-//     logger.info('Main database connected');
-//   } catch (err) {
-//     logger.error('Main database connection error:', err);
-//     process.exit(1);
-//   }
-// })();
+
 
 const app = express();
 
@@ -153,11 +214,7 @@ app.use(helmet.xssFilter());
 
 // Rate limiting
 const globalLimiter = rateLimit({
-  store: new MongoStore({
-    uri: process.env.MONGO_URI,
-    collectionName: 'rateLimits',
-    expireTimeMs: 10 * 60 * 1000, // 10 minutes
-  }),
+  store: createMongoRateLimitStore('rateLimits', 10 * 60 * 1000),
   windowMs: 10 * 60 * 1000, // 10 minutes
   max: 150, // limit each IP to 150 requests per windowMs
   message: { success: false, message: "Too many requests, please try again later" },
@@ -179,11 +236,7 @@ const globalLimiter = rateLimit({
 });
 
 const authLimiter = rateLimit({
-  store: new MongoStore({
-    uri: process.env.MONGO_URI,
-    collectionName: 'authRateLimits',
-    expireTimeMs: 5 * 60 * 1000, // 5 minutes
-  }),
+  store: createMongoRateLimitStore('authRateLimits', 5 * 60 * 1000),
   windowMs: 5 * 60 * 1000, // 5 minutes
   max: 30, // Allow 30 auth attempts per 5 minutes
   message: { success: false, message: "Too many requests, please try again later" },
@@ -193,11 +246,7 @@ const authLimiter = rateLimit({
 });
 
 const otpLimiter = rateLimit({
-  store: new MongoStore({
-    uri: process.env.MONGO_URI,
-    collectionName: 'otpRateLimits',
-    expireTimeMs: 10 * 60 * 1000,
-  }),
+  store: createMongoRateLimitStore('otpRateLimits', 10 * 60 * 1000),
   windowMs: 10 * 60 * 1000,
   max: 3,
   message: { success: false, message: "Too many requests, please try again later" },
@@ -215,8 +264,8 @@ app.use('/api/auth/reset-password', otpLimiter);
 app.use(globalLimiter);
 
 // Body parsing with size limits
-app.use('/api/payment/webhook', express.raw({ type: 'application/json' }))
-app.use(express.json({ limit: '10kb' }));
+// app.use('/api/payment/webhook', express.raw({ type: 'application/json' }))
+// app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // Data sanitization
@@ -226,6 +275,14 @@ app.use(xss());
 // Cookie parser
 app.use(cookie());
 
+app.use(express.json({
+  limit: '10kb',
+  verify: (req, res, buf) => {
+    req.rawBody = Buffer.from(buf)
+  },
+}))
+
+
 // Routes
 app.use('/api', require('./routes/index.js'));
 
@@ -233,10 +290,7 @@ app.use('/api', require('./routes/index.js'));
 const { errorHandler } = require('./middleware/errorHandler');
 app.use(errorHandler);
 
-// 404 handler
-// app.use('*', (req, res) => {
-//   res.status(404).json({ success: false, message: 'Route not found' });
-// });
+
 
 require('./jobs/feedRecalculationJob');
 require('./jobs/backupJob');
@@ -269,21 +323,6 @@ process.on('SIGINT', async () => {
     })
 })
 
-// process.on('SIGINT', async () => {
-//   logger.info('Received SIGINT, shutting down gracefully...');
-
-//   // Close all farm connections
-//   await closeAllConnections();
-
-//   // Close main mongoose connection
-//   await mongoose.connection.close();
-
-//   // Close server
-//   server.close(() => {
-//     logger.info('Server closed');
-//     process.exit(0);
-//   });
-// });
 
 process.on('SIGTERM', async () => {
   logger.info('Received SIGTERM, shutting down gracefully...');

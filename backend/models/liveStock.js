@@ -96,6 +96,10 @@ const liveStockSchema = new mongoose.Schema({
         type:Number,
         default:0
     },
+    livestockSalePrice:{
+        type:Number,
+        default:0
+    },
     feedHistory: [
         {
             feedStage: String,

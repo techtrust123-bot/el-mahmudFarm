@@ -30,7 +30,6 @@ async function generateBatchId(counterModel, counterName) {
       { $inc: { seq: 1 } },
       {
         upsert: true,
-        new: true,
         returnDocument: 'after',
         setDefaultsOnInsert: true,
       }

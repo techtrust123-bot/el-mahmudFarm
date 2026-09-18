@@ -10,6 +10,7 @@ const authSchema = new mongoose.Schema({
         required: true,
         unique: true,
         trim: true,
+        lowercase: true,
     },
     password: {
         type: String,
@@ -136,7 +137,17 @@ const authSchema = new mongoose.Schema({
     lockUntil: {
         type: Date,
         default: null
-    }
+    },
+    subscriptionPlan: {
+        type: String,
+        enum: ['starter', 'basic', 'premium', 'none','free'],
+        default: null,
+    },
+    billingCycle: {
+        type: String,
+        enum: ['monthly', 'yearly', 'none'],
+        default: null,
+    },
 },{timestamps: true});
 
 const authModel = mongoose.model('auth', authSchema);

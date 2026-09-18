@@ -107,6 +107,10 @@ const poultrySchema = new mongoose.Schema({
     currentFeedName:{
         type:String,
     },
+    poultrySalePrice:{
+        type:Number,
+        default:0
+    },
      feedHistory: [
         {
             feedStage: String,

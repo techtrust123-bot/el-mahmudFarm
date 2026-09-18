@@ -127,15 +127,15 @@ const salesValidation = [
     .withMessage('At least one order item is required')
     .custom((orders) => {
       if (!orders) return true;
-      const validTypes = ['Poultry', 'Livestock'];
+      const validTypes = ['Poultry', 'Livestock', 'Egg'];
       orders.forEach((order, index) => {
         const item = index + 1;
         if (!order.animalType) throw new Error(`Order ${item}: animalType is required`);
         if (!validTypes.includes(order.animalType)) throw new Error(`Order ${item}: animalType must be Poultry or Livestock`);
         if (order.animalType === 'Poultry' && !order.batchId) throw new Error(`Order ${item}: batchId is required for poultry`);
+        if (order.animalType === 'Egg' && !order.batchId) throw new Error(`Order ${item}: batchId is required for eggs`);
         if (order.animalType === 'Livestock' && !order.tagNumber && !order.type) throw new Error(`Order ${item}: tagNumber or type is required for livestock`);
-        if (!order.pricePerUnit) throw new Error(`Order ${item}: pricePerUnit is required`);
-        if (isNaN(Number(order.pricePerUnit)) || Number(order.pricePerUnit) < 0) throw new Error(`Order ${item}: pricePerUnit must be a valid positive number`);
+        if (order.pricePerUnit !== undefined && order.pricePerUnit !== '' && (isNaN(Number(order.pricePerUnit)) || Number(order.pricePerUnit) < 0)) throw new Error(`Order ${item}: pricePerUnit must be a valid positive number`);
         if (order.quantitySold !== undefined && order.quantitySold !== '' && (isNaN(Number(order.quantitySold)) || Number(order.quantitySold) <= 0)) {
           throw new Error(`Order ${item}: quantitySold must be a valid positive number`);
         }
@@ -169,8 +169,8 @@ const salesValidation = [
 
   body('animalType')
     .optional()
-    .isIn(['Poultry', 'Livestock'])
-    .withMessage('Animal type must be Poultry or Livestock'),
+    .isIn(['Poultry', 'Livestock', 'Egg'])
+    .withMessage('Animal type must be Poultry, Livestock, or Egg'),
 
   body('quantitySold')
     .optional()

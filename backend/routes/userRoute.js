@@ -1,11 +1,12 @@
 const express = require('express')
 const { getUsers } = require('../controllers/authController')
-const { authMiddleware, isManager } = require('../middleweres/authMiddlewere')
+const { authMiddleware, isManager, checkPermission } = require('../middleweres/authMiddlewere')
 const { checkSubscription } = require('../middleware/subscriptionMiddleware')
+const { requireFeatureAccess, enforceBasicStaffLimit } = require('../middleware/featureAuthorization')
 const { asyncHandler } = require('../middleware/errorHandler')
 const {
   userData,
-  addStaff,
+  addUser,
   getStaff,
   getStaffById,
   updateStaff,
@@ -18,15 +19,18 @@ const {
   activateUser,
   deleteUser,
 } = require('../controllers/userController')
+
+const {addStaff} = require('../controllers/staffController')
+
 const router = express.Router()
 
 router.get('/userData', authMiddleware, asyncHandler(userData))
 router.get('/users', authMiddleware, checkSubscription, asyncHandler(getUsers))
-router.post('/staff', authMiddleware, checkSubscription, isManager, asyncHandler(addStaff))
-router.get('/staff/list', authMiddleware, checkSubscription, isManager, asyncHandler(getStaff))
-router.get('/staff/:id', authMiddleware, checkSubscription, isManager, asyncHandler(getStaffById))
-router.put('/staff/:id', authMiddleware, checkSubscription, isManager, asyncHandler(updateStaff))
-router.delete('/staff/:id', authMiddleware, checkSubscription, isManager, asyncHandler(deleteStaff))
+router.post('/staff', authMiddleware, checkSubscription, requireFeatureAccess('staff'), isManager, enforceBasicStaffLimit, checkPermission('staff'), asyncHandler(addUser))
+router.get('/staff/list', authMiddleware, checkSubscription, requireFeatureAccess('staff'), isManager, checkPermission('staff'), asyncHandler(getStaff))
+router.get('/staff/:id', authMiddleware, checkSubscription, requireFeatureAccess('staff'), isManager, checkPermission('staff'), asyncHandler(getStaffById))
+router.put('/staff/:id', authMiddleware, checkSubscription, requireFeatureAccess('staff'), isManager, checkPermission('staff'), asyncHandler(updateStaff))
+router.delete('/staff/:id', authMiddleware, checkSubscription, requireFeatureAccess('staff'), isManager, checkPermission('staff'), asyncHandler(deleteStaff))
 
 router.put('/balance', authMiddleware, checkSubscription, asyncHandler(updateBalance))
 router.get('/all', authMiddleware, checkSubscription, asyncHandler(getAllUsers))

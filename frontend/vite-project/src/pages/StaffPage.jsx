@@ -5,6 +5,7 @@ import MainLayout from '../layouts/MainLayout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import CurrencyInput from '../components/ui/CurrencyInput';
 import Select from '../components/ui/Select';
 import Table from '../components/ui/Table';
 import Modal from '../components/ui/Modal';
@@ -27,13 +28,13 @@ const StaffPage = () => {
   const [alert, setAlert] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
-    role: '',
     salary: '',
     contact: '',
     email: '',
     password: '',
     hireDate: '',
     permissions: [],
+
   });
   const [errors, setErrors] = useState({});
   const { user } = useAuth();
@@ -67,7 +68,7 @@ const StaffPage = () => {
   const activeStaff = staff.filter((item) => item.status === 'active').length;
 
   const handleAddNew = () => {
-    setFormData({ name: '', role: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [] });
+    setFormData({ name: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [], });
     setEditingId(null);
     setErrors({});
     setIsModalOpen(true);
@@ -76,7 +77,6 @@ const StaffPage = () => {
   const handleEdit = (item) => {
     setFormData({
       name: item.name,
-      role: item.role,
       salary: item.salary,
       contact: item.contact?.toString() || '',
       email: item.email,
@@ -91,7 +91,7 @@ const StaffPage = () => {
 
   const handleDelete = async (id) => {
     try {
-      const response = await axiosInstance.delete(`/api/user/staff/delete/${id}`);
+      const response = await axiosInstance.delete(`/api/user/staff/${id}`);
       if (response.data.success) {
           setStaff((prev) => prev.filter((item) => item._id !== id));
           setAlert({ type: 'success', message: 'Staff member deleted successfully!' });
@@ -130,7 +130,6 @@ const StaffPage = () => {
 
     const payload = {
       name: formData.name,
-      role: formData.role,
       email: formData.email,
       contact: formData.contact?.toString() || '',
       salary: Number(formData.salary) || 0,
@@ -138,11 +137,11 @@ const StaffPage = () => {
       permissions: formData.permissions,
     };
 
-    const { isValid, errors: validationErrors } = validateForm(payload, staffSchema);
-    if (!isValid) {
-      setErrors(validationErrors);
-      return;
-    }
+    // const { isValid, errors: validationErrors } = validateForm(payload, staffSchema);
+    // if (!isValid) {
+    //   setErrors(validationErrors);
+    //   return;
+    // }
 
     if (!editingId && (!formData.password || formData.password.length < 6)) {
       setErrors((prev) => ({ ...prev, password: 'Password must be at least 6 characters' }));
@@ -159,7 +158,7 @@ const StaffPage = () => {
         response = await axiosInstance.put(`/api/user/staff/${editingId}`, payload);
         if (response.data.success) {
           setAlert({ type: 'success', message: response.data.message || 'Staff member updated successfully!' });
-          setFormData({ name: '', role: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [] });
+          setFormData({ name: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [], });
           setEditingId(null);
           setIsModalOpen(false);
           const fetchStaffs = await axiosInstance.get('/api/user/staff/list');
@@ -169,7 +168,7 @@ const StaffPage = () => {
         response = await axiosInstance.post('/api/user/staff', payload);
         if (response.data.success) {
           setAlert({ type: 'success', message: response.data.message });
-          setFormData({ name: '', role: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [] });
+          setFormData({ name: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [], });
           setEditingId(null);
           setIsModalOpen(false);
           const fetchStaffs = await axiosInstance.get('/api/user/staff/list');
@@ -208,10 +207,10 @@ const StaffPage = () => {
     {
       key: 'role',
       label: 'Role',
-      render: (value) => {
-        const role = STAFF_ROLES.find((r) => r.value === value);
-        return <Badge variant="info">{role?.label}</Badge>;
-      },
+      // render: (value) => {
+      //   const role = STAFF_ROLES.find((r) => r.value === value);
+      //   return <Badge variant="info">{role?.label}</Badge>;
+      // },
     },
     {
       key: 'permissions',
@@ -321,7 +320,7 @@ const StaffPage = () => {
               error={errors.name}
               required
             />
-            <Select
+            {/* <Select
               label="Role"
               name="role"
               options={STAFF_ROLES}
@@ -329,7 +328,7 @@ const StaffPage = () => {
               onChange={handleChange}
               error={errors.role}
               required
-            />
+            /> */}
             <Input
               label="Email"
               type="email"
@@ -359,9 +358,8 @@ const StaffPage = () => {
               error={errors.contact}
               required
             />
-            <Input
-              label="Monthly Salary (€)"
-              type="number"
+            <CurrencyInput
+              label="Monthly Salary (NGN)"
               name="salary"
               value={formData.salary}
               onChange={handleChange}

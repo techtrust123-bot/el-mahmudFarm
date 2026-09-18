@@ -24,6 +24,7 @@ import Card from '../../components/ui/Card';
 import StatCard from '../../components/ui/StatCard';
 import Table from '../../components/ui/Table';
 import { AuthContext } from '../../context/AuthContext';
+import { GiCow, GiChicken, } from 'react-icons/gi';
 import axios from 'axios';
 
 /**
@@ -270,9 +271,9 @@ const FarmerDashboardPage = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-          <StatCard icon={FiShoppingCart} label="Total Animals" value={stats.totalAnimals} />
-          <StatCard icon={FiTrendingUp} label="Total Livestock" value={stats.totalLivestock} />
-          <StatCard icon={FiDollarSign} label="Total Poultry" value={stats.totalPoultry} />
+          <StatCard icon={FiDollarSign} label="Total Animals" value={stats.totalAnimals} />
+          <StatCard icon={GiCow} label="Total Livestock" value={stats.totalLivestock} />
+          <StatCard icon={GiChicken} label="Total Poultry" value={stats.totalPoultry} />
           <StatCard
             icon={FiDollarSign}
             label="Total Revenue"

@@ -10,8 +10,11 @@ const REQUIRED_FARM_MODEL_NAMES = [
   'Sells',
   'Expenses',
   'Staff',
+  'Egg',
   'Counter',
-  'AuditLog'
+  'AuditLog',
+  'Notification',
+  'SupportConversation'
 ];
 
 const FARM_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;

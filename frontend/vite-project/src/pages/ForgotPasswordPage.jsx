@@ -6,6 +6,7 @@ import Card from '../components/ui/Card';
 import Alert from '../components/ui/Alert';
 import axios from 'axios'
 import { AuthContext } from '../context/AuthContext';
+import cloudFarmLogo from '../assets/CloudFarm_logo.png';
 /**
  * Forgot Password Page
  */
@@ -60,6 +61,7 @@ const ForgotPasswordPage = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-600 to-emerald-800 p-4">
       <Card className="w-full max-w-md">
         <div className="text-center mb-6">
+          <img src={cloudFarmLogo} alt="CloudFarm logo" className="mx-auto mb-3 h-16 w-16 rounded-xl object-contain bg-emerald-50 p-2 shadow-sm" />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">CloudFarm</h1>
           <p className="text-gray-600 dark:text-gray-400">Reset Your Password 🔐</p>
         </div>

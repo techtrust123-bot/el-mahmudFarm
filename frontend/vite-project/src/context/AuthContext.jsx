@@ -11,6 +11,28 @@ export const AuthProvider = (props) =>{
   const [loading, setLoading] = useState(true)
   const [authChecked, setAuthChecked] = useState(false)
   const [sessionWarning, setSessionWarning] = useState(false)
+  const syncSubscription = async (currentUser = null) => {
+    try {
+      const subscriptionResponse = await axiosInstance.get('/api/payment/status');
+      const subscription = subscriptionResponse.data?.data;
+      if (subscriptionResponse.data?.success && subscription) {
+        setUserData((previousUser) => ({
+          ...(currentUser || previousUser || {}),
+          isSubscribed: subscription.isSubscribed,
+          subscriptionStatus: subscription.subscriptionStatus,
+          subscriptionType: subscription.subscriptionType,
+          subscriptionPlan: subscription.subscriptionPlan,
+          billingCycle: subscription.subscriptionBillingCycle || subscription.billingCycle,
+          subscriptionStart: subscription.subscriptionStart,
+          subscriptionEnd: subscription.subscriptionEnd,
+        }));
+      }
+      return subscription;
+    } catch (subscriptionError) {
+      console.warn('Unable to reconcile subscription state:', subscriptionError?.message);
+      return null;
+    }
+  };
 
   const getUserData = async (force = false) => {
     if (!force && authChecked) return; // Prevent repeated calls unless explicitly forced
@@ -19,7 +41,10 @@ export const AuthProvider = (props) =>{
     try {
       const res = await axiosInstance.get('/api/user/userData');
       if (res.data.success) {
-        setUserData(res.data.userData);
+        let currentUser = res.data.userData;
+          const subscription = await syncSubscription(currentUser);
+          if (subscription) currentUser = { ...currentUser, subscriptionPlan: subscription.subscriptionPlan, subscriptionStatus: subscription.subscriptionStatus, isSubscribed: subscription.isSubscribed, billingCycle: subscription.subscriptionBillingCycle || subscription.billingCycle };
+        setUserData(currentUser);
         setIsLogin(true);
         scheduleTokenWarning();
       } else {
@@ -36,6 +61,8 @@ export const AuthProvider = (props) =>{
     }
   };
 
+
+
   const login = async (email, password) => {
     try {
       const res = await axiosInstance.post('/api/auth/login', { email, password });
@@ -43,6 +70,7 @@ export const AuthProvider = (props) =>{
         const user = res.data.user || res.data.userData || null;
         if (user) {
           setUserData(user);
+          await syncSubscription(user);
         }
         setIsLogin(true);
         setAuthChecked(true);
@@ -149,6 +177,7 @@ export const AuthProvider = (props) =>{
     loading,
     axiosInstance,
     sessionWarning,
+    syncSubscription,
     setSessionWarning,
   }
 

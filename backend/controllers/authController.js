@@ -1,4 +1,4 @@
-const authModel = require('../models/auth');
+const authModel = require('../models/auth.js');
 const RefreshToken = require('../models/refreshToken');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
@@ -82,11 +82,13 @@ exports.register = async (req, res) => {
     const role = userCount === 0 ? 'admin' : 'manager';
     const hashPassword = await bcrypt.hash(password, 12);
     const farmId = new mongoose.Types.ObjectId();
-    const defaultPermissions = ['dashboard', 'livestock', 'poultry', 'feed', 'sales', 'expenses', 'staff', 'reports', 'settings'];
+    const defaultPermissions = ['dashboard', 'livestock', 'poultry', 'feed', 'eggInventory', 'sales', 'expenses', 'staff', 'reports', 'settings'];
     const trialDays = role === 'admin' ? 3650 : role === 'manager' ? 14 : 0;
     const trialStart = trialDays > 0 ? new Date() : null;
     const trialEnd = trialDays > 0 ? new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000) : null;
     const isTrial = trialDays > 0;
+    const trialPlan = 'free';
+    const trialBillingCycle = 'none';
 
     const user = new authModel({
       name,
@@ -106,6 +108,8 @@ exports.register = async (req, res) => {
       subscriptionStart: trialStart,
       subscriptionEnd: trialEnd,
       isSubscribed: isTrial,
+      subscriptionPlan: trialPlan,
+      billingCycle: trialBillingCycle
     });
 
     const otp = String(Math.floor(100000 + Math.random() * 900000));
@@ -215,21 +219,35 @@ exports.login = async (req, res) => {
       throw new ApiError(400, 'Validation failed', formattedErrors);
     }
     const { email, password } = req.body;
-    const user = await authModel.findOne({ email });
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const user = await authModel.findOne({
+      $expr: {
+        $eq: [
+          { $toLower: { $trim: { input: '$email' } } },
+          normalizedEmail,
+        ],
+      },
+    });
     if (!user) {
-      logAuthEvent('login_failed', null, null, req.ip, req.get('User-Agent'), { reason: 'user_not_found', email });
+      logAuthEvent('login_failed', null, null, req.ip, req.get('User-Agent'), { reason: 'user_not_found', email: normalizedEmail });
       // return res.status(404).json({ success: false, message: 'User not found' });
       throw new ApiError(404, 'User not found');
     }
+
+    // const verifiedAccount = await authModel.findOne({ email: normalizedEmail, isAccountVerified: true });
+    // if (!verifiedAccount) {
+    //   logAuthEvent('login_failed', user._id, user.farmId, req.ip, req.get('User-Agent'), { reason: 'account_not_verified' });
+    //   return res.status(403).json({ success: false, message: 'Account not verified. Please verify your account before logging in.' });
+    // }
 
     // Check if account is locked
     if (isAccountLocked(user)) {
       const remainingTime = Math.ceil((user.lockUntil - Date.now()) / 1000 / 60);
       logAuthEvent('login_failed', user._id, user.farmId, req.ip, req.get('User-Agent'), { reason: 'account_locked', remainingMinutes: remainingTime });
-      // return res.status(423).json({
-      //   success: false,
-      //   message: `Account locked due to too many failed attempts. Try again in ${remainingTime} minutes.`
-      // });
+      return res.status(423).json({
+        success: false,
+        message: `Account locked due to too many failed attempts. Try again in ${remainingTime} minutes.`
+      });
       throw new ApiError(423, `Account locked due to too many failed attempts. Try again in ${remainingTime} minutes.`);
     }
 
@@ -305,6 +323,8 @@ exports.login = async (req, res) => {
           subscriptionStart: user.subscriptionStart,
           subscriptionEnd: user.subscriptionEnd,
           isSubscribed: user.isSubscribed,
+          subscriptionPlan: user.subscriptionPlan,
+          billingCycle: user.billingCycle,
         },
       });
     } catch (error) {
@@ -500,7 +520,7 @@ exports.verifiedOtp = async (req, res) => {
      if (error instanceof ApiError) {
        throw error;
      }
-     console.log(error)
+     logger.error(error.message)
     throw new ApiError(500, 'Internal server error');
   }
 }

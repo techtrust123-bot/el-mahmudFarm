@@ -6,6 +6,7 @@ import Card from '../components/ui/Card';
 import Alert from '../components/ui/Alert';
 import { AuthContext } from '../context/AuthContext';
 import axiosInstance from '../utils/axiosInstance';
+import cloudFarmLogo from '../assets/CloudFarm_logo.png';
 
 /**
  * Login Page
@@ -46,11 +47,13 @@ const LoginPage = () => {
     console.log('Login response:', response.data);
     if (response.data.success) {
       setAlert({ type: 'success', message: response.data.message });
+      const loggedInUser = response.data.user || response.data.userData;
       setIsLogin(true);
       await getUserData(true);
-      navigate('/dashboard');
+      navigate(loggedInUser?.isAccountVerified === false ? '/verify-otp' : '/dashboard');
     } else {
-      setAlert({ type: 'error', message: error.response?.data?.message || 'Login failed' });
+      setAlert({ type: 'error', message: response.data.message || 'Login failed' });
+      
     }
     setIsLoading(false);
   }
@@ -79,6 +82,7 @@ const LoginPage = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-600 to-emerald-800 p-4">
       <Card className="w-full max-w-md">
         <div className="text-center mb-6">
+          <img src={cloudFarmLogo} alt="CloudFarm logo" className="mx-auto mb-3 h-16 w-16 rounded-xl object-contain bg-emerald-50 p-2 shadow-sm" />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">CloudFarm</h1>
           <p className="text-gray-600 dark:text-gray-400">Welcome Back 🌾</p>
         </div>

@@ -20,11 +20,8 @@ const DashboardWrapper = () => {
 // Management Pages
 import InventoryPage from '../pages/management/InventoryPage';
 
-// Marketplace & Vet
-import MarketplacePage from '../pages/marketplace/MarketplacePage';
 import VetBookingPage from '../pages/vet/VetBookingPage';
 import ExpensePage from '../pages/ExpensePage';
-
 // Subscription
 import SubscriptionPage from '../pages/subscription/SubscriptionPage';
 import PaymentPage from '../pages/PaymentPage';
@@ -36,10 +33,18 @@ import SalesPage from '../pages/SalesPage';
 import StaffPage from '../pages/StaffPage';
 import SettingsPage from '../pages/SettingsPage';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage';
+import VerifyOtpPage from '../pages/VerifyOtpPage';
 import ForbiddenPage from '../pages/ForbiddenPage';
 import ResetOtp from '../pages/ResetOtp';
 import SupportPage from '../pages/SupportPage';
 import EggInventoryPage from '../pages/EggInventoryPage';
+import AdminSubscriptionsPage from '../pages/admin/AdminSubscriptionsPage';
+import AdminNotificationsPage from '../pages/admin/AdminNotificationsPage';
+import AdminSupportPage from '../pages/admin/AdminSupportPage';
+import ProfilePage from '../pages/ProfilePage';
+import LandingPage from '../pages/LandingPage';
+import PublicSupportPage from '../pages/PublicSupportPage';
+import LegalPage from '../pages/LegalPage';
 
 /**
  * Routes Configuration
@@ -49,12 +54,16 @@ export const AppRoutes = () => {
     <Router>
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<LoginPage />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/verify-otp" element={<VerifyOtpPage />} />
         <Route path="/reset-password" element={<ResetOtp/>} />
         <Route path="/forbidden" element={<ForbiddenPage />} />
+        <Route path="/support/contact" element={<PublicSupportPage />} />
+        <Route path="/terms" element={<LegalPage />} />
+        <Route path="/privacy-policy" element={<LegalPage />} />
 
         {/* Protected Routes */}
         <Route
@@ -85,9 +94,9 @@ export const AppRoutes = () => {
         />
 
         <Route
-          path="/egg-inventory"
+          path="/eggInventory"
           element={
-            <ProtectedRoute requiredPermission="poultry">
+            <ProtectedRoute requiredPermission="eggInventory">
               <EggInventoryPage />
             </ProtectedRoute>
           }
@@ -123,7 +132,7 @@ export const AppRoutes = () => {
         <Route
           path="/staff"
           element={
-            <ProtectedRoute requiredRole="manager">
+            <ProtectedRoute requiredPermission="staff">
               <StaffPage />
             </ProtectedRoute>
           }
@@ -138,6 +147,14 @@ export const AppRoutes = () => {
           }
         />
         <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/support"
           element={
             <ProtectedRoute>
@@ -145,21 +162,28 @@ export const AppRoutes = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/subscription"
+          element={
+            <ProtectedRoute>
+              <SubscriptionPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/subscription/manage"
+          element={
+            <ProtectedRoute>
+              <SubscriptionPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/payment" element={<PaymentPage />} />
         <Route path="/payment/verify" element={<PaymentVerifyPage />} />
-          <Route path="/sub" element={
-              <SubscriptionPage />
-          } />
-          <Route path="/marketplace" element={
-              <MarketplacePage />
-          } />
-          <Route path="/inventory" element={
-              <InventoryPage />
-          } />
-
-          <Route path="/vet" element={
-              <VetBookingPage />
-          } />
+        <Route path="/sub" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
+       
+        <Route path="/inventory" element={<InventoryPage />} />
+        <Route path="/vet" element={<VetBookingPage />} />
 
         {/* Admin Routes */}
         <Route
@@ -167,6 +191,30 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute requiredRole="admin">
               <AdminDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/subscriptions"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminSubscriptionsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/notifications"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminNotificationsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/support"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminSupportPage />
             </ProtectedRoute>
           }
         />

@@ -44,6 +44,7 @@ const LivestockPage = () => {
     healthStatus: '',
     purchaseDate: '',
     purchasePrice: '',
+    livestockSalePrice:'',
     type: '',
   });
   const [errors, setErrors] = useState({});
@@ -79,6 +80,7 @@ const LivestockPage = () => {
       healthStatus: '',
       purchaseDate: '',
       purchasePrice: '',
+      livestockSalePrice:'',
       type: '',
     });
     setEditingId(null);
@@ -109,6 +111,7 @@ const LivestockPage = () => {
       healthStatus: item.healthStatus,
       purchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : '',
       purchasePrice: item.purchasePrice,
+      livestockSalePrice: item.livestockSalePrice || '',
       type: item.type,
     });
     } else {
@@ -183,6 +186,7 @@ const LivestockPage = () => {
           healthStatus: '',
           purchaseDate: '',
           purchasePrice: '',
+          livestockSalePrice:'',
           type: '',
         });
         setIsModalOpen(false);
@@ -248,6 +252,7 @@ const LivestockPage = () => {
     { key: 'purchasePrice', label: 'purchase Price',render:(value)=> formatCurrency(value) },
     { key: 'livestockFeedConsumed', label: 'feed Consumed (kg)' },
     { key: 'totalCost', label: 'costPrice',render:(value)=> formatCurrency(value) },
+    {key: 'livestockSalePrice', label: 'sale Price',render:(value)=> formatCurrency(value) },
     {key: 'status', label: 'status', render:(value)=>{
       const status = value === 'available' ? 'success' : value === 'sold' ? 'error' : 'warning'
       return <Badge variant={status}>{value}</Badge>
@@ -459,6 +464,13 @@ const LivestockPage = () => {
               onChange={handleChange}
               error={errors.purchasePrice}
               required
+            />
+            <CurrencyInput
+              label="Sale Price"
+              name="livestockSalePrice"
+              value={formData.livestockSalePrice}
+              onChange={handleChange}
+              error={errors.livestockSalePrice}
             />
             <Input
               label="Purchase Date"

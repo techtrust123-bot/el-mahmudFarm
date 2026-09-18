@@ -29,6 +29,10 @@ const AdminDashboardPage = () => {
   const [emailSearch, setEmailSearch] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [actionLoading, setActionLoading] = useState(null);
+  const [subscriptionAnalytics, setSubscriptionAnalytics] = useState(null);
+  const [analyticsRange, setAnalyticsRange] = useState('last30');
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState('');
   const baseUrl = backendUrl || import.meta.env.VITE_BACKEND_URL || '';
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -164,20 +168,50 @@ const AdminDashboardPage = () => {
       .filter(Boolean);
   };
 
+  const getAnalyticsDates = () => {
+    const end = new Date();
+    const start = new Date(end);
+    if (analyticsRange === 'today') start.setHours(0, 0, 0, 0);
+    if (analyticsRange === 'last7') start.setDate(start.getDate() - 6);
+    if (analyticsRange === 'last30') start.setDate(start.getDate() - 29);
+    if (analyticsRange === 'thisMonth') start.setDate(1);
+    if (analyticsRange === 'lastMonth') {
+      start.setMonth(start.getMonth() - 1, 1);
+      end.setDate(0);
+    }
+    return { startDate: start.toISOString(), endDate: end.toISOString() };
+  };
+
+  const fetchSubscriptionAnalytics = async () => {
+    setAnalyticsLoading(true);
+    setAnalyticsError('');
+    try {
+      const dates = getAnalyticsDates();
+      const response = await axios.get(`${baseUrl}/api/payment/admin/revenue-analytics`, { params: dates, withCredentials: true });
+      setSubscriptionAnalytics(response.data.data);
+    } catch (error) {
+      setAnalyticsError(error.response?.data?.message || 'Unable to load subscription revenue analytics.');
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
-        const [usersResponse, salesResponse, emailResponse, backupResponse] = await Promise.all([
+        const [usersResult, salesResult, emailResult, backupResult, salesSummaryResult] = await Promise.allSettled([
           axios.get(`${baseUrl}/api/user/users`, { withCredentials: true }),
           axios.get(`${baseUrl}/api/sell/list`, { withCredentials: true }),
           axios.get(`${baseUrl}/api/dashboard/email-activity?limit=8`, { withCredentials: true }),
           axios.get(`${baseUrl}/api/backup/list`, { withCredentials: true }),
+          axios.get(`${baseUrl}/api/dashboard/admin/sales-summary`, { withCredentials: true }),
         ]);
 
-        const fetchedUsers = safeArray(usersResponse);
-        const fetchedSales = safeArray(salesResponse);
-        const fetchedEmailActivity = safeArray(emailResponse);
-        const fetchedBackups = safeArray(backupResponse);
+        const fetchedUsers = usersResult.status === 'fulfilled' ? safeArray(usersResult.value) : [];
+        const fetchedSales = salesResult.status === 'fulfilled' ? safeArray(salesResult.value) : [];
+        const fetchedEmailActivity = emailResult.status === 'fulfilled' ? safeArray(emailResult.value) : [];
+        const fetchedBackups = backupResult.status === 'fulfilled' ? safeArray(backupResult.value) : [];
+        const salesSummary = salesSummaryResult.status === 'fulfilled' ? salesSummaryResult.value.data?.data || {} : {};
 
         const totalRevenue = fetchedSales.reduce(
           (sum, sale) => sum + Number(sale.totalAmount || sale.pricePerUnit || 0),
@@ -195,12 +229,16 @@ const AdminDashboardPage = () => {
         setStats({
           totalUsers: fetchedUsers.length,
           activeFarms: activeFarmsCount,
-          totalRevenue,
-          marketplaceSales: fetchedSales.length,
+          totalRevenue: Number(salesSummary.totalRevenue ?? totalRevenue),
+          marketplaceSales: Number(salesSummary.marketplaceSales ?? fetchedSales.length),
         });
         setRevenueData(buildRevenueChart(fetchedSales));
         setUserGrowthData(buildUserGrowth(fetchedUsers));
         setActivities(buildActivityFeed(fetchedUsers, fetchedSales));
+
+        [usersResult, salesResult, emailResult, backupResult, salesSummaryResult]
+          .filter((result) => result.status === 'rejected')
+          .forEach((result) => console.error('Admin dashboard request failed:', result.reason));
       } catch (error) {
         console.error('Failed to load admin dashboard data', error);
       }
@@ -209,9 +247,14 @@ const AdminDashboardPage = () => {
     if (!baseUrl) return;
 
     fetchAdminData();
+    fetchSubscriptionAnalytics();
     const polling = setInterval(fetchAdminData, 15000);
     return () => clearInterval(polling);
   }, [baseUrl]);
+
+  useEffect(() => {
+    if (baseUrl) fetchSubscriptionAnalytics();
+  }, [analyticsRange, baseUrl]);
 
   useEffect(() => {
     const ticking = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -320,6 +363,31 @@ const AdminDashboardPage = () => {
           <StatCard icon={FiDollarSign} label="Total Revenue" value={formatCurrency(stats.totalRevenue)} />
           <StatCard icon={FiCheckCircle} label="Marketplace Sales" value={stats.marketplaceSales} />
         </div>
+
+        <Card>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><h3 className="text-lg font-bold text-gray-900 dark:text-white">Subscription revenue analytics</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Successful, processed subscription payments only.</p></div>
+            <select value={analyticsRange} onChange={(event) => setAnalyticsRange(event.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+              <option value="today">Today</option><option value="last7">Last 7 days</option><option value="last30">Last 30 days</option><option value="thisMonth">This month</option><option value="lastMonth">Last month</option>
+            </select>
+          </div>
+          {analyticsLoading && <p className="mt-6 text-sm text-gray-500">Loading subscription analytics...</p>}
+          {analyticsError && <p className="mt-6 rounded-lg bg-red-50 p-3 text-sm text-red-700">{analyticsError}</p>}
+          {!analyticsLoading && !analyticsError && subscriptionAnalytics && <>
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard icon={FiDollarSign} label="Subscription Revenue" value={formatCurrency(subscriptionAnalytics.totalRevenue)} />
+              <StatCard icon={FiCheckCircle} label="Successful Payments" value={subscriptionAnalytics.successfulPayments} />
+              <StatCard label="Active Starter" value={subscriptionAnalytics.subscriptionsByPlan?.starter || 0} />
+              <StatCard label="Active Basic / Premium" value={`${subscriptionAnalytics.subscriptionsByPlan?.basic || 0} / ${subscriptionAnalytics.subscriptionsByPlan?.premium || 0}`} />
+            </div>
+            <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <div><h4 className="mb-3 font-semibold text-gray-900 dark:text-white">Revenue over time</h4><ResponsiveContainer width="100%" height={260}><LineChart data={subscriptionAnalytics.revenueOverTime || []}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="period" /><YAxis /><Tooltip formatter={(value) => formatCurrency(value)} /><Line type="monotone" dataKey="revenue" stroke="#059669" strokeWidth={3} dot={false} name="Revenue" /></LineChart></ResponsiveContainer></div>
+              <div><h4 className="mb-3 font-semibold text-gray-900 dark:text-white">Revenue by plan</h4><ResponsiveContainer width="100%" height={260}><BarChart data={['starter', 'basic', 'premium'].map((plan) => ({ plan: plan.charAt(0).toUpperCase() + plan.slice(1), revenue: subscriptionAnalytics.revenueByPlan?.[plan] || 0 }))}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="plan" /><YAxis /><Tooltip formatter={(value) => formatCurrency(value)} /><Bar dataKey="revenue" fill="#10b981" name="Revenue" /></BarChart></ResponsiveContainer></div>
+            </div>
+            <div className="mt-6"><h4 className="mb-3 font-semibold text-gray-900 dark:text-white">Active subscriptions by plan</h4><ResponsiveContainer width="100%" height={230}><BarChart data={['starter', 'basic', 'premium'].map((plan) => ({ plan: plan.charAt(0).toUpperCase() + plan.slice(1), subscriptions: subscriptionAnalytics.subscriptionsByPlan?.[plan] || 0 }))}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="plan" /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="subscriptions" fill="#047857" name="Active subscriptions" /></BarChart></ResponsiveContainer></div>
+          </>}
+          {!analyticsLoading && !analyticsError && subscriptionAnalytics && subscriptionAnalytics.successfulPayments === 0 && <p className="mt-5 text-sm text-gray-500">No successful subscription payments in this date range.</p>}
+        </Card>
 
         {/* Revenue Chart */}
         <Card>

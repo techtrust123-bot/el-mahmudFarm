@@ -20,6 +20,7 @@ const feedSchema = new mongoose.Schema({
     feedCategory:{
         type:String,
         required:true,
+        lowercase:true,
         trim:true,
     },
     totalDailyConsumption:{

@@ -11,14 +11,17 @@ const {
 const logger = require('../utils/logger')
 const {calculateHistoricalPoultryFeed} = require('../utils/historicalFeedCalculationHelper.js')
 const { sendNotification } = require('../services/emailService')
+const { generateBatchId } = require('../utils/generateBatchId')
 
 exports.createPoultry = async (req, res) => {
-    const { Poultry, Feed } = req.farmModels
-    const { batchId, type, quantity, purchaseDate, vaccinationStatus, mortality, purchasePrice, ageInWeeks, ageInDays } = req.body
-    if (!batchId || !type || !quantity || (!purchaseDate && ageInWeeks == null && ageInDays == null) || !vaccinationStatus || !purchasePrice) {
+    const { Poultry, Feed, Counter } = req.farmModels
+    const { type, quantity, purchaseDate, vaccinationStatus, mortality, purchasePrice, ageInWeeks, ageInDays, poultrySalePrice } = req.body
+    if (!type || !quantity || (!purchaseDate && ageInWeeks == null && ageInDays == null) || !vaccinationStatus || !purchasePrice) {
         return res.status(400).json({ message: 'All fields are required. Provide purchaseDate or ageInWeeks/ageInDays for age calculation.' })
     }
     try {
+        const sequenceId = await generateBatchId(Counter, 'poultryBatch')
+        const batchId = `Batch-${sequenceId}`
         const exist = await Poultry.findOne({ batchId })
         if (exist) {
             return res.status(400).json({ success: false, message: 'Batch ID already exists...' })
@@ -76,9 +79,6 @@ exports.createPoultry = async (req, res) => {
             totalFeedConsumed: historicalFeed.totalFeedConsumed,
             totalCost: totalPurchaseCost + historicalFeed.totalFeedCost,
             costPerPoultry,
-            // costPerPoultry: adjustedQuantity > 0
-            //     ? totalCost / adjustedQuantity
-            //     : 0,
             poultryConsumePerBird: historicalFeed.poultryConsumePerBird,
             feedCostPerPoultry: historicalFeed.feedCostPerPoultry,
             totalFeedCost: historicalFeed.totalFeedCost,
@@ -89,6 +89,7 @@ exports.createPoultry = async (req, res) => {
             currentFeedStage,
             currentFeedType: currentFeed.feedType,
             currentFeedName: currentFeed.feedName,
+            poultrySalePrice: poultrySalePrice || 0,
             feedHistory: historicalFeed.feedHistory || [
                 {
                     currentFeedStage,
@@ -100,9 +101,6 @@ exports.createPoultry = async (req, res) => {
                     totalFeedCost: historicalFeed.totalFeedCost,
                     totalCost: totalPurchaseCost + historicalFeed.totalFeedCost,
                     costPerPoultry: costPerPoultry,
-                    // costPerPoultry: adjustedQuantity > 0
-                    //         ? (totalPurchaseCost + historicalFeed.totalFeedCost) / adjustedQuantity
-                    //         : 0,
                     totalCostPerPoultry: totalCost / adjustedQuantity || 0,
                 }
             ]
@@ -250,6 +248,11 @@ exports.editPoultry = async (req, res) => {
             req.body.type ||
             existingPoultry.type
 
+        const poultrySalePrice =
+            req.body.poultrySalePrice != null
+                ? Number(req.body.poultrySalePrice)
+                : Number(existingPoultry.poultrySalePrice || 0)
+
         const requestedQuantity =
             req.body.quantity != null
                 ? Number(req.body.quantity)
@@ -289,6 +292,7 @@ exports.editPoultry = async (req, res) => {
                 message: 'Quantity must be greater than mortality.'
             })
         }
+
 
         // ---------------------------------------------------------
         // 2. Determine whether feed history must be recalculated
@@ -454,6 +458,8 @@ exports.editPoultry = async (req, res) => {
             purchaseDate,
 
             purchasePrice,
+
+            poultrySalePrice,
 
             ageInDays,
 

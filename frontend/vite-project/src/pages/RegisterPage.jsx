@@ -6,6 +6,7 @@ import Card from '../components/ui/Card';
 import Alert from '../components/ui/Alert';
 import { AuthContext } from '../context/AuthContext';
 import axiosInstance from '../utils/axiosInstance';
+import cloudFarmLogo from '../assets/CloudFarm_logo.png';
 
 /**
  * Register Page
@@ -22,6 +23,7 @@ const RegisterPage = () => {
     city: '',
     password: '',
     confirmPassword: '',
+    acceptedTerms: false,
   });
   const [errors, setErrors] = useState({});
   const [alert, setAlert] = useState(null);
@@ -42,13 +44,18 @@ const RegisterPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.acceptedTerms) {
+      setErrors((prev) => ({ ...prev, acceptedTerms: 'You must accept the Terms and Conditions and Privacy Policy.' }));
+      return;
+    }
     setIsLoading(true);
     try {
-      const response = await axiosInstance.post('/api/auth/register', formData);
+      const { acceptedTerms, ...registrationData } = formData;
+      const response = await axiosInstance.post('/api/auth/register', registrationData);
       setAlert({ type: 'success', message: response.data.message || 'Registration successful!' });
       setIsLogin(true);
       await getUserData(true);
-      navigate('/dashboard');
+      navigate('/verify-otp');
       setFormData({
         name: '',
         email: '',
@@ -58,9 +65,11 @@ const RegisterPage = () => {
         city: '',
         password: '',
         confirmPassword: '',
+          acceptedTerms: false,
       });
     } catch (error) {
       console.error('Registration error:', error);
+
       
       // Handle validation errors
       if (error.response?.data?.errors) {
@@ -72,7 +81,8 @@ const RegisterPage = () => {
             : validationErrors[field];
         });
         setErrors(formattedErrors);
-        setAlert({ type: 'error', message: "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character" });
+        setAlert({ type: 'error', message: error.response?.data?.message });
+        // setAlert({ type: 'error', message: "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character" });
       } else {
         setAlert({ type: 'error', message: error.response?.data?.message || 'Registration failed' });
       }
@@ -85,6 +95,7 @@ const RegisterPage = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-600 to-emerald-800 p-4">
       <Card className="w-full max-w-md">
         <div className="text-center mb-6">
+          <img src={cloudFarmLogo} alt="CloudFarm logo" className="mx-auto mb-3 h-16 w-16 rounded-xl object-contain bg-emerald-50 p-2 shadow-sm" />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">CloudFarm</h1>
           <p className="text-gray-600 dark:text-gray-400">Create Your Account 🌾</p>
         </div>
@@ -173,7 +184,7 @@ const RegisterPage = () => {
             name="password"
             value={formData.password}
             onChange={handleChange}
-            error={errors.password}
+            // error={errors.password}
             placeholder="••••••••"
             fullWidth
             required
@@ -185,7 +196,7 @@ const RegisterPage = () => {
             name="confirmPassword"
             value={formData.confirmPassword}
             onChange={handleChange}
-            error={errors.confirmPassword}
+            // error={errors.confirmPassword}
             placeholder="••••••••"
             fullWidth
             required
@@ -193,10 +204,11 @@ const RegisterPage = () => {
           </div>
           
 
-          <label className="flex items-center gap-2">
-            <input type="checkbox" className="w-4 h-4 rounded" required />
-            <span className="text-sm text-gray-700 dark:text-gray-300">
-              I agree to the Terms and Conditions
+          <label className="flex items-start gap-3">
+            <input type="checkbox" name="acceptedTerms" checked={formData.acceptedTerms} onChange={(e) => setFormData((prev) => ({ ...prev, acceptedTerms: e.target.checked }))} className="mt-1 h-4 w-4 rounded" required />
+            <span className="text-sm leading-6 text-gray-700 dark:text-gray-300">
+              I agree to the <Link to="/terms" target="_blank" className="font-semibold text-emerald-700 hover:underline">Terms and Conditions</Link> and <Link to="/privacy-policy" target="_blank" className="font-semibold text-emerald-700 hover:underline">Privacy Policy</Link>.
+              {errors.acceptedTerms && <span className="mt-1 block text-red-600">{errors.acceptedTerms}</span>}
             </span>
           </label>
 

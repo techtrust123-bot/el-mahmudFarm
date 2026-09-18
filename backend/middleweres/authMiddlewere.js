@@ -38,6 +38,13 @@ exports.isManager = (req, res, next) => {
     return next()
 }
 
+exports.isAdmin = (req, res, next) => {
+    if (!req.user || (req.user.role !== 'admin' && req.user.userType !== 'admin')) {
+        return res.status(403).json({ success: false, message: 'Forbidden: Admin access only' })
+    }
+    return next()
+}
+
 exports.checkPermission = (page) => (req, res, next) => {
     if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized Access' })

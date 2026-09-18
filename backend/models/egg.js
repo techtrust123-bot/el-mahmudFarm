@@ -5,6 +5,11 @@ const eggSchema = new mongoose.Schema({
         type:String,
         required:true
     },
+    batchId:{
+        type:String,
+        required:true,
+        unique:true
+    },
     avlDailyEgg:{
         type:Number,
         required:true
@@ -17,9 +22,17 @@ const eggSchema = new mongoose.Schema({
         type: Number,
         default:0
     },
+    salePricePerCrate:{
+        type: Number,
+        default:0
+    },
+    totalCrateSold:{
+        type:Number,
+        default:0
+    },
     date:{
         type:Date,
-        default:Date.now
+        required:true
     },
     damageEggs:{
         type: Number,
@@ -34,6 +47,18 @@ const eggSchema = new mongoose.Schema({
         default:0
     },
     cratePrice:{
+        type:Number,
+        default:0
+    },
+    profitPerEgg:{
+        type:Number,
+        default:0
+    },
+    totalEggProfit:{
+        type:Number,
+        default:0
+    },
+    AvailableEggCrates:{
         type:Number,
         default:0
     }

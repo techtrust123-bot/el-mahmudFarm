@@ -41,8 +41,7 @@ const PoultryPage = () => {
     vaccinationStatus: '',
     feedConsumption: '',
     purchaseDate: '',
-    // ageInWeeks: '',
-    // ageInDays: '',
+    poultrySalePrice: '',
     mortality: '',
     poultryConsumePerBird:'',
     purchasePrice: '',
@@ -94,13 +93,8 @@ const PoultryPage = () => {
   }, []);
 
   const handleAddNew = () => {
-    // Generate unique batchId
-    const timestamp = Date.now();
-    const randomNum = Math.floor(Math.random() * 1000);
-    const generatedBatchId = `BATCH-${timestamp}-${randomNum}`;
-    
     setFormData({
-      batchId: generatedBatchId,
+      batchId: '',
       type: '',
       quantity: '',
       vaccinationStatus: '',
@@ -138,8 +132,7 @@ const PoultryPage = () => {
         quantity: item.quantity,
         vaccinationStatus: item.vaccinationStatus,
         purchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : '',
-        // ageInWeeks: item.ageInWeeks || '',
-        // ageInDays: item.ageInDays || '',
+        poultrySalePrice: item.poultrySalePrice || '',
         mortality: item.mortality || '',
         purchasePrice: item.purchasePrice || '',
       });
@@ -192,7 +185,7 @@ const PoultryPage = () => {
     e.preventDefault();
 
     // Validate required fields
-    const requiredFields = ['batchId', 'type', 'quantity', 'vaccinationStatus', 'purchasePrice'];
+    const requiredFields = ['type', 'quantity', 'vaccinationStatus', 'purchasePrice'];
     const newErrors = {};
     requiredFields.forEach(field => {
       if (!formData[field] || formData[field].toString().trim() === '') {
@@ -228,6 +221,7 @@ const PoultryPage = () => {
           purchaseDate: '',
           mortality: '',
           purchasePrice: '',
+          poultrySalePrice: '',
         });
         setIsModalOpen(false);
         // Refresh data
@@ -264,6 +258,7 @@ const PoultryPage = () => {
     { key: 'currentFeedStage', label: 'FeedStage' },
     // { key: 'totalCostPerPoultry', label: 'Total Cost Per Poultry' },
     { key: 'costPerPoultry', label: 'Cost PerPoultry',render:(value)=> formatCurrency(value) },
+    {key: 'poultrySalePrice', label: 'Sale Price', render:(value)=> formatCurrency(value)},
     {
       key: 'vaccinationStatus',
       label: 'Vaccination',
@@ -439,7 +434,7 @@ const PoultryPage = () => {
               onChange={handleChange}
               error={errors.mortality}
             />
-            {formData.type === 'layer' || formData.type === 'broiler' ? (
+
               <CurrencyInput
                 label="Purchase Price (₦)"
                 name="purchasePrice"
@@ -448,7 +443,14 @@ const PoultryPage = () => {
                 error={errors.purchasePrice}
                 required
               />
-            ) : null}
+            
+            < CurrencyInput
+              label="Sale Price (₦)"
+              name="poultrySalePrice"
+              value={formData.poultrySalePrice}
+              onChange={handleChange}
+              error={errors.poultrySalePrice}
+            />
             <Input
               label="Purchase Date"
               type="date"

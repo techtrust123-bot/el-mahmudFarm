@@ -15,7 +15,7 @@ const welcomeEmail = ({ userName = 'User', dashboardUrl = `${process.env.FRONTEN
   `;
 
   return {
-    subject: '🌾 Welcome to CloudFarm!',
+    subject: `🌾 Welcome to CloudFarm!`,
     html: renderLayout({
       title: 'Welcome to CloudFarm',
       previewText: 'Your farm management workspace is ready',

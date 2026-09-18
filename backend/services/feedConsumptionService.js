@@ -239,13 +239,61 @@ const createLivestockBulkOperation = (animal, feedToUse, ageInDays,ageInWeeks, c
   }
 }
 
-const createEggBulkOperation = (egg, dailyEgg, price,damage)=>{
-  const poultryType = egg.PoultryType
-  const avgDailyEgg = Math.max(toSafeNumber(dailyEgg.avgDailyEgg), 0)
-  const salePrice = Math.max(toSafeNumber(price.salePrice), 0)
-  const damageEgg = Math.max(toSafeNumber(damage.damageEgg), 0)
-  
-  
+
+
+const createEggBulkOperation = (egg, dailyEgg = {}, price = {},quantity = {},feedConsumed = {}, damage = {}) => {
+  const poultryType = egg.poultryType || egg.PoultryType
+  const avgDailyEggs = Math.max(toSafeNumber(
+    dailyEgg.totalDailyEgg ?? dailyEgg.avgDailyEgg ?? dailyEgg,
+  ), 0)
+  const salePrice = Math.max(toSafeNumber(price.salePrice ?? price), 0)
+  const damageEgg = Math.max(toSafeNumber(
+    damage.damageEggs ?? damage.damageEgg ?? damage,
+  ), 0)
+
+  const availableEgg = Math.max(avgDailyEggs - damageEgg, 0)
+  const feedCost = Math.max(toSafeNumber(
+    price.feedCost
+      ?? price.cost
+      ?? price.totalFeedCost
+      ?? price.feedCostPerEgg
+      ?? (toSafeNumber(egg.costPricePerEgg) * availableEgg),
+  ), 0)
+  const feedQuantity = Math.max(toSafeNumber(quantity.feedQuantity ?? quantity), 0)
+  const feedConsuptionPerDay = Math.max(toSafeNumber(feedConsumed.feedConsuptionPerDay ?? price.poultryDailyConsumption ?? 0), 0)
+ 
+        const feedPricePerKg = Number(feedCost / feedQuantity);
+        const feedConsuptionCostPerDay = Number( feedPricePerKg * feedConsuptionPerDay );
+        const pricePerEgg = Number(feedConsuptionCostPerDay / availableEgg);
+        const salePricePerCrate = Number(salePrice * 30);
+        const totalEggCost = Number(pricePerEgg * availableEgg);
+        const cratePrice = Number(pricePerEgg * 30);
+        const profitPerEgg = Number(salePrice > 0 ? (salePrice - pricePerEgg) : 0);
+        const totalEggProfit = Number(profitPerEgg * availableEgg);
+
+  const updateData = {
+    totalDailyEgg: avgDailyEggs,
+    salePrice,
+    salePricePerCrate,
+    damageEggs: damageEgg,
+    avlDailyEgg: availableEgg,
+    costPricePerEgg: pricePerEgg,
+    cratePrice,
+    totalEggCost,
+    profitPerEgg,
+    totalEggProfit,
+  }
+
+  if (poultryType) {
+    updateData.poultryType = poultryType
+  }
+
+  return{
+    updateOne:{
+      filter: { _id: egg._id },
+      update: { $set: updateData },
+    },
+  }
 }
 
 const buildFeedStageMap = async (Feed, animalType) => {
@@ -275,6 +323,22 @@ const buildFeedStageMap = async (Feed, animalType) => {
   }
 
   return feedStageMap
+}
+
+const recalculateEggs = async (egg, dailyEgg, price, quantity, feedConsumed, damage, farmModels) => {
+  try {
+    const { Egg } = farmModels
+    const operation = createEggBulkOperation(egg, dailyEgg, price, quantity, feedConsumed, damage)
+    const updatedEgg = await Egg.findByIdAndUpdate(
+      egg._id,
+      operation.updateOne.update,
+      { returnDocument: 'after' }
+    )
+    return updatedEgg
+  } catch (error) {
+    logger.error({ message: error.message, stack: error.stack })
+    throw error
+  }
 }
 
 const recalculatePoultry = async (feed, farmModels) => {
@@ -693,5 +757,6 @@ module.exports = {
   syncFeedConsumption,
   recalculatePoultry,
   recalculateLivestock,
+  recalculateEggs,
   recalculateLivestockForTypeAndStage,
 }

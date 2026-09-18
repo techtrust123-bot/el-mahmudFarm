@@ -1,6 +1,8 @@
 import { Navigate } from 'react-router-dom';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import { canAccessFeature } from '../data/subscriptionPlans';
+import CloudFarmLoader from '../components/common/CloudFarmLoader';
 
 /**
  * ProtectedRoute - Guard routes that require authentication
@@ -24,14 +26,21 @@ const ProtectedRoute = ({ children, requiredRole = null, requiredPermission = nu
       normalizedRole === 'admin');
 
   if (loading) {
-    return null;
+    return <CloudFarmLoader text="Checking your CloudFarm account..." />;
   }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!isSubscribed && window.location.pathname !== '/payment' && window.location.pathname !== '/payment/verify') {
+  if (user?.isAccountVerified === false) {
+    return <Navigate to="/verify-otp" replace />;
+  }
+
+  const currentPath = window.location.pathname;
+  const isSubscriptionPath = currentPath === '/subscription' || currentPath === '/subscription/manage' || currentPath === '/sub';
+
+  if (!isSubscribed && !isSubscriptionPath && currentPath !== '/payment' && currentPath !== '/payment/verify') {
     return <Navigate to="/payment" replace />;
   }
 
@@ -47,12 +56,18 @@ const ProtectedRoute = ({ children, requiredRole = null, requiredPermission = nu
     return <Navigate to="/forbidden" replace />;
   }
 
-  if (
-    requiredPermission &&
-    !isManager &&
-    !normalizedPermissions.includes(requiredPermission.toLowerCase())
-  ) {
-    return <Navigate to="/forbidden" replace />;
+  if (requiredPermission) {
+    const permissionKey = requiredPermission;
+    const hasFeatureAccess = canAccessFeature(user, permissionKey);
+    const hasPermission = normalizedPermissions.includes(permissionKey.toLowerCase());
+
+    if (!hasFeatureAccess && !isManager && !hasPermission) {
+      return <Navigate to="/forbidden" replace />;
+    }
+
+    if (!hasFeatureAccess) {
+      return <Navigate to="/forbidden" replace />;
+    }
   }
 
   return children;

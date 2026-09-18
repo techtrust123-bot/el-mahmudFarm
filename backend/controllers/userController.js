@@ -7,12 +7,20 @@ exports.userData = async(req,res)=>{
         if(!user){
             return res.status(400).json({message:'user not found...'})
         }
+
+        if(user.isAccountVerified === false){
+              logAuthEvent('login_failed', user._id, user.farmId, req.ip, req.get('User-Agent'), { reason: 'account_not_verified' });
+              throw new ApiError(400, 'Account not verified');
+            }
     
         let subscriptionData = {
-      isSubscribed: user.isSubscribed,
-      subscriptionStatus: user.subscriptionStatus,
-      subscriptionStart: user.subscriptionStart,
-      subscriptionEnd: user.subscriptionEnd,
+            isSubscribed: user.isSubscribed,
+            subscriptionStatus: user.subscriptionStatus,
+            subscriptionStart: user.subscriptionStart,
+            subscriptionEnd: user.subscriptionEnd,
+            subscriptionType: user.subscriptionType,
+            subscriptionPlan: user.subscriptionPlan,
+            billingCycle: user.billingCycle
     }
 
     if (user.userType === 'staff') {
@@ -23,6 +31,9 @@ exports.userData = async(req,res)=>{
           subscriptionStatus: manager.subscriptionStatus,
           subscriptionStart: manager.subscriptionStart,
           subscriptionEnd: manager.subscriptionEnd,
+            subscriptionType: manager.subscriptionType,
+            subscriptionPlan: manager.subscriptionPlan,
+            billingCycle: manager.billingCycle
         }
       }
     }
@@ -48,7 +59,7 @@ exports.userData = async(req,res)=>{
             ...subscriptionData,
         }})
     } catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({message:error.message})
     }
 }
@@ -65,21 +76,29 @@ exports.updateBalance = async(req,res)=>{
         await user.save()
         res.status(200).json({success:"true",message:"balance updated successfully..."})
     } catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({message:error.message})
     }
 }
 
-exports.addStaff = async(req,res)=>{
-    if (!req.user || req.user.userType !== 'manager') {
+exports.addUser = async(req,res)=>{
+    if (!req.user || (req.user.userType !== 'manager' && req.user.userType !== 'admin' && req.user.role !== 'manager' && req.user.role !== 'admin')) {
         return res.status(403).json({ message: 'Forbidden: Manager access only' })
     }
-    const { name, email, password, role, permissions, contact, salary, hireDate } = req.body
-    if (!name || !email || !password || !role) {
-        return res.status(400).json({ success:false, message: 'Name, email, password and role are required.' })
+    const { name, email, password, permissions, contact, salary, hireDate } = req.body
+    if (!name || !email || !password) {
+        return res.status(400).json({ success:false, message: 'Name, email, and password are required.' })
     }
     try {
-        const existing = await authModel.findOne({ email })
+        const normalizedEmail = String(email).trim().toLowerCase()
+        const existing = await authModel.findOne({
+            $expr: {
+                $eq: [
+                    { $toLower: { $trim: { input: '$email' } } },
+                    normalizedEmail,
+                ],
+            },
+        })
         if (existing) {
             return res.status(400).json({ success:false, message: 'Staff user already exists with that email.' })
         }
@@ -89,9 +108,9 @@ exports.addStaff = async(req,res)=>{
             : [];
         const staff = new authModel({
             name,
-            email,
+            email: normalizedEmail,
             password: hashPassword,
-            role,
+            role:'staff',
             userType: 'staff',
             farmId: req.user.farmId,
             permissions: normalizedPermissions,
@@ -105,26 +124,26 @@ exports.addStaff = async(req,res)=>{
         const { password: _, ...staffData } = staff.toObject()
         res.status(201).json({ success:true, message:'Staff created successfully.', data:staffData })
     } catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({ success:false, message:error.message })
     }
 }
 
 exports.getStaff = async(req,res)=>{
-    if (!req.user || req.user.userType !== 'manager') {
+    if (!req.user || (req.user.userType !== 'manager' && req.user.userType !== 'admin' && req.user.role !== 'manager' && req.user.role !== 'admin')) {
         return res.status(403).json({ message: 'Forbidden: Manager access only' })
     }
     try {
         const staff = await authModel.find({ farmId: req.user.farmId, userType: 'staff' }).select('-password')
         res.status(200).json({ success:true, message:'Staff retrieved successfully.', data: staff })
     } catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({ success:false, message:error.message })
     }
 }
 
 exports.getStaffById = async(req,res)=>{
-    if (!req.user || req.user.userType !== 'manager') {
+    if (!req.user || (req.user.userType !== 'manager' && req.user.userType !== 'admin' && req.user.role !== 'manager' && req.user.role !== 'admin')) {
         return res.status(403).json({ message: 'Forbidden: Manager access only' })
     }
     const id = req.params.id
@@ -135,24 +154,24 @@ exports.getStaffById = async(req,res)=>{
         }
         res.status(200).json({ success:true, message:'Staff found.', data: staff })
     } catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({ success:false, message:error.message })
     }
 }
 
 exports.updateStaff = async(req,res)=>{
-    if (!req.user || req.user.userType !== 'manager') {
+    if (!req.user || (req.user.userType !== 'manager' && req.user.userType !== 'admin' && req.user.role !== 'manager' && req.user.role !== 'admin')) {
         return res.status(403).json({ message: 'Forbidden: Manager access only' })
     }
     const id = req.params.id
-    const { name, role, permissions, contact, salary, hireDate } = req.body
+    const { name, permissions, contact, salary, hireDate } = req.body
     try {
         const staff = await authModel.findOne({ _id: id, farmId: req.user.farmId, userType: 'staff' })
         if (!staff) {
             return res.status(404).json({ success:false, message:'Staff member not found.' })
         }
         if (name) staff.name = name
-        if (role) staff.role = role
+        // if (role) staff.role = role
         if (Array.isArray(permissions)) staff.permissions = permissions
         if (contact !== undefined) staff.contact = contact
         if (salary !== undefined) staff.salary = Number(salary) || 0
@@ -161,25 +180,36 @@ exports.updateStaff = async(req,res)=>{
         const { password: _, ...staffData } = staff.toObject()
         res.status(200).json({ success:true, message:'Staff updated successfully.', data: staffData })
     } catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({ success:false, message:error.message })
     }
 }
 
 exports.deleteStaff = async(req,res)=>{
-    if (!req.user || req.user.userType !== 'manager') {
+    if (!req.user || (req.user.userType !== 'manager' && req.user.userType !== 'admin' && req.user.role !== 'manager' && req.user.role !== 'admin')) {
         return res.status(403).json({ message: 'Forbidden: Manager access only' })
     }
     const id = req.params.id
     try {
-        const staff = await authModel.findOne({ _id: id, farmId: req.user.farmId, userType: 'staff' })
+        const staff = await authModel.findOne({
+            _id: id,
+            farmId: String(req.user.farmId),
+            $or: [
+                { userType: 'staff' },
+                { userType: 'Staff' },
+                { role: 'staff' },
+            ],
+        })
         if (!staff) {
             return res.status(404).json({ success:false, message:'Staff member not found.' })
         }
-        await authModel.findByIdAndDelete(id)
+        await authModel.findOneAndDelete({
+            _id: staff._id,
+            farmId: String(req.user.farmId),
+        })
         res.status(200).json({ success:true, message:'Staff deleted successfully.' })
     } catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({ success:false, message:error.message })
     }
 }
@@ -189,7 +219,7 @@ exports.getAllUsers = async(req,res)=>{
         const users = await authModel.find()
         res.status(200).json({success:true,message:"users found...",data:users})
     } catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({message:error.message})
     }
 }
@@ -204,7 +234,7 @@ exports.getUserById = async(req,res)=>{
         res.status(200).json({success:true,message:"user found...",data:user})
     }
         catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({message:error.message})
     }
 }
@@ -221,7 +251,7 @@ exports.updateUserRole = async(req,res)=>{
         await user.save()
         res.status(200).json({success:true,message:"user role updated successfully..."})
     } catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({message:error.message})
     }
 }
@@ -237,7 +267,7 @@ exports.suspendUser = async(req,res)=>{
         await user.save()
         res.status(200).json({success:true,message:"user suspended successfully..."})
     } catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({message:error.message})
     }
 
@@ -254,7 +284,7 @@ exports.activateUser = async(req,res)=>{
         await user.save()
         res.status(200).json({success:true,message:"user activated successfully..."})
     } catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({message:error.message})
     }
 }
@@ -269,7 +299,7 @@ exports.deleteUser = async(req,res)=>{
         await authModel.findByIdAndDelete(id)
         res.status(200).json({success:true,message:"user deleted successfully..."})
     } catch (error) {
-        console.log(error)
+        logger.error({message:error.message, stack:error.stack})
         res.status(500).json({message:error.message})
     }
 }

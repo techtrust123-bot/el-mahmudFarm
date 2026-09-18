@@ -98,9 +98,26 @@ const getEmailActivity = (limit = 10) => {
     .slice(0, limit);
 };
 
+const sendPrivateMessage = async (email, subject, message) => {
+  try {
+    await trasporter.sendMail({
+      from: process.env.SENDER_MAIL,
+      to: email,
+      subject,
+      text: message,
+      html: `<p>${String(message).replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[character]))}</p>`,
+    });
+    return true;
+  } catch (error) {
+    logger.error('Error sending private message:', error);
+    return false;
+  }
+};
+
 module.exports = {
   sendNotification,
   sendBatchNotifications,
   emailTemplates,
   getEmailActivity
+  ,sendPrivateMessage
 };

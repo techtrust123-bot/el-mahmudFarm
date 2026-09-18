@@ -19,7 +19,10 @@ const normalizeUser = (user) => ({
   email: user.email || null,
   isSubscribed: Boolean(user.isSubscribed),
   subscriptionEnd: user.subscriptionEnd || null,
-  subscriptionStatus: user.subscriptionStatus || 'inactive'
+  subscriptionStatus: user.subscriptionStatus || 'inactive',
+  subscriptionType: user.subscriptionType || 'none',
+  subscriptionPlan: user.subscriptionPlan || 'none',
+  subscriptionBillingCycle: user.subscriptionBillingCycle || 'none'
 });
 
 const setCache = (key, value, ttl = CACHE_TTL_MS) => {
@@ -45,6 +48,10 @@ const getCache = (key) => {
   }
 };
 
+const clearSubscriptionCache = (userId) => {
+  if (userId) cache.delete(String(userId));
+};
+
 const daysBetween = (a, b) => Math.ceil((b - a) / (1000 * 60 * 60 * 24));
 
 /**
@@ -55,11 +62,11 @@ const getSubscriptionOwner = async (user) => {
   if (!user) return null;
   if (user.userType === 'staff') {
     return await authModel.findOne({ farmId: user.farmId, userType: 'manager' }).select(
-      'isSubscribed subscriptionEnd subscriptionStatus email name'
+      'isSubscribed subscriptionEnd subscriptionStatus email name subscriptionPlan billingCycle'
     );
   }
 
-  return await authModel.findById(user.id).select('isSubscribed subscriptionEnd subscriptionStatus email name');
+  return await authModel.findById(user.id).select('isSubscribed subscriptionEnd subscriptionStatus email name subscriptionPlan billingCycle');
 };
 
 /**
@@ -71,7 +78,9 @@ const expireSubscription = async (targetUser) => {
     await authModel.findByIdAndUpdate(targetUser._id, {
       isSubscribed: false,
       subscriptionStatus: 'expired',
-      subscriptionType: 'none'
+      subscriptionType: 'none',
+      subscriptionPlan: 'none',
+      billingCycle: 'none'
     });
   } catch (err) {
     logger.error('Failed to expire subscription', { error: err?.message });
@@ -165,6 +174,8 @@ const checkSubscription = async (req, res, next) => {
       isSubscribed: true,
       subscriptionStatus: owner.subscriptionStatus || 'active',
       subscriptionEnd: owner.subscriptionEnd,
+      subscriptionPlan: owner.subscriptionPlan || 'none',
+      billingCycle: owner.billingCycle || 'none',
       daysRemaining
     };
 
@@ -192,4 +203,4 @@ const checkSubscription = async (req, res, next) => {
   }
 };
 
-module.exports = { checkSubscription };
+module.exports = { checkSubscription, clearSubscriptionCache };

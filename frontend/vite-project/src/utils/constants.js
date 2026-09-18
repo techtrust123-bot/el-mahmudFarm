@@ -4,7 +4,7 @@
 
 export const LIVESTOCK_TYPES = [
   { value: 'cow', label: 'cow' },
-  { value: 'bool', label: 'bool' },
+  { value: 'bull', label: 'bull' },
   { value: 'goat', label: 'goat' },
   { value: 'sheep', label: 'sheep' },
   { value: 'ram', label: 'ram' },
@@ -32,7 +32,7 @@ export const HEALTH_STATUS = [
 export const POULTRY_TYPES = [
   { value: 'broiler', label: 'broiler' },
   { value: 'layer', label: 'layer' },
-  { value: 'egg', label: 'egg' },
+  
 ];
 
 export const VACCINATION_STATUS = [
@@ -45,11 +45,12 @@ export const EXPENSE_CATEGORIES = [
   { value: 'feed', label: 'Feed' },
   { value: 'medication', label: 'Medication' },
   { value: 'maintenance', label: 'Maintenance' },
-  { value: 'staff', label: 'Staff' },
+  { value: 'salary', label: 'Salary' },
+  { value: 'transportation', label: 'Transportation' },
 ];
 
 export const STAFF_ROLES = [
-  { value: 'staff', label: 'Staff' },
+  { value: 'staff', label: 'staff' },
 
 ];
 export const ANIMAL_TYPES =[
@@ -66,12 +67,7 @@ export const FEED_CATEGORY = [
   { value: 'Starter', label: 'Starter' },
   { value: 'Grower', label: 'Grower' },
   { value: 'Finisher', label: 'Finisher' },
-  { value: 'roughage', label: 'Roughage' },
-  { value: 'concentrate', label: 'Concentrate' },
-  { value: 'protein', label: 'Protein' },
-  { value: 'minerals', label: 'Minerals' },
-  { value: 'vitamins', label: 'Vitamins' },
-  { value: 'by-products', label: 'By-Products' },
+  
 ]
 
 export const COLORS = {

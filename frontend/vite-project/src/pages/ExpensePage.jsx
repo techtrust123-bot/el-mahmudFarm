@@ -137,11 +137,11 @@ const ExpensePage = () => {
       amount: formData.amount === '' ? formData.amount : Number(formData.amount),
     };
 
-    const { isValid, errors: validationErrors } = validateForm(payload, expenseSchema);
-    if (!isValid) {
-      setErrors(validationErrors);
-      return;
-    }
+    // const { isValid, errors: validationErrors } = validateForm(payload, expenseSchema);
+    // if (!isValid) {
+    //   setErrors(validationErrors);
+    //   return;
+    // }
     try {
       let response;
       if (editingId) {

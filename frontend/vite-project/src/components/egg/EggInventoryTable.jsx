@@ -4,19 +4,26 @@ import Button from '../ui/Button';
 import Table from '../ui/Table';
 
 const statusVariant = { Available: 'success', 'Low Stock': 'warning', 'Sold Out': 'default' };
+const formatMoney = (value) => Number.isFinite(Number(value)) ? `₦${Number(value).toLocaleString()}` : 'N/A';
 
 const EggInventoryTable = ({ records, loading, onView, onEdit, onDelete }) => (
   <Table
     data={records}
     loading={loading}
     columns={[
-      { key: 'productionDate', label: 'Date', sortable: true },
+      { key: 'date', label: 'Date', sortable: true },
       { key: 'batchId', label: 'Poultry Batch', sortable: true },
-      { key: 'eggType', label: 'Egg Type / Size' },
+      { key: 'poultryType', label: 'poultry Type' },
       { key: 'quantityProduced', label: 'Produced', sortable: true, render: (value) => value.toLocaleString() },
-      { key: 'quantitySold', label: 'Sold', render: (value) => value.toLocaleString() },
+      { key: 'AvailableEggCrates', label: 'A/Egg Crates', render: (value) => value.toLocaleString() },
       { key: 'damaged', label: 'Damaged', render: (value) => value.toLocaleString() },
       { key: 'available', label: 'Available', sortable: true, render: (value) => <span className="font-semibold">{value.toLocaleString()}</span> },
+      { key: 'costPricePerEgg', label: 'perEgg Price', render: formatMoney },
+      { key: 'cratePrice', label: 'Crate Price', render: formatMoney },
+      { key: 'totalEggCost', label: 'Total Cost', render: formatMoney },
+      { key: 'profitPerEgg', label: 'Profit per Egg', render: formatMoney },
+      { key: 'totalEggProfit', label: 'Total Profit', render: formatMoney },
+      { key: 'salePrice', label: 'Sale Price', render: formatMoney },
       { key: 'status', label: 'Status', render: (value) => <Badge variant={statusVariant[value] || 'default'}>{value}</Badge> },
     ]}
     actions={(record) => [

@@ -28,6 +28,7 @@ const SalesPage = () => {
   const [editingId, setEditingId] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
   const {axiosInstance} = useContext(AuthContext)
+ 
   const [formData, setFormData] = useState({
     invoiceId: '',
     date: '',
@@ -46,6 +47,10 @@ const SalesPage = () => {
   ]);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [availablePoultry, setAvailablePoultry] = useState([]);
+  const [availableLivestock, setAvailableLivestock] = useState([]);
+  const [eggRecords, setEggRecords] = useState([]);
+  const [isLoadingInventory, setIsLoadingInventory] = useState(false);
 
   const filteredSales = sales.filter((item) => {
     const matchesSearch = item.invoiceId.toLowerCase().includes(searchTerm.toLowerCase());
@@ -95,6 +100,25 @@ const SalesPage = () => {
     setIsModalOpen(true);
   };
 
+  useEffect(() => {
+    if (!isModalOpen || editingId) return;
+    const fetchAvailableInventory = async () => {
+      setIsLoadingInventory(true);
+      try {
+        const response = await axiosInstance.get('/api/sell/inventory');
+        const inventory = response.data.data || {};
+        setAvailablePoultry(inventory.poultry || []);
+        setAvailableLivestock(inventory.livestock || []);
+        setEggRecords(inventory.eggs || []);
+      } catch (error) {
+        toast.error(error.response?.data?.message || 'Unable to load sale inventory.');
+      } finally {
+        setIsLoadingInventory(false);
+      }
+    };
+    fetchAvailableInventory();
+  }, [isModalOpen, editingId, axiosInstance]);
+
   const handleExport = async () => {
     try {
       setIsExporting(true);
@@ -143,9 +167,9 @@ const SalesPage = () => {
         return `
           <tr>
             <td>${item.animalType || 'N/A'}</td>
-            <td>${item.batchId || item.tagNumber || 'N/A'}</td>
-            <td>${item.animalType || 'N/A'}</td>
-            <td>${item.quantitySold || 1}</td>
+            <td>${item.batchId || 'N/A'}</td>
+            <td>${item.animalType || item.tagNumber || 'N/A'}</td>
+            <td>${item.quantitySold || 'N/A'}</td>
             <td>${unitPrice}</td>
             <td>${amount}</td>
           </tr>`;
@@ -240,6 +264,10 @@ const SalesPage = () => {
           orderHasError = true;
           toast.error(`Order ${row}: batch ID is required for poultry`);
         }
+        if (item.animalType === 'Egg' && !item.batchId) {
+          orderHasError = true;
+          toast.error(`Order ${row}: egg batch ID is required`);
+        }
         if (item.animalType === 'Livestock' && !item.tagNumber && !item.type) {
           orderHasError = true;
           toast.error(`Order ${row}: tag number or type is required for livestock`);
@@ -267,16 +295,18 @@ const SalesPage = () => {
   };
 
   const handleOrderItemChange = (index, name, value) => {
-    setOrderItems((prev) =>
-      prev.map((item, idx) =>
-        idx === index
-          ? {
-              ...item,
-              [name]: value,
-            }
-          : item
-      )
-    );
+    setOrderItems((prev) => prev.map((item, idx) => {
+      if (idx !== index) return item;
+      if (name === 'animalType') return { ...item, animalType: value, batchId: '', tagNumber: '', pricePerUnit: '' };
+      const updatedItem = { ...item, [name]: value };
+      if (name === 'batchId' || name === 'tagNumber') {
+        const records = updatedItem.animalType === 'Poultry' ? availablePoultry : updatedItem.animalType === 'Egg' ? eggRecords : availableLivestock;
+        const selectedRecord = records.find((record) => String(record[name] || '').trim().toLowerCase() === String(value || '').trim().toLowerCase());
+        const priceField = updatedItem.animalType === 'Poultry' ? 'poultrySalePrice' : updatedItem.animalType === 'Egg' ? 'salePricePerCrate' : 'livestockSalePrice';
+        updatedItem.pricePerUnit = selectedRecord ? Number(selectedRecord[priceField] || 0) : '';
+      }
+      return updatedItem;
+    }));
   };
 
   const handleAddOrderItem = () => {
@@ -324,7 +354,10 @@ const SalesPage = () => {
       } else {
         const payload = {
           orders: orderItems.map((item) => ({
-            ...item,
+            animalType: item.animalType,
+            batchId: item.batchId,
+            tagNumber: item.tagNumber,
+            quantitySold: item.quantitySold,
             date: formData.date,
             customerName: formData.customerName,
             buyerContact: formData.buyerContact,
@@ -554,7 +587,7 @@ const SalesPage = () => {
                       )}
 
                       <Input
-                        label="Quantity"
+                        label={item.animalType === 'Egg' ? 'Crates' : 'Quantity'}
                         type="number"
                         name="quantitySold"
                         value={item.quantitySold}
@@ -563,13 +596,22 @@ const SalesPage = () => {
                         required
                       />
                       <CurrencyInput
-                        label="Unit Price (NGN)"
+                        label={item.animalType === 'Egg' ? 'Price per crate (NGN)' : 'Unit Price (NGN)'}
                         name="pricePerUnit"
                         value={item.pricePerUnit}
-                        onChange={(e) => handleOrderItemChange(index, 'pricePerUnit', e.target.value)}
-                        placeholder="Unit price"
+                        placeholder="Automatically sourced"
+                        disabled
                         required
                       />
+                      <div className="md:col-span-5 text-sm text-gray-700 dark:text-gray-300">
+                        <span className="font-medium">Total Amount:</span>{' '}
+                        {Number(item.pricePerUnit || 0) > 0
+                          ? formatCurrency(Number(item.quantitySold || 0) * Number(item.pricePerUnit))
+                          : 'Price unavailable'}
+                        <span className="ml-2 text-xs text-gray-500">
+                          {Number(item.pricePerUnit || 0) > 0 ? 'Price is sourced automatically from the selected record.' : 'Enter a valid record with a configured sale price.'}
+                        </span>
+                      </div>
                       <div className="flex justify-end">
                         {orderItems.length > 1 && (
                           <Button
@@ -632,7 +674,11 @@ const SalesPage = () => {
             <Button variant="secondary" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit" disabled={isSubmitting}>
+            <Button
+              variant="primary"
+              type="submit"
+              disabled={isSubmitting || (!editingId && orderItems.some((item) => Number(item.pricePerUnit || 0) <= 0))}
+            >
               {isSubmitting ? (editingId ? 'Updating...' : 'Recording...') : editingId ? 'Update Sale' : 'Record Sale'}
             </Button>
           </div>

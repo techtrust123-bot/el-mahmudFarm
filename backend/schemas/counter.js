@@ -15,6 +15,6 @@ const counterSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-counterSchema.index({ _id: 1 }, { unique: true });
+
 
 module.exports = counterSchema;

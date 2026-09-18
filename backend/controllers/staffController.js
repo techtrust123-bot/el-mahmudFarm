@@ -1,22 +1,8 @@
 // const Staff = require('../models/staff');
 const authModel = require('../models/auth');
 const bcrypt = require('bcryptjs')
+const logger = require('../utils/logger.js')
 
-// exports.addStaff = async(req,res)=>{
-//     const { Staff } = req.farmModels
-//     const {name,role,email,contact,salary,hireDate} = req.body
-//     if(!name || !role || !email || !contact || !salary || !hireDate){
-//         return res.status(400).json({ message: 'All fields are required' });
-//     }
-//     try {
-//         const newStaff = new Staff({name,role,email,contact,salary,hireDate});
-//         await newStaff.save();
-//         res.status(201).json({success:true,message:"Staff added successfully..."});
-//     } catch (error) {
-//         console.log(error);
-//         res.status(400).json({ success: false, message: error.message });
-//     }
-// }
 
 exports.addStaff = async (req, res) => {
     const { Staff } = req.farmModels
@@ -28,7 +14,21 @@ exports.addStaff = async (req, res) => {
 
     try {
        
-        const existingUser = await authModel.findOne({ email })
+        const normalizedEmail = String(email).trim().toLowerCase()
+        const normalizedRole = String(role).trim().toLowerCase()
+        const allowedStaffRoles = ['staff',]
+        if (!allowedStaffRoles.includes(normalizedRole)) {
+            return res.status(400).json({ success: false, message: 'Invalid staff role' })
+        }
+
+        const existingUser = await authModel.findOne({
+            $expr: {
+                $eq: [
+                    { $toLower: { $trim: { input: '$email' } } },
+                    normalizedEmail,
+                ],
+            },
+        })
         if (existingUser) {
             return res.status(400).json({ success: false, message: 'Email already exists' })
         }
@@ -38,9 +38,9 @@ exports.addStaff = async (req, res) => {
         
         const newAuthUser = new authModel({
             name,
-            email,
+            email: normalizedEmail,
             password: hashPassword,
-            role,
+            role: normalizedRole,
             userType: 'staff',
             farmId: req.user.farmId,        // ✅ link staff to manager's farm
             permissions: Array.isArray(permissions) ? permissions : [],
@@ -56,8 +56,8 @@ exports.addStaff = async (req, res) => {
         const newStaff = new Staff({
             authUserId: newAuthUser._id,    // ✅ link back to auth record
             name,
-            role,
-            email,
+            role: normalizedRole,
+            email: normalizedEmail,
             contact,
             salary: Number(salary),
             hireDate: hireDate ? new Date(hireDate) : null,
@@ -75,7 +75,7 @@ exports.addStaff = async (req, res) => {
         })
 
     } catch (error) {
-        console.log(error)
+        logger.error({ message: error.message, stack: error.stack })
         res.status(400).json({ success: false, message: error.message })
     }
 }
@@ -89,7 +89,7 @@ exports.getStaff = async(req,res)=>{
         }
         res.status(200).json({success:true,message:"Staff retrieved successfully...",data:staff});
     } catch (error) {
-        console.log(error);
+        logger.error({ message: error.message, stack: error.stack })
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 }
@@ -104,7 +104,7 @@ exports.getStaffById = async(req,res)=>{
         }
         res.status(200).json({success:true,message:"Staff retrieved successfully...",data:staff});
     } catch (error) {
-        console.log(error);
+        logger.error({ message: error.message, stack: error.stack })
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 }
@@ -120,7 +120,7 @@ exports.updateStaff = async(req,res)=>{
         const updatedStaff = await Staff.findByIdAndUpdate(id,req.body,{returnDocument:'after'})
         res.status(200).json({success:true,message:"Staff updated successfully...",data:updatedStaff});
     } catch (error) {
-        console.log(error);
+        logger.error({ message: error.message, stack: error.stack })
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 }
@@ -136,7 +136,7 @@ exports.deleteStaff = async(req,res)=>{
         await Staff.findByIdAndDelete(id)
         res.status(200).json({success:true,message:"Staff deleted successfully..."});
     } catch (error) {
-        console.log(error);
+        logger.error({ message: error.message, stack: error.stack });
         res.status(500).json({ success: false, message: 'Server Error' });
 }
 }
@@ -147,7 +147,7 @@ exports.staffCount = async(req,res)=>{
         const count = await Staff.countDocuments();
         res.status(200).json({ success: true, message: "Staff count retrieved successfully...", data: { count } });
     } catch (error) {
-        console.log(error);
+        logger.error({ message: error.message, stack: error.stack });
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 }

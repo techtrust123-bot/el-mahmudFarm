@@ -16,7 +16,7 @@ const { sendNotification } = require('../services/emailService')
 
 exports.createLiveStock = async(req,res)=>{
     const { LiveStock, Feed } = req.farmModels
-    const {type,tagNumber,breed,age,weight,purchaseDate,purchasePrice,healthStatus,ageInWeeks,ageInDays} = req.body
+    const {type,tagNumber,breed,age,weight,purchaseDate,purchasePrice,healthStatus,ageInWeeks,ageInDays,livestockSalePrice} = req.body
     if(!type || !tagNumber || !breed || !age || !weight || (!purchaseDate && ageInWeeks == null && ageInDays == null) || !healthStatus || !purchasePrice){
         return res.status(400).json({message:'All fields are required. Provide purchaseDate or ageInWeeks/ageInDays for age calculation.'})
     }
@@ -81,6 +81,7 @@ exports.createLiveStock = async(req,res)=>{
             feedStage,
             currentFeedType: feed.feedType,
             currentFeedName: feed.feedName,
+            livestockSalePrice: livestockSalePrice || 0,
             feedHistory: historicalFeed.feedHistory || [
                 {
                     feedStage,

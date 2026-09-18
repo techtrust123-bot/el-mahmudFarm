@@ -49,6 +49,7 @@ const authSchema = new mongoose.Schema({
     userType:{
         type:String,
         enum:['manager','staff','admin'],
+        lowercase:true,
         default:'manager'
     },
     farmId:{
