@@ -7,6 +7,7 @@ import Alert from '../components/ui/Alert';
 import { AuthContext } from '../context/AuthContext';
 import axiosInstance from '../utils/axiosInstance';
 import cloudFarmLogo from '../assets/CloudFarm_logo.png';
+import authService from '../services/authService';
 
 /**
  * Login Page
@@ -50,7 +51,16 @@ const LoginPage = () => {
       const loggedInUser = response.data.user || response.data.userData;
       setIsLogin(true);
       await getUserData(true);
-      navigate(loggedInUser?.isAccountVerified === false ? '/verify-otp' : '/dashboard');
+      if (loggedInUser?.isAccountVerified === false || String(loggedInUser?.isAccountVerified).toLowerCase() === 'false') {
+        try {
+          navigate('/verify-otp');
+          await authService.resendOTP();
+        } catch (resendError) {
+          console.warn('Unable to resend verification OTP after login:', resendError?.message);
+        }
+      } else if(loggedInUser?.isAccountVerified === true){
+        navigate('/dashboard');
+      }
     } else {
       setAlert({ type: 'error', message: response.data.message || 'Login failed' });
       

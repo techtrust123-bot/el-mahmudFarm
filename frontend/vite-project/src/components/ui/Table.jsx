@@ -88,7 +88,7 @@ const Table = ({
               {columns.map((column, colIdx) => (
                 <th
                   key={`${column.key}-${colIdx}`}
-                  className={`px-3 py-2 font-semibold text-gray-900 dark:text-white text-sm whitespace-normal break-words max-w-[120px] ${column.sortable ? 'cursor-pointer select-none' : ''}`}
+                  className={`px-4 py-3 font-semibold text-gray-900 dark:text-white text-sm whitespace-normal break-words max-w-[120px] ${column.sortable ? 'cursor-pointer select-none' : ''}`}
                   style={{ width: column.width || 'auto' }}
                   onClick={() => handleSort(column.key, column.sortable)}
                 >

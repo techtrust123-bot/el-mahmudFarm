@@ -225,36 +225,36 @@ const FeedPage = () => {
     }
   }
 
-  const handleRecommendFeed = async () => {
-    setAiError(null);
-    setAiRecommendation(null);
-    const { animalType, ageMonths, weightKg, feedCategory, pastureQuality } = aiFeedInput;
+  // const handleRecommendFeed = async () => {
+  //   setAiError(null);
+  //   setAiRecommendation(null);
+  //   const { animalType, ageMonths, weightKg, feedCategory, pastureQuality } = aiFeedInput;
 
-    if (!animalType || !ageMonths || !weightKg) {
-      setAiError('Animal type, age in months and weight are required');
-      return;
-    }
+  //   if (!animalType || !ageMonths || !weightKg) {
+  //     setAiError('Animal type, age in months and weight are required');
+  //     return;
+  //   }
 
-    setAiLoading(true);
-    try {
-      const response = await axiosInstance.post('/api/ai/predict/feed', {
-        animalType,
-        ageMonths: Number(ageMonths),
-        weightKg: Number(weightKg),
-        feedCategory,
-        pastureQuality,
-      });
-      if (response.data.success) {
-        setAiRecommendation(response.data.data);
-      } else {
-        setAiError(response.data.message || 'Failed to get recommendation');
-      }
-    } catch (error) {
-      setAiError(error.response?.data?.message || 'Failed to get recommendation');
-    } finally {
-      setAiLoading(false);
-    }
-  }
+  //   setAiLoading(true);
+  //   try {
+  //     const response = await axiosInstance.post('/api/ai/predict/feed', {
+  //       animalType,
+  //       ageMonths: Number(ageMonths),
+  //       weightKg: Number(weightKg),
+  //       feedCategory,
+  //       pastureQuality,
+  //     });
+  //     if (response.data.success) {
+  //       setAiRecommendation(response.data.data);
+  //     } else {
+  //       setAiError(response.data.message || 'Failed to get recommendation');
+  //     }
+  //   } catch (error) {
+  //     setAiError(error.response?.data?.message || 'Failed to get recommendation');
+  //   } finally {
+  //     setAiLoading(false);
+  //   }
+  // }
 
   useEffect(() => {
     const fetchFeeds = async () => {
@@ -274,21 +274,24 @@ const FeedPage = () => {
     currency: 'NGN'
   }).format(amount);
 
+
   const tableColumns = [
+    {key:'purchaseDate', label:'P/Date', render: (value) => value ? new Date(value).toLocaleDateString() : 'N/A' },
     { key: 'feedType', label: 'Feed Type' },
     { key: 'animalType', label: 'Animal Type', render: (value, row) => value || parseanimalType(row.feedType) },
     { key: 'feedCategory', label: 'Feed Category', render: (value, row) => value || parseFeedCategory(row.feedType) },
     { key: 'quantity', label: 'Quantity (kg)' },
-    { key: 'totalPoultryFeedConsumedPerday', label: 'Poultry daily consumed',style:{fontSize: 'small'} },
-    { key: 'totalLivestockFeedConsumedPerday', label: 'Livestock daily Consumption',style:{fontSize: 'small'} },
-    { key: 'poultryDailyConsumption', label: 'P/Avg Consume' },
-    { key: 'livestockDailyConsumption', label: 'L/Avg Consume' },
+    // { key: 'feedPricePerkg', label: 'pricePer kg (₦)', render: (value) => formatCurrency(Number(value || 0)) },
+    { key: 'totalPoultryFeedConsumedPerday', label: 'Poultry daily Consum',style:{fontSize: 'small'} },
+    { key: 'totalLivestockFeedConsumedPerday', label: 'Livestock daily Consum',style:{fontSize: 'small'} },
+    { key: 'poultryDailyConsumption', label: 'per poultry Consume' },
+    { key: 'livestockDailyConsumption', label: 'per Livestock Consume' },
     { key: 'consumption', label: 'Consumed (kg)' },
-    { key: 'feedPricePerkg', label: 'Price per kg (₦)', render: (value) => formatCurrency(Number(value || 0)) },
+    { key: 'feedPricePerkg', label: 'price Per kg (₦)', render: (value) => formatCurrency(Number(value || 0)) },
     { key:'feedName', label:'Feed Name'},
     {
       key: 'quantity',
-      label: 'Remaining',
+      label: 'Remain',
       render: (_, row) => {
         const remaining = Number(row.quantity) || 0;
         const isLow = remaining < 100;
@@ -299,7 +302,7 @@ const FeedPage = () => {
         );
       },
     },
-    { key: 'supplier', label: 'Supplier' },
+    // { key: 'supplier', label: 'Supplier' },
     { key: 'cost', label: 'Cost (₦)', render: (value) => formatCurrency(Number(value || 0)) },
     // { key: 'cost', label: 'Cost (€)', render: (value) => `€${value.toFixed(2)}` },
   ];
@@ -342,7 +345,7 @@ const FeedPage = () => {
         )}
 
         {/* AI Feed Recommendation */}
-        <Card className="p-6">
+        {/* <Card className="p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">AI Feed Recommendation</h2>
@@ -416,7 +419,7 @@ const FeedPage = () => {
               </div>
             </Card>
           )}
-        </Card>
+        </Card> */}
 
         {/* Feed Consumption Chart */}
         <Card>

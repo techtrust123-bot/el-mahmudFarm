@@ -132,6 +132,7 @@ const SalesPage = () => {
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm(`Are you show you want to delete ${id}?`)) return;
     try {
     const response =  await axiosInstance.delete(`/api/sell/del/${id}`);
       setSales((prev) => prev.filter((item) => item._id !== id));
@@ -426,7 +427,7 @@ const SalesPage = () => {
       render: (value, row) => value || row.invoiceId || 'N/A'
     },
     { key: 'invoiceId', label: 'Invoice ID' },
-    { key: 'date', label: 'Date' },
+    { key: 'date', label: 'Date',render: (value) => value ? new Date(value).toLocaleDateString() : 'N/A' },
     { key: 'animalType', label: 'Animal Type' },
     { key: 'customerName', label: 'Customer' },
     { key: 'quantitySold', label: 'Quantity Sold' },

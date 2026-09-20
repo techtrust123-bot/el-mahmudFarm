@@ -148,6 +148,7 @@ const PoultryPage = () => {
 
 
   const handleDelete = async (id) => {
+    if (!window.confirm(`Are you show you want to delete ${id}?`)) return;
     try {
       await axiosInstance.delete(`/api/poultry/${id}`);
       setAvailablePoultry((prev) => prev.filter((item) => item._id !== id));
@@ -246,6 +247,7 @@ const PoultryPage = () => {
     currency: 'NGN'
   }).format(amount);
   const tableColumns = [
+    {key: 'purchaseDate', label: 'Purchase Date', render: (value) => value ? new Date(value).toLocaleDateString() : 'N/A' },
     { key: 'batchId', label: 'BatchID' ,style: { fontSize: 'small' } },
     { key: 'type', label: 'Type', render: (value) => POULTRY_TYPES.find((t) => t.value === value)?.label },
     { key: 'quantity', label: 'Quantity' },
@@ -267,7 +269,7 @@ const PoultryPage = () => {
         return <Badge variant={value === 'vaccinated' ? 'success' : 'warning'}>{status?.label}</Badge>;
       },
     },
-    { key: 'poultryConsumePerBird', label: 'Feed (kg)' },
+    { key: 'poultryConsumePerBird', label: 'Feed (kg)'},
   ];
 
   return (

@@ -54,7 +54,8 @@ const StaffPage = () => {
     { value: 'feed', label: 'Feed' },
     { value: 'sales', label: 'Sales' },
     { value: 'expenses', label: 'Expenses' },
-    { value: 'staff', label: 'Staff' },
+    {value: 'eggInventory', label: 'Egg Inventory'},
+    // { value: 'staff', label: 'Staff' },
     { value: 'settings', label: 'Settings' },
   ];
 
@@ -90,6 +91,7 @@ const StaffPage = () => {
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm(`Are you show you want to delete ${id}?`)) return;
     try {
       const response = await axiosInstance.delete(`/api/user/staff/${id}`);
       if (response.data.success) {

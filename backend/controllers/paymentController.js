@@ -557,6 +557,7 @@ const fulfillSuccessfulSubscription = async ({
         },
         {
           $set: {
+            ...subscriptionData,
             status: 'success',
 
             paystackTransactionId:
@@ -674,6 +675,11 @@ const fulfillSuccessfulUpgrade = async ({ payment, paystackData }) => {
       { _id: payment._id, status: 'processing' },
       {
         $set: {
+          subscriptionPlan: targetPlan,
+          billingCycle,
+          subscriptionStatus: 'active',
+          subscriptionType: 'paid',
+          isSubscribed: true,
           status: 'success',
           paystackTransactionId: String(paystackData.id),
           paidAt: paystackData.paid_at ? new Date(paystackData.paid_at) : new Date(),
@@ -1482,8 +1488,8 @@ exports.getPaymentHistory = async (req, res) => {
       amount: Number(payment.amount || 0),
       currency: payment.currency || 'NGN',
       status: payment.status === 'success' ? 'active' : payment.status,
-      startDate: payment.paidAt || payment.createdAt,
-      endDate: payment.processedAt || payment.createdAt,
+      startDate: payment.subscriptionStart || payment.createdAt,
+      endDate: payment.subscriptionEnd || payment.createdAt,
       createdAt: payment.createdAt,
       processedAt: payment.processedAt,
       paidAt: payment.paidAt,
@@ -1547,8 +1553,8 @@ exports.getAdminSubscriptions = async (req, res) => {
         amount: Number(payment.amount || 0),
         status,
         paymentReference: payment.reference,
-        startDate: payer.subscriptionStart || payment.createdAt,
-        endDate: payer.subscriptionEnd || payment.createdAt,
+        startDate: users.subscriptionStart || payment.subscriptionStart,
+        endDate: users.subscriptionEnd || payment.createdAt,
         autoRenew: status === 'active',
         createdAt: payment.createdAt,
         updatedAt: payment.processedAt || payment.createdAt,

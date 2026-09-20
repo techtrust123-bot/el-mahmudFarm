@@ -29,6 +29,11 @@ exports.addFeed = async(req,res)=>{
         return res.status(400).json({message:"Input fields are required..."})
     }
     try {
+
+        const existingFeed = await Feed.findOne({feedType, feedCategory})
+        if(existingFeed){
+            return res.status(400).json({message:'This feed already exist'})
+        }
         const qtn = Number(quantity)
         if(qtn <= 0){
             return res.status(400).json({success:false,message:"Quantity must be greater than zero..."})

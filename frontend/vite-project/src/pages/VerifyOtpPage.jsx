@@ -7,6 +7,8 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Alert from '../components/ui/Alert';
 import cloudFarmLogo from '../assets/CloudFarm_logo.png';
+import { toast } from 'react-hot-toast';
+import axiosInstance from '../utils/axiosInstance.js'
 
 const VerifyOtpPage = () => {
   const navigate = useNavigate();
@@ -52,12 +54,12 @@ const VerifyOtpPage = () => {
     e.preventDefault();
 
     if (!otp) {
-      setAlert({ type: 'error', message: 'Please enter the OTP code.' });
+      toast.error({message: 'Please enter the OTP code.' });
       return;
     }
 
     if (otp.length !== 6) {
-      setAlert({ type: 'error', message: 'OTP must be 6 digits.' });
+      toast.error({message: 'OTP must be 6 digits.' });
       return;
     }
 
@@ -70,11 +72,12 @@ const VerifyOtpPage = () => {
       if (response?.success) {
         await getUserData(true);
         setIsVerified(true);
-        setAlert({ type: 'success', message: response.message || 'Account verified successfully.' });
+        toast.success( response?.message || 'Account verified successfully.');
+        navigate('/dashboard')
 
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
+        // setTimeout(() => {
+        //   navigate('/dashboard');
+        // }, 10000);
       } else {
         setAlert({ type: 'error', message: response?.message || 'OTP verification failed.' });
       }
@@ -93,7 +96,7 @@ const VerifyOtpPage = () => {
     setAlert(null);
 
     try {
-      const response = await authService.resendOTP();
+      const response = await axiosInstance.post('/api/auth/resend-otp');
 
       if (response?.success) {
         setAlert({ type: 'success', message: 'A new OTP has been sent to your email.' });

@@ -52,7 +52,7 @@ router.delete(
 	checkSubscription,
 	requireFeatureAccess('eggInventory'),
 	attachFarmDB,
-	checkPermission('poultryeggInventory'),
+	checkPermission('eggInventory'),
 	asyncHandler(deleteEgg)
 );
 

@@ -38,6 +38,7 @@ const enrichRecord = (record) => {
     profitPerEgg: Number(record.profitPerEgg || 0),
     totalEggProfit: Number(record.totalEggProfit || 0),
     AvailableEggCrates: Number(record.AvailableEggCrates || 0),
+    totalCrateSold: Number(record.totalCrateSold)
   };
   const available = getAvailable(mapped);
   return { ...mapped, available, status: getStatus(available) };
@@ -77,9 +78,9 @@ const EggInventoryPage = () => {
   const stats = useMemo(() => eggRecords.reduce((totals, record) => ({
     totalProduced: totals.totalProduced + record.quantityProduced,
     available: totals.available + record.available,
-    sold: totals.sold + record.quantitySold,
+    totalCrateSold: totals.totalCrateSold + record.totalCrateSold,
     damaged: totals.damaged + record.damaged,
-  }), { totalProduced: 0, available: 0, sold: 0, damaged: 0 }), [eggRecords]);
+  }), { totalProduced: 0, available: 0, totalCrateSold: 0, damaged: 0 }), [eggRecords]);
 
   const filteredRecords = useMemo(() => eggRecords.filter((record) => {
     const search = filters.search.toLowerCase();
@@ -128,7 +129,7 @@ const EggInventoryPage = () => {
   };
 
   const handleDeleteEggRecord = async (record) => {
-    if (!window.confirm(`Delete the egg record for ${record.batchId} on ${record.productionDate}?`)) return;
+    if (!window.confirm(`Delete the egg record for ${record.batchId} on ${record.date}?`)) return;
     try {
       await axiosInstance.delete(`/api/egg/delete-egg/${record.id}`);
       setEggRecords((current) => current.filter((item) => item.id !== record.id));

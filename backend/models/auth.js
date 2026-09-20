@@ -111,7 +111,7 @@ const authSchema = new mongoose.Schema({
         default:0
     },
     isAccountVerified:{
-        type:String,
+        type:Boolean,
         default:false
     },
     verificationOtp:{

@@ -64,7 +64,7 @@ const EggRecordModal = ({ isOpen, onClose, onSave, mode, record, batches, eggTyp
       <form id="egg-record-form" onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Input label="Poultry batch" required value={formData.batchId} error={errors.batchId} onChange={(event) => updateField('batchId', event.target.value)} options={batches.map((batch) => ({ value: batch, label: batch }))} />
         <Input label="Poultry Type" type="text" required value={formData.poultryType} error={errors.poultryType} onChange={(event) => updateField('poultryType', event.target.value)} />
-        <Input label="Sale Price" type="number" min="0" required value={formData.salePrice} error={errors.salePrice} onChange={(event) => updateField('salePrice', event.target.value)} />
+        <Input label="Sale Price" type="number" min="0" value={formData.salePrice} error={errors.salePrice} onChange={(event) => updateField('salePrice', event.target.value)} />
         <Input label="Daily Production" type="number" min="1" required value={formData.totalDailyEgg} error={errors.totalDailyEgg} onChange={(event) => updateField('totalDailyEgg', event.target.value)} />
         <Input label="Broken / damaged eggs" type="number" min="0" value={formData.damageEggs} error={errors.damageEggs} onChange={(event) => updateField('damageEggs', event.target.value)} />
         <Input label="Available Egg Crates" type="number" min="0" value={formData.AvailableEggCrates} error={errors.AvailableEggCrates} onChange={(event) => updateField('AvailableEggCrates', event.target.value)} />

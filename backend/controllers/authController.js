@@ -235,7 +235,7 @@ exports.login = async (req, res) => {
     }
 
     // const verifiedAccount = await authModel.findOne({ email: normalizedEmail, isAccountVerified: true });
-    // if (!verifiedAccount) {
+    // if (!user.isAccountVerified) {
     //   logAuthEvent('login_failed', user._id, user.farmId, req.ip, req.get('User-Agent'), { reason: 'account_not_verified' });
     //   return res.status(403).json({ success: false, message: 'Account not verified. Please verify your account before logging in.' });
     // }
@@ -515,7 +515,7 @@ exports.verifiedOtp = async (req, res) => {
     user.verificationOtpExpiresAt = 0;
     await user.save();
 
-    return res.status(200).json({ success: true, message: 'Account Verified Successful' });
+    return res.status(200).json({ success: true, message: 'Account Verified Successfull..' });
   } catch (error) {
      if (error instanceof ApiError) {
        throw error;

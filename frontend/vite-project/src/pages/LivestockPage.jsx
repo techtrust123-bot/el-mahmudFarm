@@ -124,6 +124,7 @@ const LivestockPage = () => {
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm(`Are you show you want to delete ${id}?`)) return;
     try {
       await axiosInstance.delete(`/api/livestock/${id}`);
       setLivestockList((prev) => prev.filter((item) => item._id !== id));
@@ -232,6 +233,7 @@ const LivestockPage = () => {
     currency: 'NGN'
   }).format(amount);
   const tableColumns = [
+    {key: 'purchaseDate', label: 'Purchase Date', render: (value) => value ? new Date(value).toLocaleDateString() : 'N/A' },
     { key: 'tagNumber', label: 'Tag Number' },
     { key: 'type', label: 'Type', render: (value) => LIVESTOCK_TYPES.find((t) => t.value === value)?.label || value },
     { key: 'breed', label: 'Breed' },

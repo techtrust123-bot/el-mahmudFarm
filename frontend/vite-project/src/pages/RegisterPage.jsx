@@ -184,7 +184,7 @@ const RegisterPage = () => {
             name="password"
             value={formData.password}
             onChange={handleChange}
-            // error={errors.password}
+            error={errors.password}
             placeholder="••••••••"
             fullWidth
             required
@@ -196,7 +196,7 @@ const RegisterPage = () => {
             name="confirmPassword"
             value={formData.confirmPassword}
             onChange={handleChange}
-            // error={errors.confirmPassword}
+            error={errors.confirmPassword}
             placeholder="••••••••"
             fullWidth
             required

@@ -74,13 +74,7 @@ const Sidebar = ({ isOpen }) => {
               const featureKey = item.permission;
               const hasPermission = normalizedPermissions.includes(featureKey.toLowerCase());
               const hasPlanAccess = canAccessFeature(user, featureKey);
-
-              console.log(hasPermission)
-              console.log(hasPlanAccess)
-
-              // if (!hasPlanAccess && !isManager && !hasPermission) {
-              //   return false;
-              // }
+              
               if(!hasPlanAccess){
                 return false ;
               }

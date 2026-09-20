@@ -33,7 +33,7 @@ const ProtectedRoute = ({ children, requiredRole = null, requiredPermission = nu
     return <Navigate to="/login" replace />;
   }
 
-  if (user?.isAccountVerified === false) {
+  if (user?.isAccountVerified === false || String(user?.isAccountVerified).toLowerCase() === 'false') {
     return <Navigate to="/verify-otp" replace />;
   }
 

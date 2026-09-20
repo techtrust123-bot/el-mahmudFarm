@@ -21,7 +21,7 @@ dns.setServers(["1.1.1.1", "8.8.8.8"]);
 const cookie = require('cookie-parser');
 
 
-process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/cloudfarm_main';
+process.env.MONGO_URI = process.env.MONGO_URI;
 
 // Validate required environment variables
 const requiredEnvVars = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'FRONTEND_URL'];
@@ -217,7 +217,7 @@ const globalLimiter = rateLimit({
   store: createMongoRateLimitStore('rateLimits', 10 * 60 * 1000),
   windowMs: 10 * 60 * 1000, // 10 minutes
   max: 150, // limit each IP to 150 requests per windowMs
-  message: { success: false, message: "Too many requests, please try again later" },
+  message: { success: false, message: "Too many requests, please try again in 10 minutes" },
   standardHeaders: true,
   legacyHeaders: false,
   // Skip OPTIONS and the specific create routes for poultry and livestock

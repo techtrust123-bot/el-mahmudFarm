@@ -11,7 +11,7 @@ const EggInventoryTable = ({ records, loading, onView, onEdit, onDelete }) => (
     data={records}
     loading={loading}
     columns={[
-      { key: 'date', label: 'Date', sortable: true },
+      { key: 'date', label: 'Date', sortable: true,render: (value) => value ? new Date(value).toLocaleDateString() : 'N/A' },
       { key: 'batchId', label: 'Poultry Batch', sortable: true },
       { key: 'poultryType', label: 'poultry Type' },
       { key: 'quantityProduced', label: 'Produced', sortable: true, render: (value) => value.toLocaleString() },
