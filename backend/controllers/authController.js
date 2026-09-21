@@ -441,6 +441,50 @@ exports.refresh = async (req, res) => {
   }
 };
 
+exports.logout = async (req, res) => {
+  try {
+    const isProduction = process.env.NODE_ENV === "production";
+
+    // 1. Goge Cookies da sauri-sauri (Instant response)
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'strict' : 'lax',
+      path: '/'
+    });
+
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'strict' : 'lax',
+      path: '/'
+    });
+
+    // 2. Mayar da Amsa TSOKANAN BAKI (Instant HTTP 200)
+    res.status(200).json({ success: true, message: "Logout Successful" });
+
+    // 3. Aikin Async Background (Goge token a DB & Log) - Ayi shi BAYAN an riga an turawa user amsa
+    const refreshTokenValue = req.cookies?.refreshToken;
+    
+    if (refreshTokenValue) {
+      RefreshToken.deleteOne({ token: refreshTokenValue }).catch(err => 
+        console.error("Background token delete error:", err)
+      );
+    }
+
+    try {
+      logAuthEvent('logout', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'));
+    } catch (logErr) {
+      console.error("Logging error ignored:", logErr);
+    }
+
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Maida amsa nan take koda an samu kuskure don hana Timeout
+    return res.status(200).json({ success: true, message: "Logged out" });
+  }
+};
+
 // exports.logout = async (req, res, next) => {
 //   try {
 //     const refreshTokenValue = req.cookies.refreshToken;
@@ -490,67 +534,68 @@ exports.refresh = async (req, res) => {
 //   }
 // };
 
-exports.logout = async (req, res) => {
-  try {
-    const refreshTokenValue = req.cookies.refreshToken;
+// exports.logout = async (req, res) => {
+//   try {
+//     const refreshTokenValue = req.cookies.refreshToken;
 
-    // Delete refresh token from database if it exists
-    if (refreshTokenValue) {
-      if (req.user?.id) {
-        await RefreshToken.deleteMany({ userId: req.user.id });
-      } else {
-        // Idan baka da userId, nemo token guda daya kawai wanda yake aiki
-        await RefreshToken.findOneAndDelete({ token: refreshTokenValue });
-      }
-      // const refreshTokenDocs = await RefreshToken.find({
-      //   expiresAt: { $gt: new Date() }
-      // });
-      // for (const tokenDoc of refreshTokenDocs) {
-      //   const isValid = await tokenDoc.verifyToken(refreshTokenValue);
-      //   if (isValid) {
-      //     await RefreshToken.findByIdAndDelete(tokenDoc._id);
-      //     break;
-      //   }
-      // }
-    }
+//     // Delete refresh token from database if it exists
+//     if (refreshTokenValue) {
+//       if (req.user?.id) {
+//         await RefreshToken.deleteMany({ userId: req.user.id });
+//       } else {
+//         // Idan baka da userId, nemo token guda daya kawai wanda yake aiki
+//         await RefreshToken.findOneAndDelete({ token: refreshTokenValue });
+//       }
+//       // const refreshTokenDocs = await RefreshToken.find({
+//       //   expiresAt: { $gt: new Date() }
+//       // });
+//       // for (const tokenDoc of refreshTokenDocs) {
+//       //   const isValid = await tokenDoc.verifyToken(refreshTokenValue);
+//       //   if (isValid) {
+//       //     await RefreshToken.findByIdAndDelete(tokenDoc._id);
+//       //     break;
+//       //   }
+//       // }
+//     }
 
-     const isProduction = process.env.NODE_ENV === "production";
+//      const isProduction = process.env.NODE_ENV === "production";
 
-    // Clear cookies
-    res.clearCookie('token', {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: process.env.NODE_ENV === "production" ? 'strict' : 'lax'
-    });
+//     // Clear cookies
+//     res.clearCookie('token', {
+//       httpOnly: true,
+//       secure: isProduction,
+//       sameSite: process.env.NODE_ENV === "production" ? 'strict' : 'lax'
+//     });
 
-    res.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? 'strict' : 'lax'
-    });
+//     res.clearCookie('refreshToken', {
+//       httpOnly: true,
+//       secure: process.env.NODE_ENV === "production",
+//       sameSite: process.env.NODE_ENV === "production" ? 'strict' : 'lax'
+//     });
 
-    logAuthEvent('logout', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'));
+//     logAuthEvent('logout', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'));
 
-    res.status(200).json({ success: true, message: "Logout Successful" });
-  } catch (error) {
-    console.error('Logout error:', error);
-    logAuthEvent('logout_error', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'), { error: error.message });
+//     res.status(200).json({ success: true, message: "Logout Successful" });
+//   } catch (error) {
+//     console.error('Logout error:', error);
+//     logAuthEvent('logout_error', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'), { error: error.message });
 
-    // 4. Maimakon 'throw', yi amfani da res.status() ko next() don hana Timeout
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Internal server error during logout' 
-    });
-  //   if (error instanceof ApiError) {
-  //     throw error;
-  //   }
-  //   // console.log(error);
-  //   logger.error('logout_error', {error, stack: error.stack});
-  //   logAuthEvent('logout_error', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'), { error: error.message });
-  //   throw new ApiError(500, 'Internal server error');
-  // }
-  };
-}
+//     // 4. Maimakon 'throw', yi amfani da res.status() ko next() don hana Timeout
+//     return res.status(500).json({ 
+//       success: false, 
+//       message: 'Internal server error during logout' 
+//     });
+//   //   if (error instanceof ApiError) {
+//   //     throw error;
+//   //   }
+//   //   // console.log(error);
+//   //   logger.error('logout_error', {error, stack: error.stack});
+//   //   logAuthEvent('logout_error', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'), { error: error.message });
+//   //   throw new ApiError(500, 'Internal server error');
+//   // }
+//   };
+// }
+
 
 exports.verifiedOtp = async (req, res) => {
   const {otp}= req.body
