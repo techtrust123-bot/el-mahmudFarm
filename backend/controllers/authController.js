@@ -441,49 +441,74 @@ exports.refresh = async (req, res) => {
   }
 };
 
-exports.logout = async (req, res) => {
+exports.logout = (req, res) => {
+  // 1. Amsa nan take ba tare da kowa da komai ba (No async/await)
   try {
-    const isProduction = process.env.NODE_ENV === "production";
-
-    // 1. Goge Cookies da sauri-sauri (Instant response)
-    res.clearCookie('token', {
+    const cookieOptions = {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'strict' : 'lax',
-      path: '/'
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      path: "/"
+    };
+
+    res.clearCookie('token', cookieOptions);
+    res.clearCookie('refreshToken', cookieOptions);
+
+    return res.status(200).json({ 
+      success: true, 
+      message: "Logged out successfully" 
     });
-
-    res.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'strict' : 'lax',
-      path: '/'
+  } catch (err) {
+    return res.status(200).json({ 
+      success: true, 
+      message: "Logged out" 
     });
-
-    // 2. Mayar da Amsa TSOKANAN BAKI (Instant HTTP 200)
-    res.status(200).json({ success: true, message: "Logout Successful" });
-
-    // 3. Aikin Async Background (Goge token a DB & Log) - Ayi shi BAYAN an riga an turawa user amsa
-    const refreshTokenValue = req.cookies?.refreshToken;
-    
-    if (refreshTokenValue) {
-      RefreshToken.deleteOne({ token: refreshTokenValue }).catch(err => 
-        console.error("Background token delete error:", err)
-      );
-    }
-
-    try {
-      logAuthEvent('logout', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'));
-    } catch (logErr) {
-      console.error("Logging error ignored:", logErr);
-    }
-
-  } catch (error) {
-    console.error('Logout error:', error);
-    // Maida amsa nan take koda an samu kuskure don hana Timeout
-    return res.status(200).json({ success: true, message: "Logged out" });
   }
 };
+
+// exports.logout = async (req, res) => {
+//   try {
+//     const isProduction = process.env.NODE_ENV === "production";
+
+//     // 1. Goge Cookies da sauri-sauri (Instant response)
+//     res.clearCookie('token', {
+//       httpOnly: true,
+//       secure: isProduction,
+//       sameSite: isProduction ? 'strict' : 'lax',
+//       path: '/'
+//     });
+
+//     res.clearCookie('refreshToken', {
+//       httpOnly: true,
+//       secure: isProduction,
+//       sameSite: isProduction ? 'strict' : 'lax',
+//       path: '/'
+//     });
+
+//     // 2. Mayar da Amsa TSOKANAN BAKI (Instant HTTP 200)
+//     res.status(200).json({ success: true, message: "Logout Successful" });
+
+//     // 3. Aikin Async Background (Goge token a DB & Log) - Ayi shi BAYAN an riga an turawa user amsa
+//     const refreshTokenValue = req.cookies?.refreshToken;
+    
+//     if (refreshTokenValue) {
+//       RefreshToken.deleteOne({ token: refreshTokenValue }).catch(err => 
+//         console.error("Background token delete error:", err)
+//       );
+//     }
+
+//     try {
+//       logAuthEvent('logout', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'));
+//     } catch (logErr) {
+//       console.error("Logging error ignored:", logErr);
+//     }
+
+//   } catch (error) {
+//     console.error('Logout error:', error);
+//     // Maida amsa nan take koda an samu kuskure don hana Timeout
+//     return res.status(200).json({ success: true, message: "Logged out" });
+//   }
+// };
 
 // exports.logout = async (req, res, next) => {
 //   try {
