@@ -147,24 +147,46 @@ export const AuthProvider = (props) =>{
   };
 
   useEffect(() => {
-    // Don't check auth on login/register pages
-    if (window.location.pathname === '/login' ||
-        window.location.pathname === '/register' ||
-        window.location.pathname === '/forgot-password') {
-      setLoading(false);
-      setAuthChecked(true);
-      return;
-    }
-    getUserData()
+  const publicPages = ['/', '/login', '/register', '/forgot-password', '/about', '/contact'];
+  const isPublicPage = publicPages.includes(window.location.pathname);
 
-    return () => {
-      // Cleanup timeouts on unmount
-      if (window.tokenTimeouts) {
-        clearTimeout(window.tokenTimeouts.warningTimeout);
-        clearTimeout(window.tokenTimeouts.expiryTimeout);
-      }
-    };
-  }, [])
+  // Idan mutum yana kan Public Page (kamar Landing Page '/'), kada ka kira getUserData()
+  if (isPublicPage) {
+    setLoading(false);
+    setAuthChecked(true);
+    return;
+  }
+
+  // Shafukan da ke bukatar login ne kawai za su kira getUserData()
+  getUserData();
+
+  return () => {
+    if (window.tokenTimeouts) {
+      clearTimeout(window.tokenTimeouts.warningTimeout);
+      clearTimeout(window.tokenTimeouts.expiryTimeout);
+    }
+  };
+}, []);
+
+  // useEffect(() => {
+  //   // Don't check auth on login/register pages
+  //   if (window.location.pathname === '/login' ||
+  //       window.location.pathname === '/register' ||
+  //       window.location.pathname === '/forgot-password') {
+  //     setLoading(false);
+  //     setAuthChecked(true);
+  //     return;
+  //   }
+  //   getUserData()
+
+  //   return () => {
+  //     // Cleanup timeouts on unmount
+  //     if (window.tokenTimeouts) {
+  //       clearTimeout(window.tokenTimeouts.warningTimeout);
+  //       clearTimeout(window.tokenTimeouts.expiryTimeout);
+  //     }
+  //   };
+  // }, [])
 
   const value ={
     isLogin,setIsLogin,

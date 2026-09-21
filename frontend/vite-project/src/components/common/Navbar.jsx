@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 import axios from 'axios';
 import { AuthContext } from '../../context/AuthContext';
 import Alert from '../ui/Alert';
+import axiosInstance from '../utils/axiosInstance';
 
 /**
  * Top Navigation Bar Component
@@ -15,7 +16,7 @@ const Navbar = ({ toggleSidebar, sidebarOpen, onOpenCalculator }) => {
   const { isDark, toggleTheme } = useTheme();
   const { logout } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
-  const {backendUrl, userData,setIsLogin, axiosInstance} = useContext(AuthContext) 
+  const {backendUrl, userData,setIsLogin,} = useContext(AuthContext) 
   const [alert, setAlert] = useState(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -62,7 +63,7 @@ const Navbar = ({ toggleSidebar, sidebarOpen, onOpenCalculator }) => {
   const handleLogout = async() => {
 
     try {
-      const response = await axios.post(backendUrl+'/api/auth/logout')
+      const response = await axiosInstance.post('/api/auth/logout')
       response.data.success ? navigate('/') : setAlert({ type: 'success',message: response.data.message || 'Logout successfull' })
       setIsLogin(false)
       logout()

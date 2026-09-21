@@ -86,14 +86,29 @@ axiosInstance.interceptors.response.use(
 
 const forceLogout = () => {
   if (window.isRedirecting) return;
-  window.isRedirecting = true;
+
+  const publicPages = ['/', '/login', '/register', '/forgot-password'];
+  const currentPath = window.location.pathname;
 
   localStorage.clear();
   sessionStorage.clear();
 
-  if (window.location.pathname !== '/login') {
+  // Idan yana kan Landing Page ('/'), kawai bar shi a wajen, kada ka tusa shi /login
+  if (!publicPages.includes(currentPath)) {
+    window.isRedirecting = true;
     window.location.replace('/login?reason=session_expired');
   }
 };
+// const forceLogout = () => {
+//   if (window.isRedirecting) return;
+//   window.isRedirecting = true;
+
+//   localStorage.clear();
+//   sessionStorage.clear();
+
+//   if (window.location.pathname !== '/login') {
+//     window.location.replace('/login?reason=session_expired');
+//   }
+// };
 
 export default axiosInstance;
