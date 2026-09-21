@@ -6,7 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 import axios from 'axios';
 import { AuthContext } from '../../context/AuthContext';
 import Alert from '../ui/Alert';
-import axiosInstance from '../utils/axiosInstance';
+import axiosInstance from '../../utils/axiosInstance';
 
 /**
  * Top Navigation Bar Component
