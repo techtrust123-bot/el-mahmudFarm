@@ -247,8 +247,8 @@ const AdminDashboardPage = () => {
     if (!baseUrl) return;
 
     fetchAdminData();
-    fetchSubscriptionAnalytics();
-    const polling = setInterval(fetchAdminData, 15000);
+    // fetchSubscriptionAnalytics();
+    const polling = setInterval(fetchAdminData, 150000); // 2.5 minutes
     return () => clearInterval(polling);
   }, [baseUrl]);
 

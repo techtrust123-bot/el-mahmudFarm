@@ -10,7 +10,7 @@ const CACHE_TTL_MS = Number(process.env.SUBSCRIPTION_CACHE_TTL_MS || 60 * 1000);
 const cache = new Map(); // { userId: { data, expiresAt } }
 
 const GRACE_PERIOD_DAYS = Number(process.env.SUBSCRIPTION_GRACE_DAYS || 3);
-const EXPIRY_NOTIFICATION_DAYS = Number(process.env.SUBSCRIPTION_NOTIFY_DAYS || 7);
+const EXPIRY_NOTIFICATION_DAYS = Number(process.env.SUBSCRIPTION_NOTIFY_DAYS || 2);
 
 const normalizeUser = (user) => ({
   id: String(user._id),

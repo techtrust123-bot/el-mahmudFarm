@@ -331,9 +331,7 @@ exports.login = async (req, res) => {
       if (error instanceof ApiError) {
         throw error;
       }
-      console.log('CAUGHT ERROR');
-      console.log(error.message);
-      console.log(error.statusCode);
+      logger.error('Login error:', error, { stack: error.stack });
       throw new ApiError(500, 'Internal server error');
     }
 };
@@ -436,11 +434,61 @@ exports.refresh = async (req, res) => {
     if (error instanceof ApiError) {
       throw error;
     }
-    console.error('Refresh token error:', error);
+    // console.error('Refresh token error:', error);
+    logger.error('Refresh token error:', {error,stack: error.stack});
     logAuthEvent('refresh_error', null, null, req.ip, req.get('User-Agent'), { error: error.message });
     throw new ApiError(500, 'Internal server error');
   }
 };
+
+// exports.logout = async (req, res, next) => {
+//   try {
+//     const refreshTokenValue = req.cookies.refreshToken;
+
+//     // 1. Goge Refresh Token din a database cikin sauri ba tare da Loop ba
+//     if (refreshTokenValue) {
+//       // Idan kana adana hashed token a DB (Mafi kyau da sauri):
+//       // Ko kuma ka goge ta hanyar amfani da req.user._id idan tana da alaka da user
+//       if (req.user?.id) {
+//         await RefreshToken.deleteMany({ userId: req.user.id });
+//       } else {
+//         // Idan baka da userId, nemo token guda daya kawai wanda yake aiki
+//         await RefreshToken.findOneAndDelete({ token: refreshTokenValue });
+//       }
+//     }
+
+//     const isProduction = process.env.NODE_ENV === "production";
+
+//     // 2. Clear cookies
+//     res.clearCookie('token', {
+//       httpOnly: true,
+//       secure: isProduction,
+//       sameSite: isProduction ? 'strict' : 'lax'
+//     });
+
+//     res.clearCookie('refreshToken', {
+//       httpOnly: true,
+//       secure: isProduction,
+//       sameSite: isProduction ? 'strict' : 'lax'
+//     });
+
+//     // Log event
+//     logAuthEvent('logout', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'));
+
+//     // 3. Mayar da Response Nan Taki
+//     return res.status(200).json({ success: true, message: "Logout Successful" });
+
+//   } catch (error) {
+//     console.error('Logout error:', error);
+//     logAuthEvent('logout_error', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'), { error: error.message });
+
+//     // 4. Maimakon 'throw', yi amfani da res.status() ko next() don hana Timeout
+//     return res.status(500).json({ 
+//       success: false, 
+//       message: 'Internal server error during logout' 
+//     });
+//   }
+// };
 
 exports.logout = async (req, res) => {
   try {
@@ -448,22 +496,30 @@ exports.logout = async (req, res) => {
 
     // Delete refresh token from database if it exists
     if (refreshTokenValue) {
-      const refreshTokenDocs = await RefreshToken.find({
-        expiresAt: { $gt: new Date() }
-      });
-      for (const tokenDoc of refreshTokenDocs) {
-        const isValid = await tokenDoc.verifyToken(refreshTokenValue);
-        if (isValid) {
-          await RefreshToken.findByIdAndDelete(tokenDoc._id);
-          break;
-        }
+      if (req.user?.id) {
+        await RefreshToken.deleteMany({ userId: req.user.id });
+      } else {
+        // Idan baka da userId, nemo token guda daya kawai wanda yake aiki
+        await RefreshToken.findOneAndDelete({ token: refreshTokenValue });
       }
+      // const refreshTokenDocs = await RefreshToken.find({
+      //   expiresAt: { $gt: new Date() }
+      // });
+      // for (const tokenDoc of refreshTokenDocs) {
+      //   const isValid = await tokenDoc.verifyToken(refreshTokenValue);
+      //   if (isValid) {
+      //     await RefreshToken.findByIdAndDelete(tokenDoc._id);
+      //     break;
+      //   }
+      // }
     }
+
+     const isProduction = process.env.NODE_ENV === "production";
 
     // Clear cookies
     res.clearCookie('token', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isProduction,
       sameSite: process.env.NODE_ENV === "production" ? 'strict' : 'lax'
     });
 
@@ -477,14 +533,24 @@ exports.logout = async (req, res) => {
 
     res.status(200).json({ success: true, message: "Logout Successful" });
   } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    console.log(error);
+    console.error('Logout error:', error);
     logAuthEvent('logout_error', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'), { error: error.message });
-    throw new ApiError(500, 'Internal server error');
-  }
-};
+
+    // 4. Maimakon 'throw', yi amfani da res.status() ko next() don hana Timeout
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error during logout' 
+    });
+  //   if (error instanceof ApiError) {
+  //     throw error;
+  //   }
+  //   // console.log(error);
+  //   logger.error('logout_error', {error, stack: error.stack});
+  //   logAuthEvent('logout_error', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'), { error: error.message });
+  //   throw new ApiError(500, 'Internal server error');
+  // }
+  };
+}
 
 exports.verifiedOtp = async (req, res) => {
   const {otp}= req.body
@@ -537,7 +603,8 @@ exports.getUsers = async(req,res)=>{
     if (error instanceof ApiError) {
       throw error;
     }
-    console.log(error)
+    // console.log(error)
+    logger.error('getUsers_error', {error, stack: error.stack});
     throw new ApiError(500, 'Internal server error');
   }
 }
@@ -564,7 +631,8 @@ exports.resendOtp = async(req,res)=>{
     });
     res.status(200).json({success:true, message:'OTP Resend Successful'})
   } catch (error) {
-    console.log(error)
+    // console.log(error)
+    logger.error('resendOtp_error', {error, stack: error.stack});
     throw new ApiError(500, 'Internal server error');
   }
 }
@@ -592,7 +660,8 @@ exports.forgotPasswordOtp = async(req,res)=>{
     });
     res.status(200).json({success:true, message:'Reset Password Send Successful..'})
   } catch (error) {
-     console.log(error)
+    //  console.log(error)
+    logger.error('forgotPasswordOtp_error', {error, stack: error.stack});
     throw new ApiError(500, 'Internal server error');
   }
 }
@@ -644,7 +713,8 @@ exports.resetPassword = async (req, res) => {
     if (error instanceof ApiError) {
       throw error;
     }
-    console.log(error);
+    // console.log(error);
+    logger.error('resetPassword_error', {error, stack: error.stack});
     logAuthEvent('password_reset_error', null, null, req.ip, req.get('User-Agent'), { error: error.message });
     throw new ApiError(500, 'Internal server error');
   }
