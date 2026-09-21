@@ -146,47 +146,50 @@ export const AuthProvider = (props) =>{
     }
   };
 
+//   useEffect(() => {
+//   const publicPages = ['/', '/login', '/register', '/forgot-password', '/about', '/contact'];
+//   const isPublicPage = publicPages.includes(window.location.pathname);
+
+//   // Idan mutum yana kan Public Page (kamar Landing Page '/'), kada ka kira getUserData()
+//   if (isPublicPage) {
+//     setLoading(false);
+//     setAuthChecked(true);
+//     return;
+//   }
+
+//   // Shafukan da ke bukatar login ne kawai za su kira getUserData()
+//   getUserData();
+
+//   return () => {
+//     if (window.tokenTimeouts) {
+//       clearTimeout(window.tokenTimeouts.warningTimeout);
+//       clearTimeout(window.tokenTimeouts.expiryTimeout);
+//     }
+//   };
+// }, []);
+
+
   useEffect(() => {
-  const publicPages = ['/', '/login', '/register', '/forgot-password', '/about', '/contact'];
-  const isPublicPage = publicPages.includes(window.location.pathname);
-
-  // Idan mutum yana kan Public Page (kamar Landing Page '/'), kada ka kira getUserData()
-  if (isPublicPage) {
-    setLoading(false);
-    setAuthChecked(true);
-    return;
-  }
-
-  // Shafukan da ke bukatar login ne kawai za su kira getUserData()
-  getUserData();
-
-  return () => {
-    if (window.tokenTimeouts) {
-      clearTimeout(window.tokenTimeouts.warningTimeout);
-      clearTimeout(window.tokenTimeouts.expiryTimeout);
+    // Don't check auth on login/register pages
+    if (window.location.pathname === '/login' ||
+        window.location.pathname === '/register' ||
+        window.location.pathname === '/' ||
+        window.location.pathname ==='/about'||
+        window.location.pathname === '/forgot-password') {
+      setLoading(false);
+      setAuthChecked(true);
+      return;
     }
-  };
-}, []);
+    getUserData()
 
-  // useEffect(() => {
-  //   // Don't check auth on login/register pages
-  //   if (window.location.pathname === '/login' ||
-  //       window.location.pathname === '/register' ||
-  //       window.location.pathname === '/forgot-password') {
-  //     setLoading(false);
-  //     setAuthChecked(true);
-  //     return;
-  //   }
-  //   getUserData()
-
-  //   return () => {
-  //     // Cleanup timeouts on unmount
-  //     if (window.tokenTimeouts) {
-  //       clearTimeout(window.tokenTimeouts.warningTimeout);
-  //       clearTimeout(window.tokenTimeouts.expiryTimeout);
-  //     }
-  //   };
-  // }, [])
+    return () => {
+      // Cleanup timeouts on unmount
+      if (window.tokenTimeouts) {
+        clearTimeout(window.tokenTimeouts.warningTimeout);
+        clearTimeout(window.tokenTimeouts.expiryTimeout);
+      }
+    };
+  }, [])
 
   const value ={
     isLogin,setIsLogin,
