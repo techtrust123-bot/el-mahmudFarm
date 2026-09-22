@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+// import React, { useState, useEffect, useRef } from 'react';
 import { formatNumber, parseNumber } from '../../utils/numberFormatter';
 
 const CurrencyInput = ({
@@ -28,13 +28,11 @@ const CurrencyInput = ({
 
   const handleChange = (e) => {
     const raw = e.target.value;
-    // allow digits, commas, dot and minus
     const cleanedInput = raw.replace(/[^0-9.-]/g, '');
     const parsed = parseNumber(cleanedInput);
 
     setDisplay(cleanedInput === '' ? '' : formatNumber(parsed, { locale, minimumFractionDigits: decimals, maximumFractionDigits: decimals }));
 
-    // emit synthetic event compatible with existing handlers
     if (typeof onChange === 'function') {
       onChange({ target: { name, value: parsed === '' ? '' : parsed } });
     }
@@ -51,7 +49,12 @@ const CurrencyInput = ({
 
   return (
     <div className={`currency-input ${className}`}>
-      {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+      {label && (
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          {label}
+          {props.required && <span className="text-red-500 ml-1">*</span>}
+        </label>
+      )}
       <input
         ref={inputRef}
         name={name}
@@ -61,9 +64,18 @@ const CurrencyInput = ({
         placeholder={placeholder}
         inputMode="numeric"
         {...props}
-        className={`w-full px-3 py-2 border rounded ${error ? 'border-red-500' : 'border-gray-300'}`}
+        className={`
+          w-full px-4 py-2 text-base rounded-lg border-2 transition-all duration-200
+          ${error 
+            ? 'border-red-500 bg-red-50 dark:bg-red-900/30' 
+            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700'
+          }
+          focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900
+          text-gray-900 dark:text-white dark:placeholder-gray-400
+          disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:cursor-not-allowed
+        `}
       />
-      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-1 text-sm text-red-500">{error}</p>}
     </div>
   );
 };

@@ -59,7 +59,7 @@ const PoultryPage = () => {
     const totalQuantity = data.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
     const totalMortality = data.reduce((sum, item) => sum + Number(item.mortality || 0), 0);
     const vaccinatedBatches = data.filter((item) => item.vaccinationStatus === "vaccinated").length;
-    const remainingBirds = totalQuantity - totalMortality;
+    const remainingBirds = totalQuantity;
     const starterFeed = data.filter(item => item.currentFeedStage === 'Starter').reduce((sum, item) => sum + Number(item.quantity || 0), 0);
     const growerFeed = data.filter(item => item.currentFeedStage === 'Grower').reduce((sum, item) => sum + Number(item.quantity || 0), 0);
     const finisherFeed = data.filter(item => item.currentFeedStage === 'Finisher').reduce((sum, item) => sum + Number(item.quantity || 0), 0);

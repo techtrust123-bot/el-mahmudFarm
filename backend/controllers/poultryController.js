@@ -208,6 +208,7 @@ exports.getPoultryById = async (req, res) => {
 }
 
 
+
 exports.editPoultry = async (req, res) => {
     const { Poultry, Feed } = req.farmModels
     const id = req.params.id
