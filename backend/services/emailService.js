@@ -11,7 +11,7 @@ const { unusualExpenseEmail } = require('../emails/unusualExpense');
 const { animalHealthEmail } = require('../emails/animalHealth');
 const { dailySummaryEmail } = require('../emails/dailySummary');
 const { welcomeEmail } = require('../emails/welcome');
-const { otpEmail } = require('../emails/otp');
+const { otpEmail, passwordEmail } = require('../emails/otp');
 
 const emailActivityLog = [];
 
@@ -22,7 +22,8 @@ const emailTemplates = {
   ANIMAL_HEALTH_ALERT: (data = {}) => animalHealthEmail(data),
   DAILY_SUMMARY: (data = {}) => dailySummaryEmail(data),
   WELCOME: (data = {}) => welcomeEmail(data),
-  OTP: (data = {}) => otpEmail(data)
+  OTP: (data = {}) => otpEmail(data),
+  ForgetPassword: (data = {}) => passwordEmail(data)
 };
 
 /**

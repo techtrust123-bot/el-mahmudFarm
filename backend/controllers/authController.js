@@ -724,7 +724,7 @@ exports.forgotPasswordOtp = async(req,res)=>{
     user.resetPassword = resetOtpHash,
     user.resetPasswordExpiresAt = Date.now() + 10 * 60 * 1000
     await user.save()
-    await sendNotification(email, 'OTP', {
+    await sendNotification(email, 'ForgetPassword', {
       userName: user.name,
       otp: resetOtp
     });

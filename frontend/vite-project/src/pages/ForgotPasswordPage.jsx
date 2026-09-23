@@ -5,6 +5,7 @@ import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
 import Alert from '../components/ui/Alert';
 import axios from 'axios'
+import axiosInstance from '../utils/axiosInstance';
 import { AuthContext } from '../context/AuthContext';
 import cloudFarmLogo from '../assets/CloudFarm_logo.png';
 /**

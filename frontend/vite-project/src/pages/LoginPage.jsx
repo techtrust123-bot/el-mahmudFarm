@@ -49,8 +49,7 @@ const LoginPage = () => {
     
     if (response.data.success) {
       setAlert({ type: 'success', message: response.data.message });
-      setIsLogin(true);
-      await getUserData(true);
+      
       const loggedInUser = response.data.user || response.data.userData;
 
       // Duba ko mutum ya yi Verification kafin kiran sauran bayanan user
@@ -68,7 +67,8 @@ const LoginPage = () => {
         }
       } else {
         // Tabbatar an kafa login sannan a samoUserData
-        
+        setIsLogin(true);
+        await getUserData(true);
         navigate('/dashboard');
       }
     } else {
