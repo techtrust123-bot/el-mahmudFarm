@@ -95,8 +95,8 @@ export const AuthProvider = (props) =>{
       setIsLogin(false);
       setAuthChecked(false);
       setSessionWarning(false);
-      if (window.location.pathname !== '/login') {
-        window.location.replace('/login');
+      if (window.location.pathname !== '/') {
+        window.location.replace('/');
       }
     }
   };
@@ -175,6 +175,12 @@ export const AuthProvider = (props) =>{
         window.location.pathname === '/register' ||
         window.location.pathname === '/' ||
         window.location.pathname ==='/about'||
+        window.location.pathname ==='/contact'||
+        window.location.pathname ==='/support/contact'||
+        window.location.pathname ==='/terms'||
+        window.location.pathname ==='/privacy-policy'||
+        window.location.pathname ==='/forbidden'||
+        window.location.pathname ==='/reset-password'||
         window.location.pathname === '/forgot-password') {
       setLoading(false);
       setAuthChecked(true);

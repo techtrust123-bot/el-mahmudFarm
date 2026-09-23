@@ -36,6 +36,7 @@ const LivestockPage = () => {
   const [availableLivestock, setAvailableLivestock] = useState([]);
   const [soldLivestock, setSoldLivestock] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     tagNumber: '',
     breed: '',
@@ -526,8 +527,8 @@ const LivestockPage = () => {
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit">
-              {editingId ? 'Update' : 'Add'} Livestock
+            <Button variant="primary" type="submit" disabled={isLoading}>
+              {isLoading ? 'Saving...' : editingId ? 'Update' : 'Add'} Livestock
             </Button>
           </div>
         </form>

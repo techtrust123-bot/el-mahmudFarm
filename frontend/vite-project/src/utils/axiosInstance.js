@@ -87,7 +87,7 @@ axiosInstance.interceptors.response.use(
 const forceLogout = () => {
   if (window.isRedirecting) return;
 
-  const publicPages = ['/', '/login', '/register', '/forgot-password'];
+  const publicPages = ['/', '/login', '/register', '/forgot-password', '/verify-otp', '/reset-password', '/support/contact', '/terms', '/privacy-policy', '/forbidden'];
   const currentPath = window.location.pathname;
 
   localStorage.clear();

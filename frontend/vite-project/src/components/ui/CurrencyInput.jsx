@@ -1,4 +1,4 @@
-// import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { formatNumber, parseNumber } from '../../utils/numberFormatter';
 
 const CurrencyInput = ({

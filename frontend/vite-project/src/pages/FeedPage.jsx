@@ -27,6 +27,7 @@ const FeedPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     feedType: '',
     animalType: '',
@@ -575,8 +576,8 @@ const FeedPage = () => {
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit">
-              {editingId ? 'Update' : 'Add'} Feed
+            <Button variant="primary" type="submit" disabled={isLoading}>
+              {isLoading ? 'Saving...': editingId ? 'Update' : 'Add'} Feed
             </Button>
           </div>
         </form>

@@ -34,6 +34,7 @@ const PoultryPage = () => {
   const [isExporting, setIsExporting] = useState(false);
   const {axiosInstance} = useContext(AuthContext)
   const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     batchId: '',
     type: '',
@@ -506,8 +507,8 @@ const PoultryPage = () => {
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit">
-              {editingId ? 'Update' : 'Add'} Batch
+            <Button variant="primary" type="submit" disabled={isLoading}>
+              {isLoading ? 'Saving...' : editingId ? 'Update' : 'Add'} Batch
             </Button>
           </div>
         </form>
