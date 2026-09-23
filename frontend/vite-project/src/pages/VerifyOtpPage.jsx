@@ -98,7 +98,7 @@ const VerifyOtpPage = () => {
     try {
       const response = await axiosInstance.post('/api/auth/resend-otp');
 
-      if (response?.success) {
+      if (response.data.success) {
         setAlert({ type: 'success', message: 'A new OTP has been sent to your email.' });
         setOtp('');
         setTimeRemaining(600);

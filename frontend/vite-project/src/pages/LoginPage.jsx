@@ -56,9 +56,11 @@ const LoginPage = () => {
       const isVerified = loggedInUser?.isAccountVerified === true || String(loggedInUser?.isAccountVerified).toLowerCase() === 'true';
 
       if (!isVerified) {
+      const res =  await authService.resendOTP();
+      console.log(res)
         // 1. Tura shi shafin OTP nan take
         navigate('/verify-otp');
-        await authService.resendOTP();
+        
         // 2. Tura OTP daban tare da handle kuskuren cikin amintacciyar hanya
         // try {
           
