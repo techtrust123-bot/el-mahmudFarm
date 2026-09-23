@@ -56,17 +56,14 @@ const LoginPage = () => {
       const isVerified = loggedInUser?.isAccountVerified === true || String(loggedInUser?.isAccountVerified).toLowerCase() === 'true';
 
       if (!isVerified) {
-      const res =  await authService.resendOTP();
-      console.log(res)
         // 1. Tura shi shafin OTP nan take
         navigate('/verify-otp');
         
-        // 2. Tura OTP daban tare da handle kuskuren cikin amintacciyar hanya
-        // try {
-          
-        // } catch (resendError) {
-        //   console.warn('Unable to resend OTP:', resendError?.response?.data || resendError?.message);
-        // }
+        try {
+          await authService.resendOTP();
+        } catch (resendError) {
+          console.warn('Unable to resend OTP:', resendError?.response?.data || resendError?.message);
+        }
       } else {
         // Tabbatar an kafa login sannan a samoUserData
         setIsLogin(true);
