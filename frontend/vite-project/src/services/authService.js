@@ -83,7 +83,7 @@ const authService = {
    */
   resendOTP: async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/resend-otp`, {}, {
+      const response = await axios.post(`${API_BASE_URL}/api/auth/resend-otp`, {}, {
         withCredentials: true
       });
       return response.data;
