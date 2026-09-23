@@ -728,7 +728,7 @@ exports.forgotPasswordOtp = async(req,res)=>{
       userName: user.name,
       otp: resetOtp
     });
-    res.status(200).json({success:true, message:'Reset Password Send Successful..'})
+    res.status(200).json({success:true, message:'Reset Otp Send Successful..'})
   } catch (error) {
     //  console.log(error)
     logger.error('forgotPasswordOtp_error', {error, stack: error.stack});
