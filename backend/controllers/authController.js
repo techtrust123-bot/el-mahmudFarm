@@ -36,7 +36,7 @@ const generateAccessToken = (user) => {
       permissions: user.permissions,
     },
     process.env.JWT_SECRET,
-    { expiresIn: '15m' }
+    { expiresIn: '1h' }
   );
 };
 
@@ -440,124 +440,6 @@ exports.refresh = async (req, res) => {
     throw new ApiError(500, 'Internal server error');
   }
 };
-
-// exports.logout = (req, res) => {
-//   // 1. Amsa nan take ba tare da kowa da komai ba (No async/await)
-//   try {
-//     const cookieOptions = {
-//       httpOnly: true,
-//       secure: process.env.NODE_ENV === "production",
-//       sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
-//       path: "/"
-//     };
-
-//     res.clearCookie('token', cookieOptions);
-//     res.clearCookie('refreshToken', cookieOptions);
-
-//     return res.status(200).json({ 
-//       success: true, 
-//       message: "Logged out successfully" 
-//     });
-//   } catch (err) {
-//     return res.status(200).json({ 
-//       success: true, 
-//       message: "Logged out" 
-//     });
-//   }
-// };
-
-// exports.logout = async (req, res) => {
-//   try {
-//     const isProduction = process.env.NODE_ENV === "production";
-
-//     // 1. Goge Cookies da sauri-sauri (Instant response)
-//     res.clearCookie('token', {
-//       httpOnly: true,
-//       secure: isProduction,
-//       sameSite: isProduction ? 'strict' : 'lax',
-//       path: '/'
-//     });
-
-//     res.clearCookie('refreshToken', {
-//       httpOnly: true,
-//       secure: isProduction,
-//       sameSite: isProduction ? 'strict' : 'lax',
-//       path: '/'
-//     });
-
-//     // 2. Mayar da Amsa TSOKANAN BAKI (Instant HTTP 200)
-//     res.status(200).json({ success: true, message: "Logout Successful" });
-
-//     // 3. Aikin Async Background (Goge token a DB & Log) - Ayi shi BAYAN an riga an turawa user amsa
-//     const refreshTokenValue = req.cookies?.refreshToken;
-    
-//     if (refreshTokenValue) {
-//       RefreshToken.deleteOne({ token: refreshTokenValue }).catch(err => 
-//         console.error("Background token delete error:", err)
-//       );
-//     }
-
-//     try {
-//       logAuthEvent('logout', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'));
-//     } catch (logErr) {
-//       console.error("Logging error ignored:", logErr);
-//     }
-
-//   } catch (error) {
-//     console.error('Logout error:', error);
-//     // Maida amsa nan take koda an samu kuskure don hana Timeout
-//     return res.status(200).json({ success: true, message: "Logged out" });
-//   }
-// };
-
-// exports.logout = async (req, res, next) => {
-//   try {
-//     const refreshTokenValue = req.cookies.refreshToken;
-
-//     // 1. Goge Refresh Token din a database cikin sauri ba tare da Loop ba
-//     if (refreshTokenValue) {
-//       // Idan kana adana hashed token a DB (Mafi kyau da sauri):
-//       // Ko kuma ka goge ta hanyar amfani da req.user._id idan tana da alaka da user
-//       if (req.user?.id) {
-//         await RefreshToken.deleteMany({ userId: req.user.id });
-//       } else {
-//         // Idan baka da userId, nemo token guda daya kawai wanda yake aiki
-//         await RefreshToken.findOneAndDelete({ token: refreshTokenValue });
-//       }
-//     }
-
-//     const isProduction = process.env.NODE_ENV === "production";
-
-//     // 2. Clear cookies
-//     res.clearCookie('token', {
-//       httpOnly: true,
-//       secure: isProduction,
-//       sameSite: isProduction ? 'strict' : 'lax'
-//     });
-
-//     res.clearCookie('refreshToken', {
-//       httpOnly: true,
-//       secure: isProduction,
-//       sameSite: isProduction ? 'strict' : 'lax'
-//     });
-
-//     // Log event
-//     logAuthEvent('logout', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'));
-
-//     // 3. Mayar da Response Nan Taki
-//     return res.status(200).json({ success: true, message: "Logout Successful" });
-
-//   } catch (error) {
-//     console.error('Logout error:', error);
-//     logAuthEvent('logout_error', req.user?.id, req.user?.farmId, req.ip, req.get('User-Agent'), { error: error.message });
-
-//     // 4. Maimakon 'throw', yi amfani da res.status() ko next() don hana Timeout
-//     return res.status(500).json({ 
-//       success: false, 
-//       message: 'Internal server error during logout' 
-//     });
-//   }
-// };
 
 exports.logout = async (req, res) => {
   try {
