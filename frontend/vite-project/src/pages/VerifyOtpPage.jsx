@@ -101,7 +101,7 @@ const VerifyOtpPage = () => {
       if (response.data.success) {
         setAlert({ type: 'success', message: 'A new OTP has been sent to your email.' });
         setOtp('');
-        setTimeRemaining(600);
+        setTimeRemaining(300);
         setTimerActive(true);
       } else {
         setAlert({ type: 'error', message: response?.message || 'Failed to resend OTP.' });

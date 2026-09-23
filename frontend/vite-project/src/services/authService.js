@@ -69,7 +69,7 @@ const authService = {
    */
   verifyOTP: async (otp) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/verified`, { otp }, {
+      const response = await axios.post(`${API_BASE_URL}/api/auth/verified`, { otp }, {
         withCredentials: true
       });
       return response.data;
@@ -97,7 +97,7 @@ const authService = {
    */
   refreshToken: async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
+      const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {}, {
         withCredentials: true
       });
       return response.data;
@@ -111,7 +111,7 @@ const authService = {
    */
   logout: async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/logout`, {}, {
+      const response = await axios.post(`${API_BASE_URL}/api/auth/logout`, {}, {
         withCredentials: true
       });
       return response.data;
