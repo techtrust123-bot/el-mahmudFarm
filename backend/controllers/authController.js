@@ -693,7 +693,7 @@ exports.resendOtp = async(req,res)=>{
     const otp = String(Math.floor(100000 + Math.random() * 900000))
     const otphash = await bcrypt.hash(otp,12)
     user.verificationOtp = otphash,
-    user.verificationOtpExpiresAt = Date.now() + 10 * 60 * 1000
+    user.verificationOtpExpiresAt = Date.now() + 5 * 60 * 1000
     await user.save()
     await sendNotification(user.email, 'OTP', {
       userName: user.name,
@@ -722,7 +722,7 @@ exports.forgotPasswordOtp = async(req,res)=>{
     const resetOtp = String(Math.floor(100000 + Math.random() * 900000))
    const resetOtpHash = await bcrypt.hash(resetOtp,12)
     user.resetPassword = resetOtpHash,
-    user.resetPasswordExpiresAt = Date.now() + 10 * 60 * 1000
+    user.resetPasswordExpiresAt = Date.now() + 5 * 60 * 1000
     await user.save()
     await sendNotification(email, 'ForgetPassword', {
       userName: user.name,

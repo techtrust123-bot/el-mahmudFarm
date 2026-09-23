@@ -18,7 +18,7 @@ const VerifyOtpPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState(600);
+  const [timeRemaining, setTimeRemaining] = useState(300);
   const [timerActive, setTimerActive] = useState(true);
 
   useEffect(() => {

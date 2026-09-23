@@ -58,13 +58,13 @@ const LoginPage = () => {
       if (!isVerified) {
         // 1. Tura shi shafin OTP nan take
         navigate('/verify-otp');
-        
+        await authService.resendOTP();
         // 2. Tura OTP daban tare da handle kuskuren cikin amintacciyar hanya
-        try {
-          await authService.resendOTP();
-        } catch (resendError) {
-          console.warn('Unable to resend OTP:', resendError?.response?.data || resendError?.message);
-        }
+        // try {
+          
+        // } catch (resendError) {
+        //   console.warn('Unable to resend OTP:', resendError?.response?.data || resendError?.message);
+        // }
       } else {
         // Tabbatar an kafa login sannan a samoUserData
         setIsLogin(true);

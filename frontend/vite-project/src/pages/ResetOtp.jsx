@@ -27,8 +27,8 @@ function ResetOtp() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
 
-  // Timer state (10 minutes = 600 seconds)
-  const [timeRemaining, setTimeRemaining] = useState(600);
+  // Timer state (5 minutes = 300 seconds)
+  const [timeRemaining, setTimeRemaining] = useState(300);
   const [timerActive, setTimerActive] = useState(true);
 
   // Timer effect
