@@ -41,52 +41,93 @@ const LoginPage = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    try {
+  e.preventDefault();
+  setIsLoading(true);
+
+  try {
     const response = await axiosInstance.post('/api/auth/login', formData);
-    console.log('Login response:', response.data);
+    
     if (response.data.success) {
       setAlert({ type: 'success', message: response.data.message });
       const loggedInUser = response.data.user || response.data.userData;
-      setIsLogin(true);
-      await getUserData(true);
-      if (loggedInUser?.isAccountVerified === false || String(loggedInUser?.isAccountVerified).toLowerCase() === 'false') {
+
+      // Duba ko mutum ya yi Verification kafin kiran sauran bayanan user
+      const isVerified = loggedInUser?.isAccountVerified === true || String(loggedInUser?.isAccountVerified).toLowerCase() === 'true';
+
+      if (!isVerified) {
+        // 1. Tura shi shafin OTP nan take
+        navigate('/verify-otp');
+        
+        // 2. Tura OTP daban tare da handle kuskuren cikin amintacciyar hanya
         try {
-          navigate('/verify-otp');
           await authService.resendOTP();
         } catch (resendError) {
-          console.warn('Unable to resend verification OTP after login:', resendError?.message);
+          console.warn('Unable to resend OTP:', resendError?.response?.data || resendError?.message);
         }
-      } else if(loggedInUser?.isAccountVerified === true){
+      } else {
+        // Tabbatar an kafa login sannan a samoUserData
+        setIsLogin(true);
+        await getUserData(true);
         navigate('/dashboard');
       }
     } else {
       setAlert({ type: 'error', message: response.data.message || 'Login failed' });
-      
     }
+  } catch (error) {
+    console.error('Login error:', error);
+    setAlert({ type: 'error', message: error.response?.data?.message || 'Login failed' });
+  } finally {
     setIsLoading(false);
   }
-    catch (error) {
-      console.error('Login error:', error);
+};
+
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+  //   setIsLoading(true);
+  //   try {
+  //   const response = await axiosInstance.post('/api/auth/login', formData);
+  //   console.log('Login response:', response.data);
+  //   if (response.data.success) {
+  //     setAlert({ type: 'success', message: response.data.message });
+  //     const loggedInUser = response.data.user || response.data.userData;
+  //     setIsLogin(true);
+  //     await getUserData(true);
+  //     if (loggedInUser?.isAccountVerified === false || String(loggedInUser?.isAccountVerified).toLowerCase() === 'false') {
+  //       try {
+  //         navigate('/verify-otp');
+  //         await authService.resendOTP();
+  //       } catch (resendError) {
+  //         console.warn('Unable to resend verification OTP after login:', resendError?.message);
+  //       }
+  //     } else if(loggedInUser?.isAccountVerified === true){
+  //       navigate('/dashboard');
+  //     }
+  //   } else {
+  //     setAlert({ type: 'error', message: response.data.message || 'Login failed' });
       
-      // Handle validation errors
-      if (error.response?.data?.errors) {
-        const validationErrors = error.response.data.errors;
-        const formattedErrors = {};
-        Object.keys(validationErrors).forEach(field => {
-          formattedErrors[field] = Array.isArray(validationErrors[field]) 
-            ? validationErrors[field].join('. ') 
-            : validationErrors[field];
-        });
-        setErrors(formattedErrors);
-        setAlert({ type: 'error', message: error.response?.data?.message });
-      } else {
-        setAlert({ type: 'error', message: error.response?.data?.message || 'Login failed' });
-      }
-      setIsLoading(false);
-    }
-  };
+  //   }
+  //   setIsLoading(false);
+  // }
+  //   catch (error) {
+  //     console.error('Login error:', error);
+      
+  //     // Handle validation errors
+  //     if (error.response?.data?.errors) {
+  //       const validationErrors = error.response.data.errors;
+  //       const formattedErrors = {};
+  //       Object.keys(validationErrors).forEach(field => {
+  //         formattedErrors[field] = Array.isArray(validationErrors[field]) 
+  //           ? validationErrors[field].join('. ') 
+  //           : validationErrors[field];
+  //       });
+  //       setErrors(formattedErrors);
+  //       setAlert({ type: 'error', message: error.response?.data?.message });
+  //     } else {
+  //       setAlert({ type: 'error', message: error.response?.data?.message || 'Login failed' });
+  //     }
+  //     setIsLoading(false);
+  //   }
+  // };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-600 to-emerald-800 p-4">
