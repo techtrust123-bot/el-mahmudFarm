@@ -119,12 +119,12 @@ const poultrySchema = new mongoose.Schema({
             feedCategory: String,
             poultryConsumePerBird: Number,
             feedCostPerPoultry: Number,
+            totalFeedConsumed:Number,
             totalFeedCost: Number,
             totalCost: Number,
             costPerPoultry: Number,
             totalCostPerPoultry: Number,
             quantity:Number,
-            newQuantity: Number,
             recordedAt: { type: Date, default: Date.now }
         }
     ],

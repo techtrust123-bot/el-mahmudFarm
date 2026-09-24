@@ -8,9 +8,15 @@ const STAGE_PATTERNS = {
 }
 
 // This function determines the feed stage based on the age in days and the type of animal. It uses different thresholds for poultry and livestock to categorize them into 'Starter', 'Grower', or 'Finisher' stages.
-const getPoultryFeedStage = (ageInDays) => {
-  if (ageInDays <= 29) return 'Starter'
-  if (ageInDays <= 57) return 'Grower'
+const getBroilerFeedStage = (ageInDays) => {
+  if (ageInDays <= 21) return 'Starter'
+  if (ageInDays <= 35) return 'Grower'
+  return 'Finisher'
+}
+
+const getLayerFeedStage = (ageInDays)=>{
+  if (ageInDays <= 56) return 'Starter'
+  if (ageInDays <= 126) return 'Grower'
   return 'Finisher'
 }
 
@@ -23,7 +29,7 @@ const getLivestockFeedStage = (ageInDays) => {
 
 const getFeedStage = (ageInDays, animalType) => {
   if (!animalType) {
-    return getPoultryFeedStage(ageInDays)
+    return getBroilerFeedStage(ageInDays), getLayerFeedStage(ageInDays)
   }
 
   const normalizedType = animalType.toLowerCase()
@@ -31,7 +37,7 @@ const getFeedStage = (ageInDays, animalType) => {
     return getLivestockFeedStage(ageInDays)
   }
 
-  return getPoultryFeedStage(ageInDays)
+  return getBroilerFeedStage(ageInDays), getLayerFeedStage(ageInDays)
 }
 
 const calculateAge = (purchaseDate) => {
@@ -132,7 +138,7 @@ const getFeedForStage = async (Feed, animalType, feedStage, options = {}) => {
   return null
 }
 
-const getPoultryFeedStagePeriods = (startAgeInDays, endAgeInDays) => {
+const getBroilerFeedStagePeriods = (startAgeInDays, endAgeInDays) => {
     const startAge = Math.max(Number(startAgeInDays) || 0, 0)
     const endAge = Math.max(Number(endAgeInDays) || 0, startAge)
 
@@ -144,16 +150,61 @@ const getPoultryFeedStagePeriods = (startAgeInDays, endAgeInDays) => {
         {
             stage: 'Starter',
             startDay: 0,
-            endDay: 29,
+            endDay: 21,
         },
         {
             stage: 'Grower',
-            startDay: 29,
-            endDay: 57,
+            startDay: 21,
+            endDay: 35,
         },
         {
             stage: 'Finisher',
-            startDay: 57,
+            startDay: 35,
+            endDay: Infinity,
+        },
+    ]
+
+    const periods = []
+
+    for (const stage of stages) {
+        const periodStart = Math.max(startAge, stage.startDay)
+        const periodEnd = Math.min(endAge, stage.endDay)
+
+        if (periodEnd > periodStart) {
+            periods.push({
+                stage: stage.stage,
+                startAgeInDays: periodStart,
+                endAgeInDays: periodEnd,
+                days: periodEnd - periodStart,
+            })
+        }
+    }
+
+    return periods
+}
+
+const getLayerFeedStagePeriods = (startAgeInDays, endAgeInDays) => {
+    const startAge = Math.max(Number(startAgeInDays) || 0, 0)
+    const endAge = Math.max(Number(endAgeInDays) || 0, startAge)
+
+    if (endAge < startAge) {
+        return []
+    }
+
+    const stages = [
+        {
+            stage: 'Starter',
+            startDay: 0,
+            endDay: 56,
+        },
+        {
+            stage: 'Grower',
+            startDay: 56,
+            endDay: 126,
+        },
+        {
+            stage: 'Finisher',
+            startDay: 126,
             endDay: Infinity,
         },
     ]
@@ -223,4 +274,4 @@ const getLivestockFeedStagePeriods = (startAgeInDays, endAgeInDays) => {
     return periods
 }
 
-module.exports = { getFeedStage, calculateAge, getBirthDateFromAge, getFeedForStage, parseFeedType, normalizeFeedCategory, getPoultryFeedStagePeriods,getLivestockFeedStagePeriods }
+module.exports = { getFeedStage, calculateAge, getBirthDateFromAge, getFeedForStage, parseFeedType, normalizeFeedCategory, getBroilerFeedStagePeriods,getLivestockFeedStagePeriods,getLayerFeedStagePeriods }

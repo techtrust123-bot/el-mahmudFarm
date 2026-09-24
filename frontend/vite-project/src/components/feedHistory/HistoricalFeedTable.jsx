@@ -39,6 +39,7 @@ const getDetailFields = (record, type) => {
       { label: 'Feed Type', value: formatValue(record.feedType) },
       { label: 'Feed Category', value: formatValue(record.feedCategory) },
       { label: 'Feed Consumed / Bird', value: record.poultryConsumePerBird === undefined || record.poultryConsumePerBird === null || record.poultryConsumePerBird === '' ? '—' : `${Number(record.poultryConsumePerBird).toFixed(2)} kg` },
+      {label: 'Total Feed Consumed', value: record.totalFeedConsumed === undefined || record.totalFeedConsumed === null || record.totalFeedConsumed === '' ? '—' : `${Number(record.totalFeedConsumed).toFixed(2)} kg`},
       { label: 'Feed Cost / Bird', value: formatCurrency(record.feedCostPerPoultry) },
       { label: 'Total Feed Cost', value: formatCurrency(record.totalFeedCost) },
       { label: 'Cost / Bird', value: formatCurrency(record.costPerPoultry) },

@@ -1,7 +1,8 @@
 const {
-    getPoultryFeedStagePeriods,
+    getBroilerFeedStagePeriods,
     getLivestockFeedStagePeriods,
     getFeedForStage,
+    getLayerFeedStagePeriods,
 } = require('./feedStageHelper.js')
 const ApiError = require('./ApiError')
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -46,12 +47,19 @@ const calculateHistoricalPoultryFeed = async ({
         Math.floor((today - purchase) / MS_PER_DAY),
         0
     )
-
-
-   const stagePeriods = getPoultryFeedStagePeriods(
-    0,
-    elapsedDays
-    )
+    let stagePeriods;
+    if(animalType === 'broiler'){
+         stagePeriods = getBroilerFeedStagePeriods(
+            0,
+         elapsedDays
+        )
+    }else{
+        stagePeriods = getLayerFeedStagePeriods(
+            0,
+            elapsedDays
+        )
+    }
+   
 
     if (stagePeriods.length === 0) {
         return {
@@ -112,6 +120,9 @@ const calculateHistoricalPoultryFeed = async ({
     const stageFeedConsumedPerBird =
         dailyFeedPerBird * period.days
 
+    const stageTotalFeedConsumed =
+        stageFeedConsumedPerBird * safeQuantity
+
     const stageFeedCostPerBird =
         stageFeedConsumedPerBird * pricePerKg
 
@@ -132,6 +143,9 @@ const calculateHistoricalPoultryFeed = async ({
 
         poultryConsumePerBird:
             stageFeedConsumedPerBird,
+
+        totalFeedConsumed:
+            stageTotalFeedConsumed,
 
         feedCostPerPoultry:
             stageFeedCostPerBird,
