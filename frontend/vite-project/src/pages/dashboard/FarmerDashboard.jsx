@@ -208,7 +208,7 @@ const FarmerDashboardPage = () => {
   useEffect(() => {
     const fetchDashboardMetrics = async () => {
       try {
-        const [poultryResponse, livestockResponse, salesResponse, expenseResponse, feedResponse] = await Promise.all([
+        const [poultryResponse, livestockResponse, salesResponse, expenseResponse, feedResponse] = await Promise.allSettled([
           axios.get(`${backendUrl}/api/poultry/list`, { withCredentials: true }),
           axios.get(`${backendUrl}/api/livestock/list`, { withCredentials: true }),
           axios.get(`${backendUrl}/api/sell/list`, { withCredentials: true }),
