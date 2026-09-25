@@ -255,6 +255,9 @@ const FarmerDashboardPage = () => {
     if (backendUrl) {
       fetchDashboardMetrics();
     }
+     // fetchSubscriptionAnalytics();
+        const polling = setInterval(fetchDashboardMetrics, 150000); // 2.5 minutes
+        return () => clearInterval(polling);
   }, [backendUrl]);
 
   const revenueTrend = getPeriodChange('sales');
