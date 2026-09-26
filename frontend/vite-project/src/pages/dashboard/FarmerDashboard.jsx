@@ -208,7 +208,7 @@ const FarmerDashboardPage = () => {
   useEffect(() => {
     const fetchDashboardMetrics = async () => {
       try {
-        const [poultryResponse, livestockResponse, salesResponse, expenseResponse, feedResponse] = await Promise.allSettled([
+        const [poultryResponse, livestockResponse, salesResponse, expenseResponse, feedResponse] = await Promise.all([
           axios.get(`${backendUrl}/api/poultry/list`, { withCredentials: true }),
           axios.get(`${backendUrl}/api/livestock/list`, { withCredentials: true }),
           axios.get(`${backendUrl}/api/sell/list`, { withCredentials: true }),
@@ -252,9 +252,8 @@ const FarmerDashboardPage = () => {
       }
     };
 
-    if (backendUrl) {
+    if (!backendUrl) return;
       fetchDashboardMetrics();
-    }
      // fetchSubscriptionAnalytics();
         const polling = setInterval(fetchDashboardMetrics, 150000); // 2.5 minutes
         return () => clearInterval(polling);
