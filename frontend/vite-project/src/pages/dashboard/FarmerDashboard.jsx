@@ -18,6 +18,7 @@ import {
   FiShoppingCart,
   FiDollarSign,
   FiAlertCircle,
+  FiDatabase
 } from 'react-icons/fi';
 import MainLayout from '../../components/layout/MainLayout';
 import Card from '../../components/ui/Card';
@@ -26,6 +27,8 @@ import Table from '../../components/ui/Table';
 import { AuthContext } from '../../context/AuthContext';
 import { GiCow, GiChicken, GiPayMoney} from 'react-icons/gi';
 import axios from 'axios';
+import Button from '../../components/ui/Button';
+
 
 /**
  * Farmer Dashboard - Main overview page
@@ -44,8 +47,12 @@ const FarmerDashboardPage = () => {
   const [feedTrend, setFeedTrend] = useState([]);
   const [mortalityTrend, setMortalityTrend] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupMessage, setBackupMessage] = useState('');
+  const [backups, setBackups] = useState([]);
   const { userData, backendUrl } = useContext(AuthContext);
-
+  const baseUrl = backendUrl || import.meta.env.VITE_BACKEND_URL || '';
+    const [isLoading, setIsLoading] = useState(false);
   const activityColumns = [
     { key: 'title', label: 'Activity' },
     { key: 'description', label: 'Description' },
@@ -262,6 +269,63 @@ const FarmerDashboardPage = () => {
   const revenueTrend = getPeriodChange('sales');
   const expenseTrend = getPeriodChange('expenses');
 
+  const refreshBackups = async () => {
+      try {
+        const backupListResponse = await axios.get(`${baseUrl}/api/backup/list`, { withCredentials: true });
+        setBackups(safeArray(backupListResponse));
+      } catch (error) {
+        console.error('Failed to refresh backups', error);
+      }
+    };
+  
+    const handleCreateBackup = async () => {
+      try {
+        setBackupLoading(true);
+        setBackupMessage('');
+        const response = await axios.post(`${baseUrl}/api/backup/create`, {}, { withCredentials: true });
+        const message = response?.data?.message || 'Backup created successfully';
+        setBackupMessage(message);
+        await refreshBackups();
+      } catch (error) {
+        const message = error?.response?.data?.message || 'Failed to create backup';
+        setBackupMessage(message);
+        console.error('Backup creation failed', error);
+      } finally {
+        setBackupLoading(false);
+      }
+    };
+  
+    const handleRestoreBackup = async (backupName) => {
+      try {
+        setBackupLoading(true);
+        setBackupMessage('');
+        const response = await axios.post(`${baseUrl}/api/backup/restore`, { backupName }, { withCredentials: true });
+        setBackupMessage(response?.data?.message || 'Backup restored successfully');
+      } catch (error) {
+        const message = error?.response?.data?.message || 'Failed to restore backup';
+        setBackupMessage(message);
+        console.error('Backup restore failed', error);
+      } finally {
+        setBackupLoading(false);
+      }
+    };
+  
+    const handleCleanupBackups = async () => {
+      try {
+        setBackupLoading(true);
+        setBackupMessage('');
+        const response = await axios.post(`${baseUrl}/api/backup/cleanup`, {}, { withCredentials: true });
+        setBackupMessage(response?.data?.message || 'Backup cleanup completed');
+        await refreshBackups();
+      } catch (error) {
+        const message = error?.response?.data?.message || 'Failed to cleanup backups';
+        setBackupMessage(message);
+        console.error('Backup cleanup failed', error);
+      } finally {
+        setBackupLoading(false);
+      }
+    };
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -368,7 +432,57 @@ const FarmerDashboardPage = () => {
             </ResponsiveContainer>
           </Card>
         </div>
+          <Card>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
+                <FiDatabase size={18} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Backup Management</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Create a manual backup and review recent backup snapshots.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="primary" size="sm" onClick={handleCreateBackup} disabled={backupLoading}>
+                {backupLoading ? 'Creating backup...' : 'Create Backup'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleCleanupBackups} disabled={backupLoading}>
+                {backupLoading ? 'Cleaning up...' : 'Cleanup Old'}
+              </Button>
+            </div>
+          </div>
 
+          {backupMessage && (
+            <div className={`mt-4 rounded-lg border px-3 py-2 text-sm ${backupMessage.toLowerCase().includes('failed') || backupMessage.toLowerCase().includes('error') ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+              {backupMessage}
+            </div>
+          )}
+
+          <div className="mt-4">
+            <Table
+              columns={[
+                { key: 'name', label: 'Backup Name' },
+                { key: 'createdAt', label: 'Created At', render: (value) => new Date(value).toLocaleString() },
+                { key: 'size', label: 'Size' },
+                { key: 'farmId', label: 'Target' },
+              ]}
+              data={backups.slice(0, 5)}
+              loading={backups.length === 0 && !backupLoading}
+              actions={(row) => [
+                <Button
+                  key={`restore-${row.name}`}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRestoreBackup(row.name)}
+                  disabled={backupLoading}
+                >
+                  Restore
+                </Button>
+              ]}
+            />
+          </div>
+        </Card>
         <Card>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activity</h2>

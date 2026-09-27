@@ -508,7 +508,7 @@ const PoultryPage = () => {
               Cancel
             </Button>
             <Button variant="primary" type="submit" disabled={isLoading}>
-              {isLoading ? 'Saving...' : editingId ? 'Update' : 'Add'} Batch
+              {isLoading ? (editingId ? 'Updating...' : 'Adding...') : editingId ? 'Update' : 'Add'} Batch
             </Button>
           </div>
         </form>
