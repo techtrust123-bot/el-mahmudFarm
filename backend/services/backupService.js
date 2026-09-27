@@ -18,6 +18,14 @@ const MINIMUM_BACKUPS_TO_KEEP = 5;
 const FARM_DATABASE_PREFIX = 'farm_';
 let activeBackupOperation = null;
 
+function removeDatabaseFromMongoUri(mongoUri) {
+  const url = new URL(mongoUri);
+
+  // Remove the database name while preserving query parameters.
+  url.pathname = '/';
+
+  return url.toString();
+}
 /**
  * Ensure the backup storage directory exists.
  * @returns {Promise<string>} The backup directory path.
@@ -259,6 +267,7 @@ async function createBackup(target = null, options = {}) {
 
   return activeBackupOperation = (async () => {
     const mongoUri = validateMongoUri(process.env.MONGO_URI);
+    const dumpUri = removeDatabaseFromMongoUri(mongoUri);
     const databasesToBackup = await resolveDatabasesToBackup(mongoUri, backupConfig);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backupName = `backup-${backupConfig.targetType}-${timestamp}`;
@@ -275,8 +284,8 @@ async function createBackup(target = null, options = {}) {
       });
 
       for (const databaseName of databasesToBackup) {
-        await runMongoTool('mongodump', ['--uri', mongoUri, '--db', databaseName, '--out', backupPath, '--gzip'], {
-          // timeout: 1800000
+        await runMongoTool('mongodump', ['--uri', dumpUri, '--db', databaseName, '--out', backupPath, '--gzip'], {
+          timeout: 1800000
         });
       }
 
