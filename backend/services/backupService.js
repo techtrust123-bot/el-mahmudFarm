@@ -19,12 +19,18 @@ const FARM_DATABASE_PREFIX = 'farm_';
 let activeBackupOperation = null;
 
 function removeDatabaseFromMongoUri(mongoUri) {
-  const url = new URL(mongoUri);
+  const match = mongoUri.match(
+    /^(mongodb(?:\+srv)?:\/\/[^/]+)(\/[^?]*)?(\?.*)?$/
+  );
 
-  // Remove the database name while preserving query parameters.
-  url.pathname = '/';
+  if (!match) {
+    throw new ApiError(500, 'Invalid MongoDB URI format.');
+  }
 
-  return url.toString();
+  const hosts = match[1];
+  const query = match[3] || '';
+
+  return `${hosts}/${query}`;
 }
 /**
  * Ensure the backup storage directory exists.
