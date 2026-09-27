@@ -269,62 +269,62 @@ const FarmerDashboardPage = () => {
   const revenueTrend = getPeriodChange('sales');
   const expenseTrend = getPeriodChange('expenses');
 
-  const refreshBackups = async () => {
-      try {
-        const backupListResponse = await axios.get(`${baseUrl}/api/backup/list`, { withCredentials: true });
-        setBackups(safeArray(backupListResponse));
-      } catch (error) {
-        console.error('Failed to refresh backups', error);
-      }
-    };
+  // const refreshBackups = async () => {
+  //     try {
+  //       const backupListResponse = await axios.get(`${baseUrl}/api/backup/list`, { withCredentials: true });
+  //       setBackups(safeArray(backupListResponse));
+  //     } catch (error) {
+  //       console.error('Failed to refresh backups', error);
+  //     }
+  //   };
   
-    const handleCreateBackup = async () => {
-      try {
-        setBackupLoading(true);
-        setBackupMessage('');
-        const response = await axios.post(`${baseUrl}/api/backup/create`, {}, { withCredentials: true });
-        const message = response?.data?.message || 'Backup created successfully';
-        setBackupMessage(message);
-        await refreshBackups();
-      } catch (error) {
-        const message = error?.response?.data?.message || 'Failed to create backup';
-        setBackupMessage(message);
-        console.error('Backup creation failed', error);
-      } finally {
-        setBackupLoading(false);
-      }
-    };
+  //   const handleCreateBackup = async () => {
+  //     try {
+  //       setBackupLoading(true);
+  //       setBackupMessage('');
+  //       const response = await axios.post(`${baseUrl}/api/backup/create`, {}, { withCredentials: true });
+  //       const message = response?.data?.message || 'Backup created successfully';
+  //       setBackupMessage(message);
+  //       await refreshBackups();
+  //     } catch (error) {
+  //       const message = error?.response?.data?.message || 'Failed to create backup';
+  //       setBackupMessage(message);
+  //       console.error('Backup creation failed', error);
+  //     } finally {
+  //       setBackupLoading(false);
+  //     }
+  //   };
   
-    const handleRestoreBackup = async (backupName) => {
-      try {
-        setBackupLoading(true);
-        setBackupMessage('');
-        const response = await axios.post(`${baseUrl}/api/backup/restore`, { backupName }, { withCredentials: true });
-        setBackupMessage(response?.data?.message || 'Backup restored successfully');
-      } catch (error) {
-        const message = error?.response?.data?.message || 'Failed to restore backup';
-        setBackupMessage(message);
-        console.error('Backup restore failed', error);
-      } finally {
-        setBackupLoading(false);
-      }
-    };
+  //   const handleRestoreBackup = async (backupName) => {
+  //     try {
+  //       setBackupLoading(true);
+  //       setBackupMessage('');
+  //       const response = await axios.post(`${baseUrl}/api/backup/restore`, { backupName }, { withCredentials: true });
+  //       setBackupMessage(response?.data?.message || 'Backup restored successfully');
+  //     } catch (error) {
+  //       const message = error?.response?.data?.message || 'Failed to restore backup';
+  //       setBackupMessage(message);
+  //       console.error('Backup restore failed', error);
+  //     } finally {
+  //       setBackupLoading(false);
+  //     }
+  //   };
   
-    const handleCleanupBackups = async () => {
-      try {
-        setBackupLoading(true);
-        setBackupMessage('');
-        const response = await axios.post(`${baseUrl}/api/backup/cleanup`, {}, { withCredentials: true });
-        setBackupMessage(response?.data?.message || 'Backup cleanup completed');
-        await refreshBackups();
-      } catch (error) {
-        const message = error?.response?.data?.message || 'Failed to cleanup backups';
-        setBackupMessage(message);
-        console.error('Backup cleanup failed', error);
-      } finally {
-        setBackupLoading(false);
-      }
-    };
+  //   const handleCleanupBackups = async () => {
+  //     try {
+  //       setBackupLoading(true);
+  //       setBackupMessage('');
+  //       const response = await axios.post(`${baseUrl}/api/backup/cleanup`, {}, { withCredentials: true });
+  //       setBackupMessage(response?.data?.message || 'Backup cleanup completed');
+  //       await refreshBackups();
+  //     } catch (error) {
+  //       const message = error?.response?.data?.message || 'Failed to cleanup backups';
+  //       setBackupMessage(message);
+  //       console.error('Backup cleanup failed', error);
+  //     } finally {
+  //       setBackupLoading(false);
+  //     }
+  //   };
 
   return (
     <MainLayout>
@@ -432,7 +432,7 @@ const FarmerDashboardPage = () => {
             </ResponsiveContainer>
           </Card>
         </div>
-          <Card>
+          {/* <Card>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
               <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
@@ -482,7 +482,7 @@ const FarmerDashboardPage = () => {
               ]}
             />
           </div>
-        </Card>
+        </Card> */}
         <Card>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activity</h2>
