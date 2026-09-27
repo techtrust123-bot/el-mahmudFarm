@@ -273,6 +273,9 @@ async function createBackup(target = null, options = {}) {
 
   return activeBackupOperation = (async () => {
     const mongoUri = validateMongoUri(process.env.MONGO_URI);
+    logger.info('Backup Mongo URI host check', {
+  mongoUri: mongoUri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@')
+});
     const dumpUri = removeDatabaseFromMongoUri(mongoUri);
     const databasesToBackup = await resolveDatabasesToBackup(mongoUri, backupConfig);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
