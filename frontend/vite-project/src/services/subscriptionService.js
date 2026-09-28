@@ -76,9 +76,21 @@ const subscriptionService = {
       startDate: row.startDate || row.createdAt,
       endDate: row.endDate || row.updatedAt || row.createdAt,
       autoRenew: Boolean(row.autoRenew),
+      canCancel: Boolean(row.canCancel),
+      userId: row.userId,
+      farmId: row.farmId,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      subscriptionCancelledAt: row.subscriptionCancelledAt,
     }));
+  },
+
+  async cancelAdminSubscription(subscriptionId) {
+    const response = await axiosInstance.delete(`/api/payment/admin/subscriptions/${encodeURIComponent(subscriptionId)}`);
+    if (!response?.data?.success) {
+      throw new Error(response?.data?.message || 'Unable to cancel subscription');
+    }
+    return response.data;
   },
 
   async getAdminStats() {

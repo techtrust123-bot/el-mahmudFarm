@@ -28,6 +28,8 @@ import { AuthContext } from '../../context/AuthContext';
 import { GiCow, GiChicken, GiPayMoney} from 'react-icons/gi';
 import axios from 'axios';
 import Button from '../../components/ui/Button';
+import Alert from '../../components/ui/Alert';
+import { Skeleton, SkeletonChart, SkeletonStats } from '../../components/common/Skeletons';
 
 
 /**
@@ -47,6 +49,8 @@ const FarmerDashboardPage = () => {
   const [feedTrend, setFeedTrend] = useState([]);
   const [mortalityTrend, setMortalityTrend] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState('');
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupMessage, setBackupMessage] = useState('');
   const [backups, setBackups] = useState([]);
@@ -254,8 +258,12 @@ const FarmerDashboardPage = () => {
         setFeedTrend(buildFeedTrend(feeds));
         setMortalityTrend(buildMortalityTrend(poultry));
         setActivities(buildActivityFeed(sales, expenses));
+        setDashboardError('');
       } catch (error) {
+        setDashboardError(error.response?.data?.message || 'Unable to load farm dashboard data.');
         console.error('Failed to load dashboard metrics', error);
+      } finally {
+        setDashboardLoading(false);
       }
     };
 
@@ -335,8 +343,10 @@ const FarmerDashboardPage = () => {
           <p className="text-gray-600 dark:text-gray-400 mt-1">Welcome {userData?.name}! Here's your farm overview.</p>
         </div>
 
+        {dashboardError && <Alert type="error" message={dashboardError} />}
+
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+        {dashboardLoading ? <SkeletonStats count={7} className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4" /> : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
           <StatCard  label="Total Animals" value={stats.totalAnimals} />
           <StatCard icon={GiCow} label="Total Livestock" value={stats.totalLivestock} />
           <StatCard icon={GiChicken} label="Total Poultry" value={stats.totalPoultry} />
@@ -363,10 +373,10 @@ const FarmerDashboardPage = () => {
           />
 
           <StatCard icon={FiAlertCircle} label="Mortality Rate" value={`${stats.mortalityRate}%`} />
-        </div>
+        </div>}
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {dashboardLoading ? <div className="grid grid-cols-1 gap-6 lg:grid-cols-2"><SkeletonChart /><SkeletonChart /><SkeletonChart className="lg:col-span-2" /></div> : <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Monthly Revenue & Expenses</h2>
             <ResponsiveContainer width="100%" height={300}>
@@ -431,7 +441,7 @@ const FarmerDashboardPage = () => {
               </LineChart>
             </ResponsiveContainer>
           </Card>
-        </div>
+        </div>}
           {/* <Card>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
@@ -487,7 +497,7 @@ const FarmerDashboardPage = () => {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activity</h2>
           </div>
-          <Table columns={activityColumns} data={activities} />
+          <Table columns={activityColumns} data={activities} loading={dashboardLoading} />
         </Card>
       </div>
     </MainLayout>

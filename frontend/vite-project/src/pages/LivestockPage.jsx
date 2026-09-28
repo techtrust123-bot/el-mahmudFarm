@@ -10,12 +10,14 @@ import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
+import Alert from '../components/ui/Alert';
 import HistoricalDataModal from '../components/feedHistory/HistoricalDataModal';
 import { toast } from 'react-hot-toast';
 import { LIVESTOCK_TYPES, HEALTH_STATUS } from '../utils/constants';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { downloadExport, getDefaultFilename } from '../utils/exportHelper';
+import { SkeletonStats } from '../components/common/Skeletons';
 
 
 /**
@@ -36,6 +38,7 @@ const LivestockPage = () => {
   const [availableLivestock, setAvailableLivestock] = useState([]);
   const [soldLivestock, setSoldLivestock] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     tagNumber: '',
@@ -171,6 +174,7 @@ const LivestockPage = () => {
       setErrors(newErrors);
       return;
     }
+    setIsLoading(true);
     try {
       let response;
       if (editingId) {
@@ -204,6 +208,8 @@ const LivestockPage = () => {
     } catch (error) {
       console.log(error);
       toast.error(error.response?.data?.message || 'Error saving livestock');
+    } finally {
+      setIsLoading(false);
     }
   };
   useEffect(()=>{
@@ -220,6 +226,7 @@ const LivestockPage = () => {
         setSoldLivestock(soldRes.data.data);
         setLivestockList([...availableRes.data.data, ...soldRes.data.data]);
       } catch (error) {
+        setLoadError(error.response?.data?.message || 'Unable to load livestock records.');
         console.log(error)
       } finally {
         setLoading(false)
@@ -292,6 +299,8 @@ const LivestockPage = () => {
           </div>
         </div>
 
+        {loadError && <Alert type="error" message={loadError} />}
+
         {/* Tab Navigation */}
         <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700">
           <button
@@ -317,17 +326,17 @@ const LivestockPage = () => {
         </div>
 
         {/* Statistics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+        {loading ? <SkeletonStats count={3} className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4" /> : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
           <StatCard label="Total Livestocks" value={totalLivestocks} />
           <StatCard label="Total Cost" value={`${formatCurrency(totalCost)}`} />
           <StatCard label="Avg Feed (kg)" value={avgFeedConsumption} />
-        </div>
+        </div>}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+        {loading ? <SkeletonStats count={3} className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3" /> : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
           <StatCard label="Starter Stage" value={starterStage} />
           <StatCard label="Grower Stage" value={growerStage} />
           <StatCard label="Finisher Stage" value={finisherStage} />
-        </div>
+        </div>}
         {/* Filters */}
         <Card className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

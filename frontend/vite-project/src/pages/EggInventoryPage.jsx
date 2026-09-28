@@ -13,6 +13,7 @@ import EggDetailsModal from '../components/egg/EggDetailsModal';
 import EggInventoryHistory from '../components/egg/EggInventoryHistory';
 import LowStockAlert from '../components/egg/LowStockAlert';
 import { AuthContext } from '../context/AuthContext';
+import { SkeletonStats } from '../components/common/Skeletons';
 
 export const LOW_STOCK_THRESHOLD = 200;
 
@@ -145,7 +146,7 @@ const EggInventoryPage = () => {
     <MainLayout>
       <div className="space-y-6">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold uppercase tracking-wider text-emerald-600">Poultry operations</p><h1 className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">Egg Inventory</h1><p className="mt-1 text-gray-600 dark:text-gray-400">Manage egg production, inventory, sales, and damaged eggs.</p></div><Button size="lg" onClick={() => { setSelectedRecord(null); setModalMode('create'); }}><FiPlus size={18} /> Add Egg Record</Button></div>
-        <EggStatsCards stats={stats} />
+        {loading ? <SkeletonStats count={4} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" /> : <EggStatsCards stats={stats} />}
         <LowStockAlert available={stats.available} threshold={LOW_STOCK_THRESHOLD} />
         <EggFilters filters={filters} onChange={updateFilter} onReset={() => setFilters(initialFilters)} batches={batches} eggTypes={eggTypes} />
         <Card padding="p-0"><div className="flex flex-col gap-1 p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-bold text-gray-900 dark:text-white">Egg Inventory Records</h2><p className="text-sm text-gray-500 dark:text-gray-400">{filteredRecords.length} record{filteredRecords.length === 1 ? '' : 's'} found</p></div></div><EggInventoryTable records={filteredRecords} loading={loading} onView={setSelectedRecord} onEdit={openEdit} onDelete={handleDeleteEggRecord} /></Card>

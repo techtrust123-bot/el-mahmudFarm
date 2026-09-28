@@ -1,12 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { FiLoader, FiXCircle } from 'react-icons/fi';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../layout/MainLayout';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import Table from '../ui/Table';
+import Modal from '../ui/Modal';
 import subscriptionService from '../../services/subscriptionService';
 import { formatCurrency } from '../../data/subscriptionPlans';
 import { formatDisplayDate } from '../../utils/subscriptionUtils';
+import { SkeletonStats } from '../common/Skeletons';
 
 const statusColors = {
   active: 'success',
@@ -39,6 +43,8 @@ const AdminSubscriptionPage = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedRow, setSelectedRow] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -69,6 +75,23 @@ const AdminSubscriptionPage = () => {
     });
   }, [rows, search, statusFilter]);
 
+  const handleCancelSubscription = async () => {
+    if (!cancelTarget || cancelling) return;
+    setCancelling(true);
+    try {
+      const result = await subscriptionService.cancelAdminSubscription(cancelTarget.id);
+      setRows((currentRows) => currentRows.map((row) => row.id === cancelTarget.id
+        ? { ...row, status: 'cancelled', autoRenew: false, canCancel: false, subscriptionCancelledAt: result.data?.cancelledAt }
+        : row));
+      setCancelTarget(null);
+      toast.success(result.message || 'Subscription cancelled. Payment history was retained.');
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Unable to cancel subscription.');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const columns = [
     { key: 'customer', label: 'Farm / Customer', sortable: true },
     { key: 'plan', label: 'Plan', sortable: true },
@@ -96,7 +119,7 @@ const AdminSubscriptionPage = () => {
           </Card>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {loading ? <SkeletonStats count={9} className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3" /> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <StatCard label="Total subscribers" value={stats.totalSubscribers ?? 0} icon={<span>👥</span>} />
           <StatCard label="Active subscriptions" value={stats.activeSubscriptions ?? 0} icon={<span>✅</span>} />
           <StatCard label="Expired subscriptions" value={stats.expiredSubscriptions ?? 0} icon={<span>⏳</span>} />
@@ -106,13 +129,13 @@ const AdminSubscriptionPage = () => {
           <StatCard label="Starter subscribers" value={stats.starterSubscribers ?? 0} icon={<span>1</span>} />
           <StatCard label="Basic subscribers" value={stats.basicSubscribers ?? 0} icon={<span>2</span>} />
           <StatCard label="Premium subscribers" value={stats.premiumSubscribers ?? 0} icon={<span>3</span>} />
-        </div>
+        </div>}
 
         <Card className="border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
           <div className="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-gray-700 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">Subscription records</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Frontend-only admin list for later backend integration.</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Payment and subscription history.</p>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -143,16 +166,27 @@ const AdminSubscriptionPage = () => {
               data={filteredRows}
               loading={loading}
               pageSize={6}
-              actions={(row) => (
+              actions={(row) => [
                 <Button
+                  key={`view-${row.id}`}
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => setSelectedRow(row)}
                 >
                   View
-                </Button>
-              )}
+                </Button>,
+                row.canCancel && <Button
+                  key={`cancel-${row.id}`}
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  disabled={cancelling}
+                  onClick={() => setCancelTarget(row)}
+                >
+                  <FiXCircle size={14} /> Cancel
+                </Button>,
+              ]}
             />
           </div>
         </Card>
@@ -224,6 +258,31 @@ const AdminSubscriptionPage = () => {
             </div>
           </div>
         )}
+
+        <Modal
+          isOpen={Boolean(cancelTarget)}
+          onClose={() => { if (!cancelling) setCancelTarget(null); }}
+          title="Cancel Subscription?"
+          size="md"
+          footer={(
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button variant="secondary" disabled={cancelling} onClick={() => setCancelTarget(null)}>Keep Subscription</Button>
+              <Button variant="danger" disabled={cancelling} onClick={handleCancelSubscription}>
+                {cancelling ? <><FiLoader className="animate-spin" /> Cancelling...</> : <><FiXCircle /> Cancel Subscription</>}
+              </Button>
+            </div>
+          )}
+        >
+          {cancelTarget && <div className="space-y-4">
+            <p className="text-sm text-gray-600 dark:text-gray-300">This immediately deactivates access for this farm. The successful payment record will be retained for financial history.</p>
+            <dl className="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 p-4 text-sm dark:border-gray-700 sm:grid-cols-2">
+              <div><dt className="text-gray-500 dark:text-gray-400">Farm / user</dt><dd className="mt-1 font-semibold text-gray-900 dark:text-white">{cancelTarget.customer}</dd></div>
+              <div><dt className="text-gray-500 dark:text-gray-400">Plan</dt><dd className="mt-1 font-semibold text-gray-900 dark:text-white">{cancelTarget.plan}</dd></div>
+              <div><dt className="text-gray-500 dark:text-gray-400">Billing cycle</dt><dd className="mt-1 font-semibold text-gray-900 dark:text-white">{cancelTarget.billingCycle}</dd></div>
+              <div><dt className="text-gray-500 dark:text-gray-400">Current status</dt><dd className="mt-1 font-semibold text-gray-900 dark:text-white">{cancelTarget.status}</dd></div>
+            </dl>
+          </div>}
+        </Modal>
       </div>
     </MainLayout>
   );

@@ -16,6 +16,8 @@ import { POULTRY_TYPES, VACCINATION_STATUS } from '../utils/constants';
 import { AuthContext } from '../context/AuthContext';
 import { useContext } from 'react';
 import { downloadExport, getDefaultFilename } from '../utils/exportHelper';
+import { SkeletonStats } from '../components/common/Skeletons';
+import Alert from '../components/ui/Alert';
 
 /**
  * Poultry Management Page
@@ -34,6 +36,7 @@ const PoultryPage = () => {
   const [isExporting, setIsExporting] = useState(false);
   const {axiosInstance} = useContext(AuthContext)
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     batchId: '',
@@ -75,16 +78,15 @@ const PoultryPage = () => {
   useEffect(() => {
     const fetchPoultry = async () => {
       try {
-        setTimeout(async()=>{
-          const [availableRes, soldRes] = await Promise.all([
-            axiosInstance.get('/api/poultry/available'),
-            axiosInstance.get('/api/poultry/sold')
-          ]);
-          setAvailablePoultry(availableRes.data.data);
-          setSoldPoultry(soldRes.data.data);
-          setPoultry([...availableRes.data.data, ...soldRes.data.data]);
-        }, 1000)
+        const [availableRes, soldRes] = await Promise.all([
+          axiosInstance.get('/api/poultry/available'),
+          axiosInstance.get('/api/poultry/sold')
+        ]);
+        setAvailablePoultry(availableRes.data.data);
+        setSoldPoultry(soldRes.data.data);
+        setPoultry([...availableRes.data.data, ...soldRes.data.data]);
       } catch (error) {
+        setLoadError(error.response?.data?.message || 'Unable to load poultry records.');
         console.log(error);
       } finally {
         setLoading(false);
@@ -206,6 +208,7 @@ const PoultryPage = () => {
       return;
     }
 
+    setIsLoading(true);
     try {
       let response;
       if (editingId) {
@@ -227,7 +230,7 @@ const PoultryPage = () => {
         });
         setIsModalOpen(false);
         // Refresh data
-        setTimeout(async()=>{
+        try {
           const [availableRes, soldRes] = await Promise.all([
             axiosInstance.get('/api/poultry/available'),
             axiosInstance.get('/api/poultry/sold')
@@ -235,11 +238,15 @@ const PoultryPage = () => {
           setAvailablePoultry(availableRes.data.data);
           setSoldPoultry(soldRes.data.data);
           setPoultry([...availableRes.data.data, ...soldRes.data.data]);
-        }, 5000)
+        } catch (refreshError) {
+          toast.error(refreshError.response?.data?.message || 'Poultry saved, but records could not be refreshed.');
+        }
       }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Error saving poultry');
       console.error( error);
+    } finally {
+      setIsLoading(false);
     }
   }
      const formatCurrency = (amount) =>
@@ -294,6 +301,8 @@ const PoultryPage = () => {
           </div>
         </div>
 
+        {loadError && <Alert type="error" message={loadError} />}
+
         {/* Tab Navigation */}
         <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700">
           <button
@@ -319,18 +328,18 @@ const PoultryPage = () => {
         </div>
 
         {/* Statistics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        {loading ? <SkeletonStats count={4} className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4" /> : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard label="Total Poultry" value={remainingBirds.toLocaleString()} />
           <StatCard label="Total Mortality" value={totalMortality} />
           <StatCard label="Vaccinated Batches" value={vaccinatedBatches} />
           <StatCard label="Avg Feed (kg)" value={avgFeedConsumption} />
-        </div>
+        </div>}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        {loading ? <SkeletonStats count={3} className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3" /> : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <StatCard label="Starter Stage (qty)" value={starterFeed.toLocaleString()} />
           <StatCard label="Grower Stage (qty)" value={growerFeed.toLocaleString()} />
           <StatCard label="Finisher Stage (qty)" value={finisherFeed.toLocaleString()} />
-        </div>
+        </div>}
 
         {/* Filters */}
         <Card className="p-4">

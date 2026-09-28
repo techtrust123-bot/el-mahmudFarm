@@ -10,7 +10,7 @@
     "verify": "node scripts/verifyMigration.js",
     "verify-feed-stage": "node scripts/verifyFeedStageLogic.js",
     "rollback": "node scripts/rollbackMigration.js",
-    "test": "node test/backupHelpers.test.js"
+    "test": "node test/backupHelpers.test.js && node --test test/adminDeletion.test.js"
   },
   "keywords": [],
   "author": "",

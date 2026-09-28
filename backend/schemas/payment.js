@@ -74,6 +74,10 @@ const paymentSchema = new mongoose.Schema({
         enum: ['pending', 'active', 'inactive'],
         default: 'pending'
     },
+    subscriptionCancelledAt: {
+        type: Date,
+        default: null,
+    },
     paystackTransactionId:{
         type:String,
         default:null

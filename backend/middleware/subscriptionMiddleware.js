@@ -52,6 +52,15 @@ const clearSubscriptionCache = (userId) => {
   if (userId) cache.delete(String(userId));
 };
 
+const clearSubscriptionCacheForFarm = (farmId) => {
+  if (!farmId) return;
+  for (const [userId, entry] of cache.entries()) {
+    if (String(entry.data?.farmId || '') === String(farmId)) {
+      cache.delete(userId);
+    }
+  }
+};
+
 const daysBetween = (a, b) => Math.ceil((b - a) / (1000 * 60 * 60 * 24));
 
 /**
@@ -203,4 +212,4 @@ const checkSubscription = async (req, res, next) => {
   }
 };
 
-module.exports = { checkSubscription, clearSubscriptionCache };
+module.exports = { checkSubscription, clearSubscriptionCache, clearSubscriptionCacheForFarm };

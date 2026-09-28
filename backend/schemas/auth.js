@@ -84,6 +84,10 @@ const authSchema = new mongoose.Schema({
         type: Boolean,
         default:false
     },
+    deletedAt: {
+        type: Date,
+        default: null,
+    },
     verificationOtp:{
         type:String,
         default:''

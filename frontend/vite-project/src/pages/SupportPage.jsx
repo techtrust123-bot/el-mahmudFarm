@@ -7,12 +7,15 @@ import Input from '../components/ui/Input';
 import { AuthContext } from '../context/AuthContext';
 import { FiMessageCircle, FiPlus, FiSend } from 'react-icons/fi';
 import { getWhatsappUrl } from '../config/siteConfig';
+import { Skeleton } from '../components/common/Skeletons';
 
 const SupportPage = () => {
   const { axiosInstance, userData } = useContext(AuthContext);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState(null);
   const [faqs, setFaqs] = useState([]);
+  const [faqsLoading, setFaqsLoading] = useState(true);
+  const [faqsError, setFaqsError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [trainError, setTrainError] = useState(null);
@@ -108,7 +111,10 @@ const SupportPage = () => {
           setFaqs(response.data.data || []);
         }
       } catch (err) {
+        setFaqsError(err.response?.data?.message || 'Unable to load FAQs.');
         console.error('Failed to load FAQs', err);
+      } finally {
+        setFaqsLoading(false);
       }
     };
     fetchFaqs();
@@ -259,7 +265,11 @@ const SupportPage = () => {
           <Card>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Frequently Asked Questions</h2>
             <div className="space-y-3">
-              {faqs.length === 0 ? (
+              {faqsLoading ? (
+                <div className="space-y-3">{Array.from({ length: 3 }, (_, index) => <div key={index} className="space-y-2 rounded-lg border border-gray-200 p-4 dark:border-gray-700"><Skeleton className="h-4 w-3/5" /><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-4/5" /></div>)}</div>
+              ) : faqsError ? (
+                <p role="alert" className="text-sm text-red-600 dark:text-red-400">{faqsError}</p>
+              ) : faqs.length === 0 ? (
                 <p className="text-gray-500 dark:text-gray-400">No FAQs available yet.</p>
               ) : (
                 faqs.slice(0, 6).map((faq, index) => (

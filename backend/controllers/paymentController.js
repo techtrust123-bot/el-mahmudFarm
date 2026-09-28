@@ -5,7 +5,9 @@ const logger = require('../utils/logger')
 const { sendNotification } = require('../services/emailService')
 const Payment = require('../models/payment')
 const mongoose = require('mongoose')
-const { clearSubscriptionCache } = require('../middleware/subscriptionMiddleware')
+const ApiError = require('../utils/ApiError')
+const { clearSubscriptionCache, clearSubscriptionCacheForFarm } = require('../middleware/subscriptionMiddleware')
+const { createAuditLog } = require('../middleware/auditLogger')
 
 const PAYSTACK_SECRET =
   process.env.PAYSTACK_SECRET ||
@@ -1538,26 +1540,58 @@ exports.getAdminSubscriptions = async (req, res) => {
     const payments = await Payment.find(filter).sort({ createdAt: -1 }).lean()
 
     const userIds = [...new Set(payments.map((payment) => String(payment.userId)).filter(Boolean))]
-    const users = await authModel.find({ _id: { $in: userIds } }).select('name farmName farmId email').lean()
+    const users = await authModel.find({ _id: { $in: userIds } })
+      .select('name farmName farmId email userType role isSubscribed subscriptionStatus subscriptionPlan billingCycle subscriptionStart subscriptionEnd')
+      .lean()
     const userMap = new Map(users.map((item) => [String(item._id), item]))
+
+    const currentPaymentByUser = new Map()
+    payments.forEach((payment) => {
+      const ownerId = String(payment.userId)
+      const payer = userMap.get(ownerId)
+      if (
+        payer &&
+        !currentPaymentByUser.has(ownerId) &&
+        payment.status === 'success' &&
+        payment.plan === payer.subscriptionPlan &&
+        payment.billingCycle === payer.billingCycle &&
+        payer.isSubscribed &&
+        payer.subscriptionStatus === 'active'
+      ) {
+        currentPaymentByUser.set(ownerId, String(payment._id))
+      }
+    })
 
     const rows = payments.map((payment) => {
       const payer = userMap.get(String(payment.userId)) || {}
-      const status = payment.status === 'success' ? 'active' : payment.status === 'processing' ? 'pending' : payment.status
+      const isCurrentPayment = currentPaymentByUser.get(String(payment.userId)) === String(payment._id)
+      const status = payment.subscriptionCancelledAt
+        ? 'cancelled'
+        : isCurrentPayment
+          ? payer.subscriptionStatus
+          : payment.status === 'success'
+            ? 'active'
+            : payment.status === 'processing'
+              ? 'pending'
+              : payment.status
 
       return {
-        id: payment.reference || String(payment._id),
+        id: String(payment._id),
         customer: payer.farmName || payer.name || 'Unknown farm',
         plan: payment.plan || 'starter',
         billingCycle: payment.billingCycle || 'monthly',
         amount: Number(payment.amount || 0),
         status,
         paymentReference: payment.reference,
-        startDate: user.subscriptionStart || payer.subscriptionStart || payment.subscriptionStart,
-        endDate: user.subscriptionEnd || payer.subscriptionEnd || payment.createdAt,
-        autoRenew: status === 'active',
+        userId: String(payment.userId),
+        farmId: payment.farmId,
+        canCancel: isCurrentPayment && !payment.subscriptionCancelledAt,
+        startDate: isCurrentPayment ? payer.subscriptionStart : payment.subscriptionStart || payment.createdAt,
+        endDate: isCurrentPayment ? payer.subscriptionEnd : payment.subscriptionEnd || payment.createdAt,
+        autoRenew: isCurrentPayment && status === 'active',
         createdAt: payment.createdAt,
         updatedAt: payment.processedAt || payment.createdAt,
+        subscriptionCancelledAt: payment.subscriptionCancelledAt,
       }
     })
 
@@ -1577,6 +1611,124 @@ exports.getAdminSubscriptions = async (req, res) => {
       message: 'Unable to load admin subscription records.',
     })
   }
+}
+
+exports.cancelAdminSubscription = async (req, res) => {
+  const { id } = req.params
+  if (!mongoose.isObjectIdOrHexString(id)) {
+    throw new ApiError(400, 'Invalid subscription ID.')
+  }
+
+  const payment = await Payment.findById(id).lean()
+  if (!payment) {
+    throw new ApiError(404, 'Subscription record not found.')
+  }
+  if (payment.status !== 'success' || payment.subscriptionCancelledAt) {
+    throw new ApiError(409, 'Only an active successful subscription can be cancelled.')
+  }
+
+  const owner = await authModel.findOne({
+    _id: payment.userId,
+    farmId: payment.farmId,
+    userType: 'manager',
+  }).lean()
+  if (!owner) {
+    throw new ApiError(409, 'The subscription owner could not be safely resolved. No records were changed.')
+  }
+  if (
+    !owner.isSubscribed ||
+    owner.subscriptionStatus !== 'active' ||
+    !owner.subscriptionEnd ||
+    new Date(owner.subscriptionEnd).getTime() <= Date.now() ||
+    owner.subscriptionPlan !== payment.plan ||
+    owner.billingCycle !== payment.billingCycle
+  ) {
+    throw new ApiError(409, 'This payment is not the farm’s current active subscription.')
+  }
+
+  const latestMatchingPayment = await Payment.findOne({
+    farmId: payment.farmId,
+    userId: payment.userId,
+    status: 'success',
+    plan: owner.subscriptionPlan,
+    billingCycle: owner.billingCycle,
+  }).sort({ createdAt: -1, _id: -1 }).lean()
+  if (!latestMatchingPayment || String(latestMatchingPayment._id) !== String(payment._id)) {
+    throw new ApiError(409, 'This payment is not the farm’s current active subscription.')
+  }
+
+  const cancelledAt = new Date()
+  const session = await mongoose.startSession()
+  try {
+    session.startTransaction()
+    const updatedOwner = await authModel.findOneAndUpdate(
+      {
+        _id: owner._id,
+        farmId: payment.farmId,
+        userType: 'manager',
+        isSubscribed: true,
+        subscriptionStatus: 'active',
+        subscriptionPlan: payment.plan,
+        billingCycle: payment.billingCycle,
+      },
+      {
+        $set: {
+          isSubscribed: false,
+          subscriptionStatus: 'cancelled',
+          subscriptionType: 'none',
+          subscriptionPlan: 'none',
+          billingCycle: 'none',
+          subscriptionStart: null,
+          subscriptionEnd: null,
+        },
+      },
+      { session, new: true }
+    )
+    const updatedPayment = await Payment.findOneAndUpdate(
+      { _id: payment._id, farmId: payment.farmId, userId: payment.userId, status: 'success', subscriptionCancelledAt: null },
+      { $set: { subscriptionCancelledAt: cancelledAt, subscriptionStatus: 'inactive', isSubscribed: false } },
+      { session, new: true }
+    )
+    if (!updatedOwner || !updatedPayment) {
+      throw new ApiError(409, 'The subscription changed during cancellation. Refresh and try again.')
+    }
+    await session.commitTransaction()
+  } catch (error) {
+    if (session.inTransaction()) await session.abortTransaction()
+    throw error
+  } finally {
+    await session.endSession()
+  }
+
+  clearSubscriptionCache(String(owner._id))
+  clearSubscriptionCacheForFarm(payment.farmId)
+  await createAuditLog('ADMIN_DELETE_SUBSCRIPTION', 'subscription', {
+    userId: req.user.id,
+    farmId: payment.farmId,
+    entityId: payment._id,
+    before: {
+      userId: String(owner._id),
+      farmId: payment.farmId,
+      paymentReference: payment.reference,
+      plan: payment.plan,
+      billingCycle: payment.billingCycle,
+      status: owner.subscriptionStatus,
+    },
+    after: {
+      subscriptionStatus: 'cancelled',
+      isSubscribed: false,
+      paymentHistoryRetained: true,
+      cancelledAt,
+    },
+    req,
+    maxPayloadBytes: 8192,
+  })
+
+  return res.status(200).json({
+    success: true,
+    message: 'Subscription cancelled. The successful payment record has been retained.',
+    data: { id: String(payment._id), status: 'cancelled', cancelledAt },
+  })
 }
 
 exports.getAdminSubscriptionStats = async (req, res) => {

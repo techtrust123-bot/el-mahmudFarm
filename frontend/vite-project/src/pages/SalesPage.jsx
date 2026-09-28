@@ -16,6 +16,7 @@ import { ANIMAL_TYPE } from '../utils/constants';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { downloadExport, getDefaultFilename } from '../utils/exportHelper';
+import { SkeletonChart, SkeletonStats } from '../components/common/Skeletons';
 
 /**
  * Sales & Revenue Page
@@ -47,6 +48,7 @@ const SalesPage = () => {
   ]);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [availablePoultry, setAvailablePoultry] = useState([]);
   const [availableLivestock, setAvailableLivestock] = useState([]);
   const [eggRecords, setEggRecords] = useState([]);
@@ -410,6 +412,9 @@ const SalesPage = () => {
         }
       } catch (error) {
         console.log(error)
+        toast.error(error.response?.data?.message || 'Unable to load sales data.');
+      } finally {
+        setInitialLoading(false);
       }
     }
     fetchSells()
@@ -467,17 +472,17 @@ const SalesPage = () => {
 
 
         {/* Statistics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        {initialLoading ? <SkeletonStats count={6} className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3" /> : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <StatCard label="Total Revenue" value={formatCurrency(totalRevenue)} change="+15%" trend="up" />
           <StatCard label="Latest Month Revenue" value={formatCurrency(latestMonthRevenue)} />
           <StatCard label="Profit" value={formatCurrency(profit)} />
           <StatCard label="Total Quantity Sold" value={quantitySold} />
           <StatCard label="Completed Sales" value={completedSales} change="+3" trend="up" />
           <StatCard label="Pending Sales" value={pendingSales} />
-        </div>
+        </div>}
 
         {/* Revenue Chart */}
-        <Card>
+        {initialLoading ? <SkeletonChart /> : <Card>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Monthly Revenue
           </h2>
@@ -491,7 +496,7 @@ const SalesPage = () => {
               <Bar dataKey="revenue" fill="#10b981" name="Revenue" />
             </BarChart>
           </ResponsiveContainer>
-        </Card>
+        </Card>}
 
         {/* Filters */}
         <Card className="p-4">
@@ -518,6 +523,7 @@ const SalesPage = () => {
           <Table
             columns={tableColumns}
             data={filteredSales}
+            loading={initialLoading}
             actions={(row) => [
               <Button key="invoice" variant="outline" size="sm" className="flex items-center gap-1" onClick={() => handleGenerateReceipt(row)}>
                 <FiDownload size={14} />

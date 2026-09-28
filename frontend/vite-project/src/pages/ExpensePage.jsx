@@ -17,6 +17,7 @@ import { EXPENSE_CATEGORIES } from '../utils/constants';
 import { validateForm, expenseSchema } from '../utils/validation';
 import { AuthContext } from '../context/AuthContext';
 import { downloadExport, getDefaultFilename } from '../utils/exportHelper';
+import { SkeletonChart, SkeletonStats } from '../components/common/Skeletons';
 
 /**
  * Expense Management Page
@@ -28,6 +29,7 @@ const ExpensePage = () => {
   const [editingId, setEditingId] = useState(null);
   const [alert, setAlert] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [formData, setFormData] = useState({
     title: '',
     amount: '',
@@ -178,6 +180,8 @@ const ExpensePage = () => {
         }
       } catch (error) {
         setAlert({ type: 'error', message: 'An error occurred while fetching expenses.' });
+      } finally {
+        setInitialLoading(false);
       }
     }
     fetchExpenses();
@@ -235,14 +239,14 @@ const ExpensePage = () => {
         )}
 
         {/* Statistics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        {initialLoading ? <SkeletonStats count={3} className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3" /> : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <StatCard label="Total Expenses" value={`${formatCurrency(totalExpenses)}`} change="+8%" trend="up" />
           <StatCard label="This Month" value={`${formatCurrency(currentMonthExpense)}`} />
           <StatCard label="Monthly Average" value={`${formatCurrency(monthlyAverageExpense)}`} />
-        </div>
+        </div>}
 
         {/* Charts */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+        {initialLoading ? <div className="grid grid-cols-1 gap-6 md:grid-cols-2"><SkeletonChart /><SkeletonChart /></div> : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
           {/* Expenses by Category Pie Chart */}
           <Card>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -284,7 +288,7 @@ const ExpensePage = () => {
               </BarChart>
             </ResponsiveContainer>
           </Card>
-        </div>
+        </div>}
 
         {/* Filter */}
         <Card className="p-4">
@@ -301,6 +305,7 @@ const ExpensePage = () => {
           <Table
             columns={tableColumns}
             data={filteredExpenses}
+            loading={initialLoading}
             actions={(row) => [
               <Button key="edit" variant="outline" size="sm" onClick={() => handleEdit(row)}>
                 <FiEdit2 size={14} />

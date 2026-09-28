@@ -1,6 +1,6 @@
 const express = require('express')
 const { getUsers } = require('../controllers/authController')
-const { authMiddleware, isManager, checkPermission } = require('../middleweres/authMiddlewere')
+const { authMiddleware, isManager, isAdmin, checkPermission } = require('../middleweres/authMiddlewere')
 const { checkSubscription } = require('../middleware/subscriptionMiddleware')
 const { requireFeatureAccess, enforceBasicStaffLimit } = require('../middleware/featureAuthorization')
 const { asyncHandler } = require('../middleware/errorHandler')
@@ -38,6 +38,6 @@ router.get('/profile/:id', authMiddleware, checkSubscription, asyncHandler(getUs
 router.put('/role/:id', authMiddleware, checkSubscription, isManager, asyncHandler(updateUserRole))
 router.put('/suspend/:id', authMiddleware, checkSubscription, isManager, asyncHandler(suspendUser))
 router.put('/activate/:id', authMiddleware, checkSubscription, isManager, asyncHandler(activateUser))
-router.delete('/delete/:id', authMiddleware, checkSubscription, isManager, asyncHandler(deleteUser))
+router.delete('/delete/:id', authMiddleware, isAdmin, asyncHandler(deleteUser))
 
 module.exports = router

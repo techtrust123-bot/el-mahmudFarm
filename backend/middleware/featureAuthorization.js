@@ -111,7 +111,7 @@ const enforceBasicStaffLimit = async (req, res, next) => {
     }
 
     const farmId = req.user.farmId;
-    const staffCount = await authModel.countDocuments({ farmId, userType: 'staff' });
+    const staffCount = await authModel.countDocuments({ farmId, userType: 'staff', deletedAt: null });
 
     if (staffCount >= 4) {
       return next(

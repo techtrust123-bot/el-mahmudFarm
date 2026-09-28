@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { FiUsers, FiTrendingUp, FiCheckCircle, FiDollarSign, FiDatabase } from 'react-icons/fi';
+import { FiUsers, FiTrendingUp, FiCheckCircle, FiDollarSign, FiDatabase, FiLoader, FiTrash2 } from 'react-icons/fi';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import axios from 'axios';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../../components/layout/MainLayout';
 import Card from '../../components/ui/Card';
 import StatCard from '../../components/ui/StatCard';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import Modal from '../../components/ui/Modal';
 import { AuthContext } from '../../context/AuthContext';
+import Alert from '../../components/ui/Alert';
+import { SkeletonChart, SkeletonStats } from '../../components/common/Skeletons';
 
 /**
  * Admin Super Dashboard - Platform overview
@@ -29,10 +33,14 @@ const AdminDashboardPage = () => {
   const [emailSearch, setEmailSearch] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [actionLoading, setActionLoading] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletingUserId, setDeletingUserId] = useState(null);
   const [subscriptionAnalytics, setSubscriptionAnalytics] = useState(null);
   const [analyticsRange, setAnalyticsRange] = useState('last30');
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState('');
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [initialError, setInitialError] = useState('');
   const baseUrl = backendUrl || import.meta.env.VITE_BACKEND_URL || '';
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -125,6 +133,24 @@ const AdminDashboardPage = () => {
     } catch (error) {
       console.error(`Failed to ${action} user`, error);
       setActionLoading(null);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteTarget || deletingUserId) return;
+    setDeletingUserId(deleteTarget.id);
+    try {
+      const response = await axios.delete(`${baseUrl}/api/user/delete/${deleteTarget.id}`, { withCredentials: true });
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Unable to deactivate this user.');
+      }
+      setUsers((currentUsers) => currentUsers.filter((user) => String(user._id || user.id) !== String(deleteTarget.id)));
+      setDeleteTarget(null);
+      toast.success(response.data.message || 'Staff access deactivated.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message || 'Unable to deactivate this user.');
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -236,11 +262,16 @@ const AdminDashboardPage = () => {
         setUserGrowthData(buildUserGrowth(fetchedUsers));
         setActivities(buildActivityFeed(fetchedUsers, fetchedSales));
 
-        [usersResult, salesResult, emailResult, backupResult, salesSummaryResult]
-          .filter((result) => result.status === 'rejected')
+        const failedRequests = [usersResult, salesResult, emailResult, backupResult, salesSummaryResult]
+          .filter((result) => result.status === 'rejected');
+        setInitialError(failedRequests.length ? 'Some admin dashboard data could not be loaded.' : '');
+        failedRequests
           .forEach((result) => console.error('Admin dashboard request failed:', result.reason));
       } catch (error) {
+        setInitialError(error.response?.data?.message || 'Unable to load admin dashboard data.');
         console.error('Failed to load admin dashboard data', error);
+      } finally {
+        setInitialLoading(false);
       }
     };
 
@@ -322,6 +353,7 @@ const AdminDashboardPage = () => {
     id: user._id || user.id,
     name: user.name,
     email: user.email,
+    userType: user.userType || 'unknown',
     role: user.role || 'User',
     farm: user.farmName || user.farmId || 'N/A',
     status: String(user.isAccountVerified) === 'true' || user.isAccountVerified === true ? 'active' : 'inactive',
@@ -356,13 +388,15 @@ const AdminDashboardPage = () => {
           </div>
         </div>
 
+        {initialError && <Alert type="error" message={initialError} />}
+
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        {initialLoading ? <SkeletonStats count={4} className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4" /> : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard icon={FiUsers} label="Total Users" value={stats.totalUsers} />
           <StatCard icon={FiTrendingUp} label="Active Farms" value={stats.activeFarms} />
           <StatCard icon={FiDollarSign} label="Total Revenue" value={formatCurrency(stats.totalRevenue)} />
           <StatCard icon={FiCheckCircle} label="Marketplace Sales" value={stats.marketplaceSales} />
-        </div>
+        </div>}
 
         <Card>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -371,7 +405,7 @@ const AdminDashboardPage = () => {
               <option value="today">Today</option><option value="last7">Last 7 days</option><option value="last30">Last 30 days</option><option value="thisMonth">This month</option><option value="lastMonth">Last month</option>
             </select>
           </div>
-          {analyticsLoading && <p className="mt-6 text-sm text-gray-500">Loading subscription analytics...</p>}
+          {analyticsLoading && <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2"><SkeletonChart /><SkeletonChart /></div>}
           {analyticsError && <p className="mt-6 rounded-lg bg-red-50 p-3 text-sm text-red-700">{analyticsError}</p>}
           {!analyticsLoading && !analyticsError && subscriptionAnalytics && <>
             <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -390,7 +424,7 @@ const AdminDashboardPage = () => {
         </Card>
 
         {/* Revenue Chart */}
-        <Card>
+        {initialLoading ? <SkeletonChart /> : <Card>
           <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Revenue Overview</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={revenueData}>
@@ -406,10 +440,10 @@ const AdminDashboardPage = () => {
               <Bar dataKey="sales" fill="#f09c0a" name="Sales" />
             </BarChart>
           </ResponsiveContainer>
-        </Card>
+        </Card>}
 
         {/* User Growth */}
-        <Card>
+        {initialLoading ? <SkeletonChart /> : <Card>
           <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">User Growth Trend</h3>
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={userGrowthData}>
@@ -420,7 +454,7 @@ const AdminDashboardPage = () => {
               <Line type="monotone" dataKey="users" stroke="#10b981" strokeWidth={2} name="User Signups" />
             </LineChart>
           </ResponsiveContainer>
-        </Card>
+        </Card>}
 
         {/* Users Management */}
         <Card>
@@ -433,6 +467,7 @@ const AdminDashboardPage = () => {
             columns={[
               { key: 'name', label: 'Name' },
               { key: 'email', label: 'Email' },
+              { key: 'userType', label: 'User type', render: (val) => <span className="capitalize">{val}</span> },
               { key: 'role', label: 'Role', render: (val) => <Badge variant="info">{val}</Badge> },
               { key: 'farm', label: 'Farm' },
               {
@@ -442,6 +477,7 @@ const AdminDashboardPage = () => {
               },
             ]}
             data={tableUsers}
+            loading={initialLoading}
             actions={(row) => {
               const isActive = row.status === 'active';
               return [
@@ -460,7 +496,16 @@ const AdminDashboardPage = () => {
                     ? 'Suspend'
                     : 'Activate'}
                 </Button>,
-                <Button key={`view-${row.id}`} variant="ghost" size="sm">View</Button>,
+                // <Button key={`view-${row.id}`} variant="ghost" size="sm">View</Button>,
+                row.userType.toLowerCase() === 'staff' && <Button
+                  key={`delete-${row.id}`}
+                  variant="danger"
+                  size="sm"
+                  disabled={Boolean(deletingUserId)}
+                  onClick={() => setDeleteTarget(row)}
+                >
+                  <FiTrash2 size={14} /> Delete
+                </Button>,
               ]
             }}
           />
@@ -503,7 +548,7 @@ const AdminDashboardPage = () => {
                 { key: 'farmId', label: 'Target' },
               ]}
               data={backups.slice(0, 5)}
-              loading={backups.length === 0 && !backupLoading}
+              loading={initialLoading}
               actions={(row) => [
                 <Button
                   key={`restore-${row.name}`}
@@ -578,7 +623,7 @@ const AdminDashboardPage = () => {
               },
             ]}
             data={filteredEmailActivity}
-            loading={emailActivity.length === 0}
+            loading={initialLoading}
           />
         </Card>
 
@@ -591,7 +636,7 @@ const AdminDashboardPage = () => {
             </div>
             <span className="text-sm text-gray-600 dark:text-gray-400">Updated at {currentTime.toLocaleTimeString()}</span>
           </div>
-          <Table columns={activityColumns} data={activities} loading={activities.length === 0 && users.length === 0} />
+          <Table columns={activityColumns} data={activities} loading={initialLoading} />
         </Card>
 
 {/* 
@@ -665,6 +710,32 @@ const AdminDashboardPage = () => {
             </div>
           </Card>
         </div>
+
+        <Modal
+          isOpen={Boolean(deleteTarget)}
+          onClose={() => { if (!deletingUserId) setDeleteTarget(null); }}
+          title="Deactivate Staff User?"
+          size="md"
+          footer={(
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button variant="secondary" disabled={Boolean(deletingUserId)} onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button variant="danger" disabled={Boolean(deletingUserId)} onClick={handleDeleteUser}>
+                {deletingUserId ? <><FiLoader className="animate-spin" /> Deleting...</> : <><FiTrash2 /> Delete User</>}
+              </Button>
+            </div>
+          )}
+        >
+          {deleteTarget && <div className="space-y-4">
+            <p className="text-sm text-gray-600 dark:text-gray-300">This deactivates the staff login and revokes refresh sessions. Existing farm data and subscription records are retained; no manager, farm, or other staff account will be deleted.</p>
+            <dl className="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 p-4 text-sm dark:border-gray-700 sm:grid-cols-2">
+              <div><dt className="text-gray-500 dark:text-gray-400">Name</dt><dd className="mt-1 font-semibold text-gray-900 dark:text-white">{deleteTarget.name || 'Unknown'}</dd></div>
+              <div><dt className="text-gray-500 dark:text-gray-400">Email</dt><dd className="mt-1 break-all font-semibold text-gray-900 dark:text-white">{deleteTarget.email || 'Not available'}</dd></div>
+              <div><dt className="text-gray-500 dark:text-gray-400">User type</dt><dd className="mt-1 capitalize font-semibold text-gray-900 dark:text-white">{deleteTarget.userType}</dd></div>
+              <div><dt className="text-gray-500 dark:text-gray-400">Farm</dt><dd className="mt-1 font-semibold text-gray-900 dark:text-white">{deleteTarget.farm}</dd></div>
+              <div><dt className="text-gray-500 dark:text-gray-400">Role</dt><dd className="mt-1 capitalize font-semibold text-gray-900 dark:text-white">{deleteTarget.role}</dd></div>
+            </dl>
+          </div>}
+        </Modal>
       </div>
     </MainLayout>
   );

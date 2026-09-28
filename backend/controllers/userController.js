@@ -1,4 +1,9 @@
 const authModel = require('../models/auth.js')
+const mongoose = require('mongoose')
+const ApiError = require('../utils/ApiError')
+const logger = require('../utils/logger')
+const RefreshToken = require('../models/refreshToken')
+const { createAuditLog } = require('../middleware/auditLogger')
 
 exports.userData = async(req,res)=>{
     const userId = req.user.id
@@ -134,7 +139,7 @@ exports.getStaff = async(req,res)=>{
         return res.status(403).json({ message: 'Forbidden: Manager access only' })
     }
     try {
-        const staff = await authModel.find({ farmId: req.user.farmId, userType: 'staff' }).select('-password')
+        const staff = await authModel.find({ farmId: req.user.farmId, userType: 'staff', deletedAt: null }).select('-password')
         res.status(200).json({ success:true, message:'Staff retrieved successfully.', data: staff })
     } catch (error) {
         logger.error({message:error.message, stack:error.stack})
@@ -148,7 +153,7 @@ exports.getStaffById = async(req,res)=>{
     }
     const id = req.params.id
     try {
-        const staff = await authModel.findOne({ _id: id, farmId: req.user.farmId, userType: 'staff' }).select('-password')
+        const staff = await authModel.findOne({ _id: id, farmId: req.user.farmId, userType: 'staff', deletedAt: null }).select('-password')
         if (!staff) {
             return res.status(404).json({ success:false, message:'Staff member not found.' })
         }
@@ -166,7 +171,7 @@ exports.updateStaff = async(req,res)=>{
     const id = req.params.id
     const { name, permissions, contact, salary, hireDate } = req.body
     try {
-        const staff = await authModel.findOne({ _id: id, farmId: req.user.farmId, userType: 'staff' })
+        const staff = await authModel.findOne({ _id: id, farmId: req.user.farmId, userType: 'staff', deletedAt: null })
         if (!staff) {
             return res.status(404).json({ success:false, message:'Staff member not found.' })
         }
@@ -194,6 +199,7 @@ exports.deleteStaff = async(req,res)=>{
         const staff = await authModel.findOne({
             _id: id,
             farmId: String(req.user.farmId),
+            deletedAt: null,
             $or: [
                 { userType: 'staff' },
                 { userType: 'Staff' },
@@ -216,7 +222,7 @@ exports.deleteStaff = async(req,res)=>{
 
 exports.getAllUsers = async(req,res)=>{
     try {
-        const users = await authModel.find()
+        const users = await authModel.find({ deletedAt: null })
         res.status(200).json({success:true,message:"users found...",data:users})
     } catch (error) {
         logger.error({message:error.message, stack:error.stack})
@@ -289,17 +295,67 @@ exports.activateUser = async(req,res)=>{
     }
 }
 
-exports.deleteUser = async(req,res)=>{ 
-    const id = req.params.id
-    try {
-        const user = await authModel.findById(id)
-        if(!user){
-            return res.status(404).json({message:"user not found..."})
-        }
-        await authModel.findByIdAndDelete(id)
-        res.status(200).json({success:true,message:"user deleted successfully..."})
-    } catch (error) {
-        logger.error({message:error.message, stack:error.stack})
-        res.status(500).json({message:error.message})
+exports.deleteUser = async (req, res) => {
+    const { id } = req.params
+    if (!mongoose.isObjectIdOrHexString(id)) {
+        throw new ApiError(400, 'Invalid user ID.')
     }
+    if (String(req.user.id) === String(id)) {
+        throw new ApiError(409, 'You cannot deactivate your own account.')
+    }
+
+    const user = await authModel.findById(id)
+    if (!user || user.deletedAt) {
+        throw new ApiError(404, 'User not found.')
+    }
+
+    const userType = String(user.userType || '').toLowerCase()
+    const role = String(user.role || '').toLowerCase()
+    if (userType === 'admin' || role === 'admin') {
+        throw new ApiError(409, 'Protected administrator accounts cannot be deactivated.')
+    }
+    if (userType === 'manager' || role === 'manager' || (userType !== 'staff' && role !== 'staff')) {
+        throw new ApiError(409, 'Only staff accounts can be deactivated here. Farm owner accounts and their data are retained.')
+    }
+
+    const deactivatedAt = new Date()
+    const deactivatedUser = await authModel.findOneAndUpdate(
+        { _id: user._id, userType: user.userType, role: user.role, deletedAt: null },
+        { $set: { deletedAt: deactivatedAt, isAccountVerified: false } },
+        { new: true }
+    )
+    if (!deactivatedUser) {
+        throw new ApiError(409, 'This user was changed by another request. Refresh the list and try again.')
+    }
+
+    try {
+        await RefreshToken.deleteMany({ userId: user._id })
+    } catch (error) {
+        logger.error('Failed to remove refresh tokens for deactivated staff account', {
+            userId: String(user._id),
+            message: error.message,
+        })
+    }
+
+    await createAuditLog('ADMIN_DELETE_USER', 'user', {
+        userId: req.user.id,
+        farmId: user.farmId || req.user.farmId,
+        entityId: user._id,
+        before: {
+            name: user.name,
+            email: user.email,
+            userType: user.userType,
+            role: user.role,
+            farmId: user.farmId,
+        },
+        after: { deletedAt: deactivatedAt, relatedFarmDataRetained: true },
+        req,
+        maxPayloadBytes: 8192,
+    })
+
+    return res.status(200).json({
+        success: true,
+        message: 'Staff access deactivated. Farm data and related records were retained.',
+        data: { id: String(user._id), deletedAt: deactivatedAt },
+    })
 }

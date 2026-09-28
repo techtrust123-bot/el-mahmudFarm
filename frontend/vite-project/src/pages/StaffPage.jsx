@@ -15,6 +15,7 @@ import Badge from '../components/ui/Badge';
 import { STAFF_ROLES } from '../utils/constants';
 import { validateForm, staffSchema } from '../utils/validation';
 import axiosInstance from '../utils/axiosInstance';
+import { SkeletonStats } from '../components/common/Skeletons';
 
 /**
  * Staff Management Page
@@ -26,6 +27,7 @@ const StaffPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [alert, setAlert] = useState(null);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
     salary: '',
@@ -193,6 +195,8 @@ const StaffPage = () => {
       } catch (error) {
         console.log(error);
         setAlert({ type: 'error', message: error.response?.data?.message || 'Failed to fetch staff data. Please try again.' });
+      } finally {
+        setInitialLoading(false);
       }
     };
     fetchStaffs();
@@ -253,11 +257,11 @@ const StaffPage = () => {
         )}
 
         {/* Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {initialLoading ? <SkeletonStats count={3} className="grid grid-cols-1 gap-4 md:grid-cols-3" /> : <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <StatCard label="Total Staff" value={staff.length} />
           <StatCard label="Active Staff" value={activeStaff} />
           <StatCard label="Monthly Payroll" value={formatCurrency(totalPayroll)} />
-        </div>
+        </div>}
 
         {/* Filters */}
         <Card className="p-4">
@@ -292,6 +296,7 @@ const StaffPage = () => {
           <Table
             columns={tableColumns}
             data={filteredStaff}
+            loading={initialLoading}
             actions={(row) => [
               <Button key="edit" variant="outline" size="sm" onClick={() => handleEdit(row)}>
                 <FiEdit2 size={14} />

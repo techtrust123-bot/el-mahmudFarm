@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { Skeleton } from '../common/Skeletons';
 
 /**
  * Data table component with sorting and pagination
@@ -107,11 +108,15 @@ const Table = ({
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={columns.length + (actions ? 1 : 0)} className="px-4 py-4 text-center text-gray-500">
-                  Loading...
-                </td>
-              </tr>
+              Array.from({ length: 5 }, (_, rowIndex) => (
+                <tr key={`skeleton-${rowIndex}`} className="border-b border-gray-200 dark:border-gray-700">
+                  {Array.from({ length: columns.length + (actions ? 1 : 0) }, (_, columnIndex) => (
+                    <td key={columnIndex} className="px-3 py-3">
+                      <Skeleton className="h-4 w-3/4" />
+                    </td>
+                  ))}
+                </tr>
+              ))
             ) : pagedData.length === 0 ? (
               <tr>
                 <td colSpan={columns.length + (actions ? 1 : 0)} className="px-4 py-4 text-center text-gray-500">
@@ -142,7 +147,16 @@ const Table = ({
       </div>
       <div className="md:hidden space-y-4 p-3 bg-white dark:bg-gray-900">
         {loading ? (
-          <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-4 text-center text-gray-500">Loading...</div>
+          Array.from({ length: 3 }, (_, rowIndex) => (
+            <div key={`mobile-skeleton-${rowIndex}`} className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+              {columns.slice(0, 4).map((column) => (
+                <div key={column.key} className="grid grid-cols-2 gap-3 border-b border-gray-100 py-2 last:border-0 dark:border-gray-700">
+                  <Skeleton className="h-3 w-3/4" />
+                  <Skeleton className="h-3 w-full" />
+                </div>
+              ))}
+            </div>
+          ))
         ) : pagedData.length === 0 ? (
           <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-4 text-center text-gray-500">No data available</div>
         ) : (

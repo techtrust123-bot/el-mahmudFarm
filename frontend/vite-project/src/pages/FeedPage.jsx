@@ -16,6 +16,7 @@ import { toast } from 'react-hot-toast';
 import { AuthContext } from '../context/AuthContext';
 import { FEED_CATEGORY, ANIMAL_TYPES } from '../utils/constants';
 import { downloadExport, getDefaultFilename } from '../utils/exportHelper';
+import { SkeletonChart, SkeletonStats } from '../components/common/Skeletons';
 // import { FEED_TYPE, FEED_CATEGORY, POULTRY_TYPES,ANIMAL_TYPES } from '../utils/constants';
 
 /**
@@ -27,6 +28,7 @@ const FeedPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     feedType: '',
@@ -192,6 +194,7 @@ const FeedPage = () => {
   
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
     try {
       let response;
       const payload = {
@@ -223,6 +226,8 @@ const FeedPage = () => {
       }
     } catch (error) {
       toast.error(error.response?.data?.message || (editingId ? 'Failed to update feed' : 'Failed to add feed'));
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -264,6 +269,8 @@ const FeedPage = () => {
         setFeeds(response.data.data || response.data.message || []);
       } catch (error) {
         toast.error(error.response?.data?.message || 'Failed to fetch feeds');
+      } finally {
+        setInitialLoading(false);
       }
     };
     fetchFeeds();
@@ -330,11 +337,11 @@ const FeedPage = () => {
         </div>
 
         {/* Statistics */}
-        <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-3 gap-4">
+        {initialLoading ? <SkeletonStats count={3} className="grid grid-cols-1 gap-4 md:grid-cols-3" /> : <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-3 gap-4">
           <StatCard label="Total Feed (kg)" value={feeds.reduce((sum, item) => sum + Number(item.quantity || 0), 0).toLocaleString()} />
           <StatCard label="Total Consumption (kg)" value={totalConsumption.toLocaleString()} />
           <StatCard label="Inventory Value" value={formatCurrency(Number(totalValue || 0).toFixed(2))} />
-        </div>
+        </div>}
 
         {/* Low Stock Alert */}
         {lowStockFeeds.length > 0 && (
@@ -423,7 +430,7 @@ const FeedPage = () => {
         </Card> */}
 
         {/* Feed Consumption Chart */}
-        <Card>
+        {initialLoading ? <SkeletonChart /> : <Card>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Daily Consumption Trend
           </h2>
@@ -437,7 +444,7 @@ const FeedPage = () => {
               <Line type="monotone" dataKey="consumption" stroke="#10b981" name="Consumption (kg)" />
             </LineChart>
           </ResponsiveContainer>
-        </Card>
+        </Card>}
 
         {/* Search */}
         <Card className="p-4">
@@ -453,6 +460,7 @@ const FeedPage = () => {
           <Table
             columns={tableColumns}
             data={filteredFeeds}
+            loading={initialLoading}
             actions={(row) => [
               <Button key="edit" variant="outline" size="sm" onClick={() => handleEdit(row)}>
                 <FiEdit2 size={14} />

@@ -233,6 +233,9 @@ exports.login = async (req, res) => {
       // return res.status(404).json({ success: false, message: 'User not found' });
       throw new ApiError(404, 'User not found');
     }
+    if (user.deletedAt) {
+      throw new ApiError(403, 'This account has been deactivated.');
+    }
 
     // const verifiedAccount = await authModel.findOne({ email: normalizedEmail, isAccountVerified: true });
     // if (!user.isAccountVerified) {
@@ -244,11 +247,12 @@ exports.login = async (req, res) => {
     if (isAccountLocked(user)) {
       const remainingTime = Math.ceil((user.lockUntil - Date.now()) / 1000 / 60);
       logAuthEvent('login_failed', user._id, user.farmId, req.ip, req.get('User-Agent'), { reason: 'account_locked', remainingMinutes: remainingTime });
+       throw new ApiError(423, `Account locked due to too many failed attempts. Try again in ${remainingTime} minutes.`);
       return res.status(423).json({
         success: false,
         message: `Account locked due to too many failed attempts. Try again in ${remainingTime} minutes.`
       });
-      throw new ApiError(423, `Account locked due to too many failed attempts. Try again in ${remainingTime} minutes.`);
+     
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -377,7 +381,7 @@ exports.refresh = async (req, res) => {
 
     // Get user
     const user = await authModel.findById(validUserId);
-    if (!user) {
+    if (!user || user.deletedAt) {
       logAuthEvent('refresh_failed', validUserId, null, req.ip, req.get('User-Agent'), { reason: 'user_not_found' });
       return res.status(401).json({ 
         success: false, 
@@ -548,7 +552,7 @@ exports.getUsers = async(req,res)=>{
     if (!req.user || (req.user.userType !== 'manager' && req.user.role !== 'admin')) {
       throw new ApiError(403, 'Forbidden: Manager access only');
     }
-    const query = req.user.role === 'admin' ? {} : { farmId: req.user.farmId }
+    const query = req.user.role === 'admin' ? { deletedAt: null } : { farmId: req.user.farmId, deletedAt: null }
     const users = await authModel.find(query).select('-password -verificationOtp -resetPassword -loginAttempts -lockUntil')
     return res.status(200).json({ success: true, users })
   } catch (error) {

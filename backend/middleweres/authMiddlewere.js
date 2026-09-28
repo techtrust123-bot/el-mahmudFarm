@@ -1,7 +1,9 @@
 const jwt = require('jsonwebtoken')
+const mongoose = require('mongoose')
+const authModel = require('../models/auth')
 const logger = require('../utils/logger')
 
-exports.authMiddleware = (req, res, next) => {
+exports.authMiddleware = async (req, res, next) => {
     const token = req.cookies.token
     if (!token) {
         return res.status(401).json({ success: false, message: 'Unauthorized', code: 'NO_TOKEN' })
@@ -11,13 +13,29 @@ exports.authMiddleware = (req, res, next) => {
         if (!decoded) {
             return res.status(401).json({ success: false, message: 'Invalid Token', code: 'INVALID_TOKEN' })
         }
+        if (!decoded.id || !mongoose.isObjectIdOrHexString(decoded.id)) {
+            return res.status(401).json({ success: false, message: 'Invalid Token', code: 'INVALID_TOKEN' })
+        }
+
+        let account
+        try {
+            account = await authModel.findById(decoded.id).select('role userType farmId permissions deletedAt')
+        } catch (accountLookupError) {
+            logger.error('Auth account lookup failed:', accountLookupError)
+            return res.status(500).json({ success: false, message: 'Unable to verify account status' })
+        }
+
+        if (!account || account.deletedAt) {
+            return res.status(401).json({ success: false, message: 'Account is no longer available', code: 'INVALID_TOKEN' })
+        }
+
         req.user = {
-            id: decoded.id,
-            role: typeof decoded.role === 'string' ? decoded.role.toLowerCase() : '',
-            userType: typeof decoded.userType === 'string' ? decoded.userType.toLowerCase() : '',
-            farmId: decoded.farmId,
-            permissions: Array.isArray(decoded.permissions)
-                ? decoded.permissions.map((perm) => (typeof perm === 'string' ? perm.toLowerCase() : perm))
+            id: String(account._id),
+            role: typeof account.role === 'string' ? account.role.toLowerCase() : '',
+            userType: typeof account.userType === 'string' ? account.userType.toLowerCase() : '',
+            farmId: account.farmId,
+            permissions: Array.isArray(account.permissions)
+                ? account.permissions.map((perm) => (typeof perm === 'string' ? perm.toLowerCase() : perm))
                 : [],
         }
         return next()
