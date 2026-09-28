@@ -504,7 +504,7 @@ const AdminDashboardPage = () => {
                   disabled={Boolean(deletingUserId)}
                   onClick={() => setDeleteTarget(row)}
                 >
-                  <FiTrash2 size={14} /> Delete
+                  <FiTrash2 size={14} /> Deactivate
                 </Button>,
               ]
             }}
@@ -720,7 +720,7 @@ const AdminDashboardPage = () => {
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <Button variant="secondary" disabled={Boolean(deletingUserId)} onClick={() => setDeleteTarget(null)}>Cancel</Button>
               <Button variant="danger" disabled={Boolean(deletingUserId)} onClick={handleDeleteUser}>
-                {deletingUserId ? <><FiLoader className="animate-spin" /> Deleting...</> : <><FiTrash2 /> Delete User</>}
+                {deletingUserId ? <><FiLoader className="animate-spin" /> Deactivating...</> : <><FiTrash2 /> Deactivate User</>}
               </Button>
             </div>
           )}

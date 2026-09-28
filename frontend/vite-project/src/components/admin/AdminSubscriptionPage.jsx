@@ -156,6 +156,7 @@ const AdminSubscriptionPage = () => {
                 <option value="pending">Pending</option>
                 <option value="cancelled">Cancelled</option>
                 <option value="failed">Failed</option>
+                <option value="historical">Historical</option>
               </select>
             </div>
           </div>

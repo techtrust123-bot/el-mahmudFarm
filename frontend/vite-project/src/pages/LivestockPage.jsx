@@ -46,6 +46,7 @@ const LivestockPage = () => {
     age: '',
     weight: '',
     healthStatus: '',
+    startingStage: 'starter',
     purchaseDate: '',
     purchasePrice: '',
     livestockSalePrice:'',
@@ -82,6 +83,7 @@ const LivestockPage = () => {
       age: '',
       weight: '',
       healthStatus: '',
+      startingStage: 'starter',
       purchaseDate: '',
       purchasePrice: '',
       livestockSalePrice:'',
@@ -113,6 +115,7 @@ const LivestockPage = () => {
       age: item.age,
       weight: item.weight,
       healthStatus: item.healthStatus,
+      startingStage: item.startingStage || 'starter',
       purchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : '',
       purchasePrice: item.purchasePrice,
       livestockSalePrice: item.livestockSalePrice || '',
@@ -190,6 +193,7 @@ const LivestockPage = () => {
           age: '',
           weight: '',
           healthStatus: '',
+          startingStage: 'starter',
           purchaseDate: '',
           purchasePrice: '',
           livestockSalePrice:'',
@@ -432,6 +436,24 @@ const LivestockPage = () => {
               error={errors.type}
               required
             />
+            <div>
+              <Select
+                label="Starting Feed Stage"
+                name="startingStage"
+                options={[
+                  { value: 'starter', label: 'Starter' },
+                  { value: 'grower', label: 'Grower' },
+                  { value: 'finisher', label: 'Finisher' },
+                ]}
+                value={formData.startingStage}
+                onChange={handleChange}
+                error={errors.startingStage}
+                required
+              />
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Select the feed stage when you purchased/acquired this animal.
+              </p>
+            </div>
             <Input
               label="Tag Number"
               type="text"

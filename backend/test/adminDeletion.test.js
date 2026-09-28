@@ -8,6 +8,7 @@ const RefreshToken = require('../models/refreshToken');
 const userController = require('../controllers/userController');
 const paymentController = require('../controllers/paymentController');
 const { authMiddleware, isAdmin } = require('../middleweres/authMiddlewere');
+const { checkSubscription } = require('../middleware/subscriptionMiddleware');
 
 const originalMethods = {
   authExists: authModel.exists,
@@ -99,6 +100,30 @@ test('invalid user IDs return 400 without querying the database', async () => {
   );
 });
 
+test('nonexistent user IDs return 404', async () => {
+  authModel.findById = async () => null;
+  await assert.rejects(
+    userController.deleteUser(adminRequest(new mongoose.Types.ObjectId().toString())),
+    (error) => error.statusCode === 404
+  );
+});
+
+test('invalid subscription IDs return 400 without querying payments', async () => {
+  Payment.findById = () => assert.fail('database must not be queried');
+  await assert.rejects(
+    paymentController.cancelAdminSubscription(adminRequest('not-an-object-id')),
+    (error) => error.statusCode === 400
+  );
+});
+
+test('nonexistent subscription IDs return 404', async () => {
+  Payment.findById = () => ({ lean: async () => null });
+  await assert.rejects(
+    paymentController.cancelAdminSubscription(adminRequest(new mongoose.Types.ObjectId().toString())),
+    (error) => error.statusCode === 404
+  );
+});
+
 test('manager user accounts cannot be deactivated or cascade-delete farm data', async () => {
   const manager = { _id: new mongoose.Types.ObjectId(), userType: 'manager', role: 'manager', farmId: 'farm-1' };
   authModel.findById = async () => manager;
@@ -165,6 +190,7 @@ test('subscription cancellation keeps the successful payment and deactivates its
     userType: 'manager',
     isSubscribed: true,
     subscriptionStatus: 'active',
+    subscriptionType: 'paid',
     subscriptionPlan: 'basic',
     billingCycle: 'monthly',
     subscriptionEnd: new Date(Date.now() + 86400000),
@@ -172,7 +198,7 @@ test('subscription cancellation keeps the successful payment and deactivates its
   let auditedAction;
   Payment.findById = () => ({ lean: async () => payment });
   Payment.findOne = () => ({ sort: () => ({ lean: async () => payment }) });
-  authModel.findOne = () => ({ lean: async () => owner });
+  authModel.findOne = () => ({ lean: async () => owner, select: async () => owner });
   authModel.findOneAndUpdate = async (_filter, update) => {
     Object.assign(owner, update.$set);
     return owner;
@@ -195,6 +221,12 @@ test('subscription cancellation keeps the successful payment and deactivates its
     async save() { auditedAction = this.data.action; }
   };
   const response = makeResponse();
+  const staffRequest = {
+    user: { id: new mongoose.Types.ObjectId().toString(), userType: 'staff', farmId: 'farm-1' },
+    farmModels: req.farmModels,
+  };
+
+  await checkSubscription(staffRequest, makeResponse(), (error) => assert.ifError(error));
 
   await paymentController.cancelAdminSubscription(req, response);
 
@@ -205,6 +237,11 @@ test('subscription cancellation keeps the successful payment and deactivates its
   assert.equal(payment.status, 'success');
   assert.ok(payment.subscriptionCancelledAt instanceof Date);
   assert.equal(auditedAction, 'ADMIN_DELETE_SUBSCRIPTION');
+
+  let accessError;
+  await checkSubscription(staffRequest, makeResponse(), (error) => { accessError = error; });
+  assert.equal(accessError.statusCode, 403);
+  assert.equal(owner.subscriptionStatus, 'cancelled');
 });
 
 test('stale JWT admin claims are replaced by the current database role', async () => {

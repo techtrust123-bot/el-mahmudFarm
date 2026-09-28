@@ -19,7 +19,7 @@ exports.authMiddleware = async (req, res, next) => {
 
         let account
         try {
-            account = await authModel.findById(decoded.id).select('role userType farmId permissions deletedAt')
+            account = await authModel.findById(decoded.id).select('role userType farmId permissions deletedAt name email isSubscribed subscriptionEnd subscriptionStatus subscriptionType subscriptionPlan billingCycle')
         } catch (accountLookupError) {
             logger.error('Auth account lookup failed:', accountLookupError)
             return res.status(500).json({ success: false, message: 'Unable to verify account status' })
@@ -34,6 +34,14 @@ exports.authMiddleware = async (req, res, next) => {
             role: typeof account.role === 'string' ? account.role.toLowerCase() : '',
             userType: typeof account.userType === 'string' ? account.userType.toLowerCase() : '',
             farmId: account.farmId,
+            name: account.name,
+            email: account.email,
+            isSubscribed: account.isSubscribed,
+            subscriptionEnd: account.subscriptionEnd,
+            subscriptionStatus: account.subscriptionStatus,
+            subscriptionType: account.subscriptionType,
+            subscriptionPlan: account.subscriptionPlan,
+            billingCycle: account.billingCycle,
             permissions: Array.isArray(account.permissions)
                 ? account.permissions.map((perm) => (typeof perm === 'string' ? perm.toLowerCase() : perm))
                 : [],

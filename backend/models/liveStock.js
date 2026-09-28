@@ -30,6 +30,11 @@ const liveStockSchema = new mongoose.Schema({
         type:Date,
         required:true
     },
+    startingStage:{
+        type:String,
+        enum:['starter','grower','finisher'],
+        default:'starter'
+    },
     healthStatus:{
         type:String,
         required:true

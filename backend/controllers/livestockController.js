@@ -4,7 +4,7 @@ const { recalculateLivestock, recalculateLivestockForTypeAndStage } = require('.
 const { calculateLivestockConsumption } = require('../utils/feedCalculator')
 const ApiError = require('../utils/ApiError')
 const {
-  getFeedStage,
+    getFeedStageFromStartingStage,
   calculateAge,
   getBirthDateFromAge,
   getFeedForStage,
@@ -17,6 +17,7 @@ const { sendNotification } = require('../services/emailService')
 exports.createLiveStock = async(req,res)=>{
     const { LiveStock, Feed } = req.farmModels
     const {type,tagNumber,breed,age,weight,purchaseDate,purchasePrice,healthStatus,ageInWeeks,ageInDays,livestockSalePrice} = req.body
+    const startingStage = req.body.startingStage || 'starter'
     if(!type || !tagNumber || !breed || !age || !weight || (!purchaseDate && ageInWeeks == null && ageInDays == null) || !healthStatus || !purchasePrice){
         return res.status(400).json({message:'All fields are required. Provide purchaseDate or ageInWeeks/ageInDays for age calculation.'})
     }
@@ -27,7 +28,7 @@ exports.createLiveStock = async(req,res)=>{
         }
 
         const { ageInDays: resolvedAgeInDays, ageInWeeks: resolvedAgeInWeeks } = calculateAge(purchaseDate)
-        const feedStage = getFeedStage(resolvedAgeInDays, type)
+        const feedStage = getFeedStageFromStartingStage(resolvedAgeInDays, type, startingStage)
 
 
         const feed = await getFeedForStage(Feed, type, feedStage)
@@ -52,7 +53,8 @@ exports.createLiveStock = async(req,res)=>{
             Feed,
             animalType: type,
             purchaseDate,
-            quantity
+            quantity,
+            startingStage,
         })
 
         const totalPurchaseCost = Number(purchasePrice) || 0
@@ -68,6 +70,7 @@ exports.createLiveStock = async(req,res)=>{
             age,
             weight,
             purchaseDate: new Date(purchaseDate || new Date()),
+            startingStage,
             lastFeedUpdate: new Date(),
             healthStatus,
             quantity,
@@ -124,7 +127,7 @@ exports.getLivestocks = async(req,res)=>{
         const data = livestocks.map((animal) => {
             const birthDate =  animal.purchaseDate || new Date()
             const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-            const feedStage = getFeedStage(ageInDays, animal.type)
+            const feedStage = getFeedStageFromStartingStage(ageInDays, animal.type, animal.startingStage)
             return {
                 ...animal.toObject(),
                 ageInDays,
@@ -148,7 +151,7 @@ exports.getAvailableLivestock = async(req,res)=>{
         const data = livestocks.map((animal) => {
             const birthDate = animal.purchaseDate || new Date()
             const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-            const feedStage = getFeedStage(ageInDays, animal.type)
+            const feedStage = getFeedStageFromStartingStage(ageInDays, animal.type, animal.startingStage)
             return {
                 ...animal.toObject(),
                 ageInDays,
@@ -172,7 +175,7 @@ exports.getSoldLivestock = async(req,res)=>{
         const data = livestocks.map((animal) => {
             const birthDate = animal.purchaseDate || new Date()
             const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-            const feedStage = getFeedStage(ageInDays, animal.type)
+            const feedStage = getFeedStageFromStartingStage(ageInDays, animal.type, animal.startingStage)
             return {
                 ...animal.toObject(),
                 ageInDays,
@@ -200,7 +203,7 @@ exports.getLiveStockById = async(req,res)=>{
         
         const birthDate = fetchById.purchaseDate || new Date()
         const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-        const feedStage = getFeedStage(ageInDays, fetchById.type)
+        const feedStage = getFeedStageFromStartingStage(ageInDays, fetchById.type, fetchById.startingStage)
         
         const data = {
             ...fetchById.toObject(),
@@ -466,6 +469,9 @@ exports.edit = async (req, res) => {
         // 2. Resolve type
         // --------------------------------------------------
         const type = req.body.type || exist.type
+        const startingStage = req.body.startingStage != null
+            ? req.body.startingStage
+            : exist.startingStage || 'starter'
 
         // --------------------------------------------------
         // 3. Resolve quantity
@@ -512,6 +518,9 @@ exports.edit = async (req, res) => {
             String(exist.type).toLowerCase() !==
             String(type).toLowerCase()
 
+        const startingStageChanged =
+            (exist.startingStage || 'starter') !== startingStage
+
         const quantityChanged =
             Number(exist.quantity) !== quantity
 
@@ -529,7 +538,8 @@ exports.edit = async (req, res) => {
         const needsHistoricalRecalculation =
             purchaseDateChanged ||
             typeChanged ||
-            quantityChanged
+            quantityChanged ||
+            startingStageChanged
 
         // --------------------------------------------------
         // 6. Recalculate age from purchase date
@@ -543,7 +553,7 @@ exports.edit = async (req, res) => {
         // 7. Determine current feed stage
         // --------------------------------------------------
         const currentFeedStage =
-            getFeedStage(ageInDays, type)
+            getFeedStageFromStartingStage(ageInDays, type, startingStage)
 
         // --------------------------------------------------
         // 8. Get current stage feed
@@ -596,7 +606,8 @@ exports.edit = async (req, res) => {
                     Feed,
                     animalType: type,
                     purchaseDate,
-                    quantity
+                    quantity,
+                    startingStage,
                 })
 
             totalFeedConsumed =
@@ -634,6 +645,7 @@ exports.edit = async (req, res) => {
             ...req.body,
 
             type,
+            startingStage,
             quantity,
 
             purchaseDate,

@@ -5,61 +5,8 @@ const { sendNotification } = require('../services/emailService');
 const { createAuditLog } = require('./auditLogger');
 const { sendError } = require('../utils/apiResponse');
 
-// Optional in-memory cache as fallback when Redis is not configured.
-const CACHE_TTL_MS = Number(process.env.SUBSCRIPTION_CACHE_TTL_MS || 60 * 1000);
-const cache = new Map(); // { userId: { data, expiresAt } }
-
 const GRACE_PERIOD_DAYS = Number(process.env.SUBSCRIPTION_GRACE_DAYS || 3);
 const EXPIRY_NOTIFICATION_DAYS = Number(process.env.SUBSCRIPTION_NOTIFY_DAYS || 2);
-
-const normalizeUser = (user) => ({
-  id: String(user._id),
-  userType: String(user.userType || 'manager'),
-  farmId: user.farmId || null,
-  email: user.email || null,
-  isSubscribed: Boolean(user.isSubscribed),
-  subscriptionEnd: user.subscriptionEnd || null,
-  subscriptionStatus: user.subscriptionStatus || 'inactive',
-  subscriptionType: user.subscriptionType || 'none',
-  subscriptionPlan: user.subscriptionPlan || 'none',
-  subscriptionBillingCycle: user.subscriptionBillingCycle || 'none'
-});
-
-const setCache = (key, value, ttl = CACHE_TTL_MS) => {
-  try {
-    cache.set(key, { data: value, expiresAt: Date.now() + ttl });
-  } catch (e) {
-    logger.warn('Subscription cache set failed', { error: e?.message });
-  }
-};
-
-const getCache = (key) => {
-  try {
-    const entry = cache.get(key);
-    if (!entry) return null;
-    if (Date.now() > entry.expiresAt) {
-      cache.delete(key);
-      return null;
-    }
-    return entry.data;
-  } catch (e) {
-    logger.warn('Subscription cache read failed', { error: e?.message });
-    return null;
-  }
-};
-
-const clearSubscriptionCache = (userId) => {
-  if (userId) cache.delete(String(userId));
-};
-
-const clearSubscriptionCacheForFarm = (farmId) => {
-  if (!farmId) return;
-  for (const [userId, entry] of cache.entries()) {
-    if (String(entry.data?.farmId || '') === String(farmId)) {
-      cache.delete(userId);
-    }
-  }
-};
 
 const daysBetween = (a, b) => Math.ceil((b - a) / (1000 * 60 * 60 * 24));
 
@@ -75,7 +22,18 @@ const getSubscriptionOwner = async (user) => {
     );
   }
 
-  return await authModel.findById(user.id).select('isSubscribed subscriptionEnd subscriptionStatus email name subscriptionPlan billingCycle');
+  return {
+    _id: user.id,
+    farmId: user.farmId,
+    isSubscribed: user.isSubscribed,
+    subscriptionEnd: user.subscriptionEnd,
+    subscriptionStatus: user.subscriptionStatus,
+    subscriptionType: user.subscriptionType,
+    email: user.email,
+    name: user.name,
+    subscriptionPlan: user.subscriptionPlan,
+    billingCycle: user.billingCycle,
+  };
 };
 
 /**
@@ -84,6 +42,7 @@ const getSubscriptionOwner = async (user) => {
 const expireSubscription = async (targetUser) => {
   try {
     if (!targetUser || !targetUser._id) return;
+    if (targetUser.subscriptionStatus === 'cancelled') return;
     await authModel.findByIdAndUpdate(targetUser._id, {
       isSubscribed: false,
       subscriptionStatus: 'expired',
@@ -118,10 +77,7 @@ const checkSubscription = async (req, res, next) => {
       return next();
     }
 
-    const cached = getCache(req.user.id);
-    let owner = cached || (await getSubscriptionOwner(req.user));
-
-    if (!cached) setCache(req.user.id, owner);
+    const owner = await getSubscriptionOwner(req.user);
 
     if (!owner) {
       throw forbidden('Subscription owner not found for this account', 'SUBSCRIPTION_OWNER_NOT_FOUND');
@@ -212,4 +168,4 @@ const checkSubscription = async (req, res, next) => {
   }
 };
 
-module.exports = { checkSubscription, clearSubscriptionCache, clearSubscriptionCacheForFarm };
+module.exports = { checkSubscription };

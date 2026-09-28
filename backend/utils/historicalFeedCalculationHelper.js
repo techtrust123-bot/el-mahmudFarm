@@ -1,8 +1,6 @@
 const {
-    getBroilerFeedStagePeriods,
-    getLivestockFeedStagePeriods,
     getFeedForStage,
-    getLayerFeedStagePeriods,
+    getFeedStagePeriodsFromStartingStage,
 } = require('./feedStageHelper.js')
 const ApiError = require('./ApiError')
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -13,6 +11,7 @@ const calculateHistoricalPoultryFeed = async ({
     purchaseDate,
     purchasePrice,
     quantity,
+    startingStage = 'starter',
 }) => {
     const safeQuantity = Math.max(Number(quantity) || 0, 0)
 
@@ -47,18 +46,11 @@ const calculateHistoricalPoultryFeed = async ({
         Math.floor((today - purchase) / MS_PER_DAY),
         0
     )
-    let stagePeriods;
-    if(animalType === 'broiler'){
-         stagePeriods = getBroilerFeedStagePeriods(
-            0,
-         elapsedDays
-        )
-    }else{
-        stagePeriods = getLayerFeedStagePeriods(
-            0,
-            elapsedDays
-        )
-    }
+    const stagePeriods = getFeedStagePeriodsFromStartingStage(
+        animalType,
+        elapsedDays,
+        startingStage
+    )
    
 
     if (stagePeriods.length === 0) {
@@ -196,6 +188,7 @@ const calculateHistoricalLivestockFeed = async ({
     purchaseDate,
     quantity,
     purchasePrice,
+    startingStage = 'starter',
 }) => {
     const safeQuantity = Math.max(Number(quantity) || 0, 0)
 
@@ -232,9 +225,10 @@ const calculateHistoricalLivestockFeed = async ({
     )
 
 
-   const stagePeriods = getLivestockFeedStagePeriods(
-    0,
-    elapsedDays
+   const stagePeriods = getFeedStagePeriodsFromStartingStage(
+        animalType,
+        elapsedDays,
+        startingStage
     )
 
     if (stagePeriods.length === 0) {

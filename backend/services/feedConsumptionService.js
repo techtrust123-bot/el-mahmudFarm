@@ -1,6 +1,6 @@
 const logger = require('../utils/logger')
 const ApiError = require('../utils/ApiError')
-const { getFeedStage, calculateAge, parseFeedType } = require('../utils/feedStageHelper')
+const { getFeedStageFromStartingStage, calculateAge, parseFeedType } = require('../utils/feedStageHelper')
 
 const BULK_WRITE_BATCH_SIZE = 500
 
@@ -67,7 +67,7 @@ const getStageRecords = (records, stage) => {
       const birthDate = record.purchaseDate || new Date()
       const safeBirthDate = normalizeDate(birthDate)
       const { ageInDays } = calculateAge(safeBirthDate)
-      const batchStage = getFeedStage(ageInDays, record.type)
+      const batchStage = getFeedStageFromStartingStage(ageInDays, record.type, record.startingStage)
 
       if ((batchStage || '').toLowerCase() === normalizedStage) {
         matchingRecords.push(record)
@@ -407,7 +407,7 @@ const recalculatePoultry = async (feed, farmModels) => {
     for (const bird of poultryToUpdate) {
       const purchaseDate = bird.purchaseDate || today
       const { ageInDays, ageInWeeks } = calculateAge(purchaseDate)
-      const currentFeedStage = getFeedStage(ageInDays, bird.type)
+      const currentFeedStage = getFeedStageFromStartingStage(ageInDays, bird.type, bird.startingStage)
       const feedStageKey = `${String(bird.type || animalType).toLowerCase()}:${currentFeedStage || 'default'}`
       const feedForStage = feedStageMap.get(feedStageKey)
 
@@ -521,7 +521,7 @@ const recalculateLivestock = async (feed, farmModels) => {
     for (const animal of livestockToUpdate) {
       const purchaseDate = animal.purchaseDate || today
       const { ageInDays, ageInWeeks } = calculateAge(purchaseDate)
-      const currentFeedStage = getFeedStage(ageInDays, animal.type)
+      const currentFeedStage = getFeedStageFromStartingStage(ageInDays, animal.type, animal.startingStage)
       const feedStageKey = `${String(animal.type || livestockType).toLowerCase()}:${currentFeedStage || 'default'}`
       const feedForStage = feedStageMap.get(feedStageKey)
 

@@ -6,7 +6,6 @@ const { sendNotification } = require('../services/emailService')
 const Payment = require('../models/payment')
 const mongoose = require('mongoose')
 const ApiError = require('../utils/ApiError')
-const { clearSubscriptionCache, clearSubscriptionCacheForFarm } = require('../middleware/subscriptionMiddleware')
 const { createAuditLog } = require('../middleware/auditLogger')
 
 const PAYSTACK_SECRET =
@@ -588,8 +587,6 @@ const fulfillSuccessfulSubscription = async ({
     // 13. Commit transaction
     // --------------------------------------------------
     await session.commitTransaction()
-    clearSubscriptionCache(String(payment.userId))
-
     return {
       alreadyProcessed: false,
       user: updatedUser,
@@ -693,8 +690,6 @@ const fulfillSuccessfulUpgrade = async ({ payment, paystackData }) => {
 
     if (!updatedUser || !updatedPayment) throw new Error('Failed to finalize upgrade payment')
     await session.commitTransaction()
-    clearSubscriptionCache(String(payment.userId))
-
     return {
       alreadyProcessed: false,
       user: updatedUser,
@@ -1489,7 +1484,7 @@ exports.getPaymentHistory = async (req, res) => {
       billingCycle: payment.billingCycle,
       amount: Number(payment.amount || 0),
       currency: payment.currency || 'NGN',
-      status: payment.status === 'success' ? 'active' : payment.status,
+      status: payment.subscriptionCancelledAt ? 'cancelled' : payment.status === 'success' ? 'active' : payment.status,
       startDate: payment.subscriptionStart || payment.createdAt,
       endDate: payment.subscriptionEnd || payment.createdAt,
       createdAt: payment.createdAt,
@@ -1541,7 +1536,7 @@ exports.getAdminSubscriptions = async (req, res) => {
 
     const userIds = [...new Set(payments.map((payment) => String(payment.userId)).filter(Boolean))]
     const users = await authModel.find({ _id: { $in: userIds } })
-      .select('name farmName farmId email userType role isSubscribed subscriptionStatus subscriptionPlan billingCycle subscriptionStart subscriptionEnd')
+      .select('name farmName farmId email userType role isSubscribed subscriptionStatus subscriptionType subscriptionPlan billingCycle subscriptionStart subscriptionEnd')
       .lean()
     const userMap = new Map(users.map((item) => [String(item._id), item]))
 
@@ -1553,6 +1548,7 @@ exports.getAdminSubscriptions = async (req, res) => {
         payer &&
         !currentPaymentByUser.has(ownerId) &&
         payment.status === 'success' &&
+        payer.subscriptionType === 'paid' &&
         payment.plan === payer.subscriptionPlan &&
         payment.billingCycle === payer.billingCycle &&
         payer.isSubscribed &&
@@ -1570,7 +1566,7 @@ exports.getAdminSubscriptions = async (req, res) => {
         : isCurrentPayment
           ? payer.subscriptionStatus
           : payment.status === 'success'
-            ? 'active'
+            ? 'historical'
             : payment.status === 'processing'
               ? 'pending'
               : payment.status
@@ -1638,6 +1634,7 @@ exports.cancelAdminSubscription = async (req, res) => {
   if (
     !owner.isSubscribed ||
     owner.subscriptionStatus !== 'active' ||
+    owner.subscriptionType !== 'paid' ||
     !owner.subscriptionEnd ||
     new Date(owner.subscriptionEnd).getTime() <= Date.now() ||
     owner.subscriptionPlan !== payment.plan ||
@@ -1700,8 +1697,6 @@ exports.cancelAdminSubscription = async (req, res) => {
     await session.endSession()
   }
 
-  clearSubscriptionCache(String(owner._id))
-  clearSubscriptionCacheForFarm(payment.farmId)
   await createAuditLog('ADMIN_DELETE_SUBSCRIPTION', 'subscription', {
     userId: req.user.id,
     farmId: payment.farmId,
@@ -1756,7 +1751,7 @@ exports.getAdminSubscriptionStats = async (req, res) => {
 
     const [totalSubscribers, activeSubscriptions, failedSubscriptions, pendingSubscriptions, monthlySubscriptions, yearlySubscriptions, starterSubscribers, basicSubscribers, premiumSubscribers] = await Promise.all([
       Payment.countDocuments(filter),
-      Payment.countDocuments({ ...filter, status: 'success' }),
+      authModel.countDocuments({ isSubscribed: true, subscriptionStatus: 'active', subscriptionType: 'paid', userType: 'manager' }),
       Payment.countDocuments({ ...filter, status: 'failed' }),
       Payment.countDocuments({ ...filter, status: { $in: ['pending', 'processing'] } }),
       Payment.countDocuments({ ...filter, billingCycle: 'monthly' }),

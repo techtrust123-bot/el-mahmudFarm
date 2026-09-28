@@ -41,6 +41,7 @@ const PoultryPage = () => {
   const [formData, setFormData] = useState({
     batchId: '',
     type: '',
+    startingStage: 'starter',
     quantity: '',
     vaccinationStatus: '',
     feedConsumption: '',
@@ -99,6 +100,7 @@ const PoultryPage = () => {
     setFormData({
       batchId: '',
       type: '',
+      startingStage: 'starter',
       quantity: '',
       vaccinationStatus: '',
       poultryConsumePerBird: '',
@@ -132,6 +134,7 @@ const PoultryPage = () => {
       setFormData({
         batchId: item.batchId,
         type: item.type,
+        startingStage: item.startingStage || 'starter',
         quantity: item.quantity,
         vaccinationStatus: item.vaccinationStatus,
         purchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : '',
@@ -221,6 +224,7 @@ const PoultryPage = () => {
         setFormData({
           batchId: '',
           type: '',
+          startingStage: 'starter',
           quantity: '',
           vaccinationStatus: '',
           purchaseDate: '',
@@ -429,6 +433,24 @@ const PoultryPage = () => {
               error={errors.type}
               required
             />
+            <div>
+              <Select
+                label="Starting Feed Stage"
+                name="startingStage"
+                options={[
+                  { value: 'starter', label: 'Starter' },
+                  { value: 'grower', label: 'Grower' },
+                  { value: 'finisher', label: 'Finisher' },
+                ]}
+                value={formData.startingStage}
+                onChange={handleChange}
+                error={errors.startingStage}
+                required
+              />
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Select the feed stage when you purchased/acquired this batch.
+              </p>
+            </div>
             <Input
               label="Quantity"
               type="number"

@@ -7,6 +7,11 @@ const { body, check } = require('express-validator');
 
 // Livestock validation
 const livestockValidation = [
+  body('startingStage')
+    .optional({ values: 'undefined' })
+    .isIn(['starter', 'grower', 'finisher'])
+    .withMessage('Starting stage must be starter, grower, or finisher'),
+
   body('type')
     .notEmpty().withMessage('Animal type is required')
     .isIn(['cattle', 'cow', 'sheep', 'goat', 'horse', 'ram', 'bull'])
@@ -40,6 +45,11 @@ const livestockValidation = [
 
 // Poultry validation
 const poultryValidation = [
+  body('startingStage')
+    .optional({ values: 'undefined' })
+    .isIn(['starter', 'grower', 'finisher'])
+    .withMessage('Starting stage must be starter, grower, or finisher'),
+
   body('quantity')
     .notEmpty().withMessage('Quantity is required')
     .isInt({ min: 1 })

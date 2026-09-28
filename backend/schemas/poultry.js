@@ -24,6 +24,11 @@ const poultrySchema = new mongoose.Schema({
         type:Number,
         required:true
      },
+      startingStage:{
+          type:String,
+          enum:['starter','grower','finisher'],
+          default:'starter'
+      },
      feedStage:{
         type:String,
         enum:['Starter','Grower','Finisher'],

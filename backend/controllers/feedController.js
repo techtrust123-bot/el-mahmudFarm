@@ -3,7 +3,7 @@ const Poultry = require("../models/poultry")
 const LiveStock = require('../models/liveStock')
 const logger = require('../utils/logger')
 const {
-  getFeedStage,
+    getFeedStageFromStartingStage,
   calculateAge,
   parseFeedType,
 } = require('../utils/feedStageHelper')
@@ -59,7 +59,7 @@ exports.addFeed = async(req,res)=>{
                                 // i will use purchagedate only
                                  const birthDate = batch.purchaseDate || new Date()
                                  const { ageInDays } = calculateAge(birthDate)
-                                 const batchStage = getFeedStage(ageInDays, batch.type)
+                                 const batchStage = getFeedStageFromStartingStage(ageInDays, batch.type, batch.startingStage)
                                  return (batchStage || '').toLowerCase() === (targetStage || '').toLowerCase()
                              })
                          }
@@ -101,7 +101,7 @@ exports.addFeed = async(req,res)=>{
         stageLivestock = allLivestock.filter(animal => {
             const birthDate = animal.birthDay || animal.purchaseDate || new Date()
             const { ageInDays } = calculateAge(birthDate)
-            const liveStage = getFeedStage(ageInDays, animal.type)
+            const liveStage = getFeedStageFromStartingStage(ageInDays, animal.type, animal.startingStage)
             // ✅ compare liveStage string against targetStage string — NOT against the array
             return (liveStage || '').toLowerCase() === (targetStage || '').toLowerCase()
         })
