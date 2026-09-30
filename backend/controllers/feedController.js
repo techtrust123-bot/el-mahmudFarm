@@ -14,34 +14,50 @@ const {
 } = require('../utils/feedCalculator')
 const {
   syncFeedConsumption,
+    updateFeedConsumption,
+    recalculateFeedDependents,
   recalculatePoultry,
   recalculateLivestock,
   recalculateLivestockForTypeAndStage,
 } = require('../services/feedConsumptionService')
 const { sendNotification } = require('../services/emailService')
+const { normalizeFeedQuantity, calculateFeedPricePerKg } = require('../utils/feedQuantity')
 
 const LOW_FEED_THRESHOLD = Number(process.env.LOW_FEED_THRESHOLD) || 20
 
+const normalizeDailyFeedInput = (quantity, unit = 'kg', bagWeightKg) => {
+    if (quantity === undefined || quantity === null || quantity === '' || Number(quantity) === 0) {
+        return { quantityKg: 0, quantityEntered: 0, unit: 'kg', bagWeightKg: null }
+    }
+    return normalizeFeedQuantity({ quantity, unit, bagWeightKg })
+}
+
 exports.addFeed = async(req,res)=>{
     const { Feed, Poultry,LiveStock } = req.farmModels
-    const {feedType,feedCategory,quantity,cost,purchaseDate,supplier,feedName,totalPoultryFeedConsumedPerday,totalLivestockFeedConsumedPerday,animalType} = req.body
+    const {feedType,feedCategory,quantity,unit,bagWeightKg,cost,purchaseDate,supplier,feedName,totalPoultryFeedConsumedPerday,totalLivestockFeedConsumedPerday,animalType,poultryFeedUnit,poultryBagWeightKg,livestockFeedUnit,livestockBagWeightKg} = req.body
     if(!feedType || !quantity || !cost || !purchaseDate || !supplier || !feedName || !animalType){
         return res.status(400).json({message:"Input fields are required..."})
     }
+    let savedFeed
+    let recalculationCompleted = false
     try {
 
         const existingFeed = await Feed.findOne({feedType, feedCategory})
         if(existingFeed){
             return res.status(400).json({message:'This feed already exist'})
         }
-        const qtn = Number(quantity)
-        if(qtn <= 0){
-            return res.status(400).json({success:false,message:"Quantity must be greater than zero..."})
-            
+        let normalizedQuantity
+        try {
+            normalizedQuantity = normalizeFeedQuantity({ quantity, unit, bagWeightKg })
+        } catch (error) {
+            return res.status(400).json({ success: false, message: error.message })
         }
+        const qtn = normalizedQuantity.quantityKg
         
-        const poultryInput = Number(totalPoultryFeedConsumedPerday || 0);
-        const livestockInput = Number(totalLivestockFeedConsumedPerday || 0);
+        const poultryRate = normalizeDailyFeedInput(totalPoultryFeedConsumedPerday, poultryFeedUnit, poultryBagWeightKg)
+        const livestockRate = normalizeDailyFeedInput(totalLivestockFeedConsumedPerday, livestockFeedUnit, livestockBagWeightKg)
+        const poultryInput = poultryRate.quantityKg
+        const livestockInput = livestockRate.quantityKg
         const parsed = parseFeedType(feedType)
 
         let poultryDailyConsumption = 0;
@@ -129,7 +145,7 @@ exports.addFeed = async(req,res)=>{
         
         const totalDailyConsumption = (poultryDailyConsumption || 0) + (livestockDailyConsumption || 0)
         const totalCost = Number(cost)
-        const feedPricePerkg = totalCost / qtn;
+        const feedPricePerkg = calculateFeedPricePerKg(totalCost, qtn);
         // const consumption = (poultryDailyConsumption * qtn) + (livestockDailyConsumption * qtn)
         const savedAnimalType = parsed.animalType || animalType
         const savedPoultryType = parsed.poultryType || (['broiler', 'layer'].includes(savedAnimalType) ? savedAnimalType : null)
@@ -139,22 +155,31 @@ exports.addFeed = async(req,res)=>{
             animalType: savedAnimalType,
             poultryType: savedPoultryType,
             feedCategory: parsed.feedCategory,
-            quantity,
+            quantity: qtn,
+            ...normalizedQuantity,
             cost,
             purchaseDate,
             supplier,
             consumption: 0,
             poultryDailyConsumption: Number(poultryDailyConsumption || 0),
             livestockDailyConsumption: Number(livestockDailyConsumption || 0),
-            totalPoultryFeedConsumedPerday: Number(totalPoultryFeedConsumedPerday || 0),
-            totalLivestockFeedConsumedPerday: Number(totalLivestockFeedConsumedPerday || 0),
+            totalPoultryFeedConsumedPerday: poultryRate.quantityKg,
+            totalPoultryFeedConsumedPerdayEntered: poultryRate.quantityEntered,
+            poultryFeedUnit: poultryRate.unit,
+            poultryBagWeightKg: poultryRate.bagWeightKg,
+            totalLivestockFeedConsumedPerday: livestockRate.quantityKg,
+            totalLivestockFeedConsumedPerdayEntered: livestockRate.quantityEntered,
+            livestockFeedUnit: livestockRate.unit,
+            livestockBagWeightKg: livestockRate.bagWeightKg,
             lastConsumptionUpdate: new Date(),
             feedPricePerkg,
             totalDailyConsumption,
             feedName,
         })
         await newFeed.save()
-        await syncFeedConsumption(newFeed, req.farmModels)
+        savedFeed = newFeed
+        await recalculateFeedDependents([newFeed], req.farmModels)
+        recalculationCompleted = true
 
         if (qtn <= LOW_FEED_THRESHOLD && req.user?.email) {
             await sendNotification(req.user.email, 'LOW_FEED_ALERT', {
@@ -167,6 +192,17 @@ exports.addFeed = async(req,res)=>{
 
         res.status(201).json({success:true,message:"Feed Added Successfully"})
     } catch (error) {
+        if (savedFeed && !recalculationCompleted) {
+            try {
+                await Feed.findByIdAndDelete(savedFeed._id)
+                await recalculateFeedDependents([savedFeed], req.farmModels)
+            } catch (rollbackError) {
+                logger.error('Failed to roll back feed creation after recalculation failure.', {
+                    feedId: savedFeed._id,
+                    error: rollbackError.message,
+                })
+            }
+        }
         logger.error('Failed to add feed.', {
             error: error.message,
             stack: error.stack,
@@ -270,21 +306,52 @@ exports.getById = async (req, res) => {
 exports.edit = async (req, res) => {
     const { Feed, Poultry } = req.farmModels
     const id = req.params.id
+    let previousFeed
+    let updatedFeed
+    let recalculationCompleted = false
     try {
         const existingFeed = await Feed.findOne({ _id: id })
         if (!existingFeed) {
             return res.status(404).json({ success: false, message: "Feed not found..." })
         }
+        previousFeed = existingFeed.toObject ? existingFeed.toObject() : { ...existingFeed }
 
         const parsed = parseFeedType(req.body.feedType || existingFeed.feedType)
+        const normalizedQuantity = normalizeFeedQuantity({
+            quantity: req.body.quantity,
+            unit: req.body.unit || existingFeed.unit || 'kg',
+            bagWeightKg: req.body.bagWeightKg ?? existingFeed.bagWeightKg,
+        })
+        const poultryRate = normalizeDailyFeedInput(
+            req.body.totalPoultryFeedConsumedPerday ?? existingFeed.totalPoultryFeedConsumedPerdayEntered ?? existingFeed.totalPoultryFeedConsumedPerday,
+            req.body.poultryFeedUnit || existingFeed.poultryFeedUnit || 'kg',
+            req.body.poultryBagWeightKg ?? existingFeed.poultryBagWeightKg
+        )
+        const livestockRate = normalizeDailyFeedInput(
+            req.body.totalLivestockFeedConsumedPerday ?? existingFeed.totalLivestockFeedConsumedPerdayEntered ?? existingFeed.totalLivestockFeedConsumedPerday,
+            req.body.livestockFeedUnit || existingFeed.livestockFeedUnit || 'kg',
+            req.body.livestockBagWeightKg ?? existingFeed.livestockBagWeightKg
+        )
+        const updatedCost = Number(req.body.cost ?? existingFeed.cost)
         const updatedData = {
             ...req.body,
+            quantity: normalizedQuantity.quantityKg,
+            ...normalizedQuantity,
+            feedPricePerkg: calculateFeedPricePerKg(updatedCost, normalizedQuantity.quantityKg),
+            totalPoultryFeedConsumedPerday: poultryRate.quantityKg,
+            totalPoultryFeedConsumedPerdayEntered: poultryRate.quantityEntered,
+            poultryFeedUnit: poultryRate.unit,
+            poultryBagWeightKg: poultryRate.bagWeightKg,
+            totalLivestockFeedConsumedPerday: livestockRate.quantityKg,
+            totalLivestockFeedConsumedPerdayEntered: livestockRate.quantityEntered,
+            livestockFeedUnit: livestockRate.unit,
+            livestockBagWeightKg: livestockRate.bagWeightKg,
             animalType: parsed.animalType,
             poultryType: parsed.poultryType,
             feedCategory: parsed.feedCategory,
         }
 
-        const updatedFeed = await Feed.findOneAndUpdate(
+        updatedFeed = await Feed.findOneAndUpdate(
             { _id: id },
             updatedData,
             { returnDocument: 'after' }
@@ -293,16 +360,31 @@ exports.edit = async (req, res) => {
             return res.status(404).json({ success: false, message: "Feed not found or not authorized..." })
         }
 
-        const syncedFeed = await syncFeedConsumption(updatedFeed, req.farmModels)
+        await updateFeedConsumption(updatedFeed, req.farmModels)
+        await recalculateFeedDependents([previousFeed, updatedFeed], req.farmModels)
+        recalculationCompleted = true
 
-        const typeToQuery = syncedFeed.poultryType || parsed.poultryType
-        const updatedPoultry = await Poultry.find({
-            type: typeToQuery
-        })
+        const typeToQuery = updatedFeed.animalType || parsed.animalType
+        const isPoultryFeed = ['broiler', 'layer'].includes(String(typeToQuery || '').toLowerCase())
+        const AnimalModel = isPoultryFeed ? Poultry : req.farmModels.LiveStock
+        const updatedAnimals = await AnimalModel.find({ type: typeToQuery })
 
-        res.status(200).json({ success: true, data: updatedPoultry, message: "Feed update successful..." })
+        res.status(200).json({ success: true, data: updatedAnimals, message: "Feed update successful..." })
 
     } catch (error) {
+        if (previousFeed && updatedFeed && !recalculationCompleted) {
+            try {
+                const { _id, __v, ...restoreFields } = previousFeed
+                await Feed.findByIdAndUpdate(_id, { $set: restoreFields }, { returnDocument: 'after' })
+                await recalculateFeedDependents([updatedFeed, previousFeed], req.farmModels)
+            } catch (rollbackError) {
+                logger.error('Failed to restore feed after recalculation failure.', {
+                    feedId: previousFeed._id,
+                    error: rollbackError.message,
+                    stack: rollbackError.stack,
+                })
+            }
+        }
         logger.error('Failed to update feed.', {
             error: error.message,
             stack: error.stack,
@@ -314,12 +396,19 @@ exports.edit = async (req, res) => {
 exports.del = async(req,res)=>{
     const { Feed, Poultry, LiveStock } = req.farmModels
     const id = req.params.id
+    let deletedFeed
+    let didDelete = false
+    let recalculationCompleted = false
     try {
         const feed = await Feed.findOne({ _id: id })
         if(!feed){
             return  res.status(404).json({success:false,message:"Feed not found..."})
         }
+        deletedFeed = feed.toObject ? feed.toObject() : { ...feed }
         await Feed.findOneAndDelete({ _id: id })
+        didDelete = true
+        await recalculateFeedDependents([deletedFeed], req.farmModels)
+        recalculationCompleted = true
 
     //  const animalType = feed.animalType || feed.poultryType || parseFeedType(feed.feedType).animalType
     //     if (animalType) {
@@ -350,6 +439,18 @@ exports.del = async(req,res)=>{
 
         res.status(200).json({ success:true,message:"feed deleted successfully"})
     } catch (error) {
+        if (deletedFeed && didDelete && !recalculationCompleted) {
+            try {
+                await Feed.create(deletedFeed)
+                await recalculateFeedDependents([deletedFeed], req.farmModels)
+            } catch (rollbackError) {
+                logger.error('Failed to restore feed after delete recalculation failure.', {
+                    feedId: deletedFeed._id,
+                    error: rollbackError.message,
+                    stack: rollbackError.stack,
+                })
+            }
+        }
         logger.error('Failed to delete feed.', {
             error: error.message,
             stack: error.stack,

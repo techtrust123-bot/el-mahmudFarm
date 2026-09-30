@@ -57,7 +57,7 @@ const AdminSubscriptionPage = () => {
         ]);
         setStats(nextStats);
         setRows(nextRows);
-      } catch (err) {
+      } catch {
         setError('Unable to load subscription data.');
       } finally {
         setLoading(false);
@@ -83,6 +83,10 @@ const AdminSubscriptionPage = () => {
       setRows((currentRows) => currentRows.map((row) => row.id === cancelTarget.id
         ? { ...row, status: 'cancelled', autoRenew: false, canCancel: false, subscriptionCancelledAt: result.data?.cancelledAt }
         : row));
+      setStats((currentStats) => ({
+        ...currentStats,
+        activeSubscriptions: Math.max(0, Number(currentStats.activeSubscriptions || 0) - 1),
+      }));
       setCancelTarget(null);
       toast.success(result.message || 'Subscription cancelled. Payment history was retained.');
     } catch (err) {

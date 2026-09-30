@@ -1,6 +1,19 @@
 const logger = require('../utils/logger')
+const { getFeedQuantityKg } = require('../utils/feedQuantity')
 const ApiError = require('../utils/ApiError')
-const { getFeedStageFromStartingStage, calculateAge, parseFeedType } = require('../utils/feedStageHelper')
+const {
+  getFeedStageFromStartingStage,
+  calculateAge,
+  calculatePoultryAge,
+  resolvePoultryPurchaseAgeDays,
+  getFeedStagePeriodsFromStartingStage,
+  getFeedForStage,
+  parseFeedType,
+} = require('../utils/feedStageHelper')
+const {
+  calculateHistoricalPoultryFeed,
+  calculateHistoricalLivestockFeed,
+} = require('../utils/historicalFeedCalculationHelper')
 
 const BULK_WRITE_BATCH_SIZE = 500
 
@@ -23,6 +36,72 @@ const getDaysBetween = (startDate, endDate) => {
 const toSafeNumber = (value, fallback = 0) => {
   const numericValue = Number(value)
   return Number.isFinite(numericValue) ? numericValue : fallback
+}
+
+const normalizeFeedStageKey = (value) => {
+  const stage = String(value || '').trim().toLowerCase()
+  if (stage.includes('starter')) return 'starter'
+  if (stage.includes('grower')) return 'grower'
+  if (stage.includes('finisher') || stage.includes('layer')) return 'finisher'
+  return stage
+}
+
+const getFeedAnimalType = (feed) => String(
+  feed?.animalType || feed?.poultryType || parseFeedType(feed?.feedType).animalType || ''
+).trim().toLowerCase()
+
+const getRecordFeedStage = (record, asOf = new Date()) => {
+  const purchaseStage = record.purchaseStage || record.startingStage || 'starter'
+  if (['broiler', 'layer'].includes(String(record.type || '').toLowerCase())) {
+    const purchaseAgeDays = resolvePoultryPurchaseAgeDays(record.type, purchaseStage, record.purchaseAgeDays)
+    const { elapsedDays } = calculatePoultryAge(record.purchaseDate || asOf, purchaseAgeDays, asOf)
+    return getFeedStageFromStartingStage(elapsedDays, record.type, purchaseStage, purchaseAgeDays)
+  }
+
+  const { ageInDays } = calculateAge(record.birthDay || record.purchaseDate || asOf)
+  return getFeedStageFromStartingStage(ageInDays, record.type, purchaseStage, record.purchaseAgeDays)
+}
+
+const getStageCohortRecords = (records, stage, asOf = new Date()) => {
+  const targetStage = normalizeFeedStageKey(stage)
+  if (!targetStage) return records
+
+  return records.filter((record) => {
+    try {
+      const startingStage = record.purchaseStage || record.startingStage || 'starter'
+      const isPoultry = ['broiler', 'layer'].includes(String(record.type || '').toLowerCase())
+      let elapsedDays
+      let purchaseAgeDays = record.purchaseAgeDays
+
+      if (isPoultry) {
+        purchaseAgeDays = resolvePoultryPurchaseAgeDays(record.type, startingStage, purchaseAgeDays)
+        elapsedDays = calculatePoultryAge(record.purchaseDate || asOf, purchaseAgeDays, asOf).elapsedDays
+      } else {
+        elapsedDays = calculateAge(record.birthDay || record.purchaseDate || asOf).ageInDays
+      }
+
+      const stagePeriods = getFeedStagePeriodsFromStartingStage(
+        record.type,
+        elapsedDays,
+        startingStage,
+        purchaseAgeDays
+      )
+      return stagePeriods.some((period) => normalizeFeedStageKey(period.stage) === targetStage)
+    } catch (error) {
+      logger.warn('Skipping animal with invalid stage data while rebuilding feed rates.', {
+        animalId: record?._id,
+        stage,
+        error: error.message,
+      })
+      return false
+    }
+  })
+}
+
+const writeInBatches = async (Model, operations) => {
+  for (let index = 0; index < operations.length; index += BULK_WRITE_BATCH_SIZE) {
+    await Model.bulkWrite(operations.slice(index, index + BULK_WRITE_BATCH_SIZE))
+  }
 }
 
 const validateFeedConsumptionInputs = (feed, farmModels) => {
@@ -64,12 +143,9 @@ const getStageRecords = (records, stage) => {
     }
 
     try {
-      const birthDate = record.purchaseDate || new Date()
-      const safeBirthDate = normalizeDate(birthDate)
-      const { ageInDays } = calculateAge(safeBirthDate)
-      const batchStage = getFeedStageFromStartingStage(ageInDays, record.type, record.startingStage)
+      const batchStage = getRecordFeedStage(record)
 
-      if ((batchStage || '').toLowerCase() === normalizedStage) {
+      if (normalizeFeedStageKey(batchStage) === normalizeFeedStageKey(normalizedStage)) {
         matchingRecords.push(record)
       }
     } catch (error) {
@@ -262,9 +338,9 @@ const createEggBulkOperation = (egg, dailyEgg = {}, price = {},quantity = {},fee
   const feedQuantity = Math.max(toSafeNumber(quantity.feedQuantity ?? quantity), 0)
   const feedConsuptionPerDay = Math.max(toSafeNumber(feedConsumed.feedConsuptionPerDay ?? price.poultryDailyConsumption ?? 0), 0)
  
-        const feedPricePerKg = Number(feedCost / feedQuantity);
-        const feedConsuptionCostPerDay = Number( feedPricePerKg * feedConsuptionPerDay );
-        const pricePerEgg = Number(feedConsuptionCostPerDay / availableEgg);
+        const feedPricePerKg = Math.max(toSafeNumber(price.feedPricePerKg ?? (feedQuantity > 0 ? feedCost / feedQuantity : 0)), 0);
+        const feedConsuptionCostPerDay = feedPricePerKg * feedConsuptionPerDay;
+        const pricePerEgg = availableEgg > 0 ? feedConsuptionCostPerDay / availableEgg : 0;
         const salePricePerCrate = Number(salePrice * 30);
         const totalEggCost = Number(pricePerEgg * availableEgg);
         const cratePrice = Number(pricePerEgg * 30);
@@ -314,7 +390,7 @@ const buildFeedStageMap = async (Feed, animalType) => {
   for (const feedDocument of feedDocuments) {
     const feedRecord = feedDocument.toObject ? feedDocument.toObject() : feedDocument
     const parsedFeed = parseFeedType(feedRecord.feedType)
-    const feedStage = String(feedRecord.feedCategory || parsedFeed.feedCategory || 'default').trim()
+    const feedStage = normalizeFeedStageKey(feedRecord.feedCategory || parsedFeed.feedCategory || 'default')
     const mapKey = `${normalizedAnimalType}:${feedStage}`
 
     if (!feedStageMap.has(mapKey)) {
@@ -408,7 +484,7 @@ const recalculatePoultry = async (feed, farmModels) => {
       const purchaseDate = bird.purchaseDate || today
       const { ageInDays, ageInWeeks } = calculateAge(purchaseDate)
       const currentFeedStage = getFeedStageFromStartingStage(ageInDays, bird.type, bird.startingStage)
-      const feedStageKey = `${String(bird.type || animalType).toLowerCase()}:${currentFeedStage || 'default'}`
+      const feedStageKey = `${String(bird.type || animalType).toLowerCase()}:${normalizeFeedStageKey(currentFeedStage) || 'default'}`
       const feedForStage = feedStageMap.get(feedStageKey)
 
       if (!feedForStage) {
@@ -522,7 +598,7 @@ const recalculateLivestock = async (feed, farmModels) => {
       const purchaseDate = animal.purchaseDate || today
       const { ageInDays, ageInWeeks } = calculateAge(purchaseDate)
       const currentFeedStage = getFeedStageFromStartingStage(ageInDays, animal.type, animal.startingStage)
-      const feedStageKey = `${String(animal.type || livestockType).toLowerCase()}:${currentFeedStage || 'default'}`
+      const feedStageKey = `${String(animal.type || livestockType).toLowerCase()}:${normalizeFeedStageKey(currentFeedStage) || 'default'}`
       const feedForStage = feedStageMap.get(feedStageKey)
 
       if (!feedForStage) {
@@ -573,6 +649,206 @@ const recalculateLivestock = async (feed, farmModels) => {
   }
 }
 
+const recalculateFeedDependents = async (changedFeeds, farmModels) => {
+  const { Feed, Poultry, LiveStock } = farmModels
+  const affectedTypes = new Set((Array.isArray(changedFeeds) ? changedFeeds : [changedFeeds])
+    .filter(Boolean)
+    .map(getFeedAnimalType)
+    .filter(Boolean))
+
+  if (affectedTypes.size === 0) return
+
+  try {
+    const allFeeds = await Feed.find()
+    const asOf = new Date()
+
+    for (const animalType of affectedTypes) {
+      const isPoultry = ['broiler', 'layer'].includes(animalType)
+      const AnimalModel = isPoultry ? Poultry : LiveStock
+      const typeFeeds = allFeeds.filter((feed) => getFeedAnimalType(feed) === animalType)
+      const animals = await AnimalModel.find({ type: animalType })
+      const activeAnimals = animals.filter((animal) => animal.status !== 'sold')
+
+      for (const feed of typeFeeds) {
+        const feedRecord = feed.toObject ? feed.toObject() : feed
+        const parsed = parseFeedType(feedRecord.feedType)
+        const feedStage = feedRecord.feedCategory || parsed.feedCategory
+        const stageAnimals = feedStage ? getStageCohortRecords(activeAnimals, feedStage, asOf) : activeAnimals
+        const stagePopulation = stageAnimals.reduce(
+          (sum, animal) => sum + Math.max(toSafeNumber(animal.quantity), 0),
+          0
+        )
+        const totalFeedPerDay = isPoultry
+          ? toSafeNumber(feedRecord.totalPoultryFeedConsumedPerday)
+          : toSafeNumber(feedRecord.totalLivestockFeedConsumedPerday)
+        const previousRate = isPoultry
+          ? toSafeNumber(feedRecord.poultryDailyConsumption)
+          : toSafeNumber(feedRecord.livestockDailyConsumption)
+        const dailyRate = totalFeedPerDay <= 0
+          ? 0
+          : stagePopulation > 0
+            ? totalFeedPerDay / stagePopulation
+            : previousRate
+        const rateFields = isPoultry
+          ? {
+              poultryDailyConsumption: dailyRate,
+              totalDailyConsumption: dailyRate + toSafeNumber(feedRecord.livestockDailyConsumption),
+            }
+          : {
+              livestockDailyConsumption: dailyRate,
+              totalDailyConsumption: dailyRate + toSafeNumber(feedRecord.poultryDailyConsumption),
+            }
+
+        await Feed.findByIdAndUpdate(feedRecord._id, { $set: rateFields }, { returnDocument: 'after' })
+      }
+
+      const operations = []
+      for (const animal of animals) {
+        const animalRecord = animal.toObject ? animal.toObject() : animal
+        const quantity = Math.max(toSafeNumber(animalRecord.quantity), 0)
+        const purchaseDate = animalRecord.purchaseDate || animalRecord.birthDay || asOf
+        const purchasePrice = Math.max(toSafeNumber(animalRecord.purchasePrice), 0)
+        const startingStage = animalRecord.purchaseStage || animalRecord.startingStage || 'starter'
+
+        if (isPoultry) {
+          const purchaseAgeDays = resolvePoultryPurchaseAgeDays(
+            animalRecord.type,
+            startingStage,
+            animalRecord.purchaseAgeDays
+          )
+          const age = calculatePoultryAge(purchaseDate, purchaseAgeDays, asOf)
+          const currentFeedStage = getFeedStageFromStartingStage(
+            age.elapsedDays,
+            animalRecord.type,
+            startingStage,
+            purchaseAgeDays
+          )
+          const historical = await calculateHistoricalPoultryFeed({
+            Feed,
+            animalType: animalRecord.type,
+            purchaseDate,
+            purchasePrice,
+            quantity,
+            startingStage,
+            purchaseAgeDays,
+            skipMissingFeed: true,
+          })
+          const currentFeed = await getFeedForStage(Feed, animalRecord.type, currentFeedStage)
+          const totalCost = purchasePrice + historical.totalFeedCost
+          const costPerBird = quantity > 0 ? totalCost / quantity : 0
+
+          operations.push({
+            updateOne: {
+              filter: { _id: animalRecord._id },
+              update: {
+                $set: {
+                  ageInDays: age.ageInDays,
+                  ageInWeeks: age.ageInWeeks,
+                  feedStage: currentFeedStage,
+                  currentFeedStage,
+                  currentFeedType: currentFeed?.feedType || null,
+                  currentFeedName: currentFeed?.feedName || null,
+                  totalFeedConsumed: historical.totalFeedConsumed,
+                  poultryConsumePerBird: historical.poultryConsumePerBird,
+                  feedCostPerPoultry: historical.feedCostPerPoultry,
+                  totalFeedCost: historical.totalFeedCost,
+                  totalCost,
+                  costPerPoultry: costPerBird,
+                  totalCostPerPoultry: costPerBird,
+                  feedHistory: historical.feedHistory,
+                  lastFeedUpdate: asOf,
+                },
+              },
+            },
+          })
+        } else {
+          const { ageInDays, ageInWeeks } = calculateAge(purchaseDate)
+          const currentFeedStage = getFeedStageFromStartingStage(
+            ageInDays,
+            animalRecord.type,
+            startingStage,
+            animalRecord.purchaseAgeDays
+          )
+          const historical = await calculateHistoricalLivestockFeed({
+            Feed,
+            animalType: animalRecord.type,
+            purchaseDate,
+            purchasePrice,
+            quantity,
+            startingStage,
+            purchaseAgeDays: animalRecord.purchaseAgeDays,
+            skipMissingFeed: true,
+          })
+          const currentFeed = await getFeedForStage(Feed, animalRecord.type, currentFeedStage)
+          const totalCost = purchasePrice + historical.totalFeedCost
+
+          operations.push({
+            updateOne: {
+              filter: { _id: animalRecord._id },
+              update: {
+                $set: {
+                  ageInDays,
+                  ageInWeeks,
+                  feedStage: currentFeedStage,
+                  currentFeedType: currentFeed?.feedType || null,
+                  currentFeedName: currentFeed?.feedName || null,
+                  totalFeedConsumed: historical.totalFeedConsumed,
+                  livestockFeedConsumed: historical.livestockFeedConsumed,
+                  feedCostPerLivestock: historical.feedCostPerLivestock,
+                  totalFeedCost: historical.totalFeedCost,
+                  totalCost,
+                  costPrice: quantity > 0 ? totalCost / quantity : 0,
+                  feedHistory: historical.feedHistory,
+                  lastFeedUpdate: asOf,
+                },
+              },
+            },
+          })
+        }
+      }
+
+      if (operations.length > 0) {
+        await writeInBatches(AnimalModel, operations)
+      }
+
+      if (animalType === 'layer' && farmModels.Egg) {
+        const finisherFeed = typeFeeds.find((feed) => {
+          const record = feed.toObject ? feed.toObject() : feed
+          const stage = record.feedCategory || parseFeedType(record.feedType).feedCategory
+          return normalizeFeedStageKey(stage) === 'finisher'
+        })
+        const eggs = await farmModels.Egg.find({ poultryType: 'layer' })
+        const feedQuantityKg = finisherFeed ? getFeedQuantityKg(finisherFeed) : 0
+        const feedPricePerKg = finisherFeed
+          ? Math.max(toSafeNumber(finisherFeed.feedPricePerkg), 0)
+          : 0
+        const dailyFeedKg = finisherFeed
+          ? Math.max(toSafeNumber(finisherFeed.totalPoultryFeedConsumedPerday), 0)
+          : 0
+
+        for (const egg of eggs) {
+          await recalculateEggs(
+            egg,
+            { totalDailyEgg: egg.totalDailyEgg },
+            { salePrice: egg.salePrice, feedPricePerKg },
+            { feedQuantity: feedQuantityKg },
+            { feedConsuptionPerDay: dailyFeedKg },
+            { damageEggs: egg.damageEggs },
+            farmModels
+          )
+        }
+      }
+    }
+  } catch (error) {
+    logger.error('Failed to recalculate feed dependents.', {
+      affectedTypes: [...affectedTypes],
+      error: error.message,
+      stack: error.stack,
+    })
+    throw error
+  }
+}
+
 const updateFeedConsumption = async (feed, farmModels, retry = 0) => {
   validateFeedConsumptionInputs(feed, farmModels)
   const { Feed, Poultry, LiveStock } = farmModels
@@ -616,8 +892,9 @@ const updateFeedConsumption = async (feed, farmModels, retry = 0) => {
   const totalPoultryRequired = totalPoultryCount * poultryDailyRate * diffDays
   const totalLivestockRequired = totalLivestockCount * livestockDailyRate * diffDays
   const totalDecrease = totalPoultryRequired + totalLivestockRequired
-  const available = toSafeNumber(feed.quantity)
+  const available = getFeedQuantityKg(feed)
   const actualDecrease = Math.min(totalDecrease, available)
+  const remainingQuantityKg = Math.max(available - actualDecrease, 0)
 
   const query = { _id: feed._id }
   if (feed.lastConsumptionUpdate) {
@@ -631,9 +908,10 @@ const updateFeedConsumption = async (feed, farmModels, retry = 0) => {
     {
       $inc: {
         consumption: actualDecrease,
-        quantity: -actualDecrease,
       },
       $set: {
+        quantity: remainingQuantityKg,
+        quantityKg: remainingQuantityKg,
         lastConsumptionUpdate: startToday,
         poultryDailyConsumption: poultryDailyRate,
         livestockDailyConsumption: livestockDailyRate,
@@ -757,6 +1035,7 @@ module.exports = {
   syncFeedConsumption,
   recalculatePoultry,
   recalculateLivestock,
+  recalculateFeedDependents,
   recalculateEggs,
   recalculateLivestockForTypeAndStage,
 }

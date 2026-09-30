@@ -3,21 +3,14 @@ import Sidebar from '../components/common/Sidebar';
 import Navbar from '../components/common/Navbar';
 import SessionWarningBanner from '../components/common/SessionWarningBanner';
 import CalculatorModal from '../components/calculator/CalculatorModal';
+import useSidebarLayout from '../hooks/useSidebarLayout';
 
 /**
  * Main Layout Component - Wraps all route pages
  */
 const MainLayout = ({ children }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { sidebarOpen, sidebarCollapsed, toggleSidebar, closeSidebar, toggleSidebarCollapsed } = useSidebarLayout();
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
-
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
-
-  const closeSidebar = () => {
-    setSidebarOpen(false);
-  };
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -25,7 +18,7 @@ const MainLayout = ({ children }) => {
       <SessionWarningBanner />
 
       {/* Sidebar */}
-      <Sidebar isOpen={sidebarOpen} />
+      <Sidebar isOpen={sidebarOpen} isCollapsed={sidebarCollapsed} onClose={closeSidebar} />
 
       {/* Overlay for mobile sidebar */}
       {sidebarOpen && (
@@ -36,11 +29,13 @@ const MainLayout = ({ children }) => {
       )}
 
       {/* Main content */}
-      <div className="flex flex-col flex-1 md:ml-64">
+      <div className={`flex min-w-0 flex-1 flex-col transition-[margin] duration-200 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         {/* Navbar */}
         <Navbar
           toggleSidebar={toggleSidebar}
           sidebarOpen={sidebarOpen}
+          sidebarCollapsed={sidebarCollapsed}
+          toggleSidebarCollapsed={toggleSidebarCollapsed}
           onOpenCalculator={() => setIsCalculatorOpen(true)}
         />
 

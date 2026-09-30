@@ -41,7 +41,8 @@ const PoultryPage = () => {
   const [formData, setFormData] = useState({
     batchId: '',
     type: '',
-    startingStage: 'starter',
+    purchaseStage: 'starter' || 'starter mash',
+    purchaseAgeDays: '1',
     quantity: '',
     vaccinationStatus: '',
     feedConsumption: '',
@@ -100,7 +101,8 @@ const PoultryPage = () => {
     setFormData({
       batchId: '',
       type: '',
-      startingStage: 'starter',
+      purchaseStage: 'starter'|| 'starter mash',
+      purchaseAgeDays: '1',
       quantity: '',
       vaccinationStatus: '',
       poultryConsumePerBird: '',
@@ -134,7 +136,8 @@ const PoultryPage = () => {
       setFormData({
         batchId: item.batchId,
         type: item.type,
-        startingStage: item.startingStage || 'starter',
+        purchaseStage: item.purchaseStage || item.startingStage || 'starter',
+        purchaseAgeDays: String(item.purchaseAgeDays ?? 0),
         quantity: item.quantity,
         vaccinationStatus: item.vaccinationStatus,
         purchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : '',
@@ -154,7 +157,7 @@ const PoultryPage = () => {
 
 
   const handleDelete = async (id) => {
-    if (!window.confirm(`Are you show you want to delete ${id}?`)) return;
+    if (!window.confirm(`Are you sure you want to delete ${id}?`)) return;
     try {
       await axiosInstance.delete(`/api/poultry/${id}`);
       setAvailablePoultry((prev) => prev.filter((item) => item._id !== id));
@@ -192,7 +195,7 @@ const PoultryPage = () => {
     e.preventDefault();
 
     // Validate required fields
-    const requiredFields = ['type', 'quantity', 'vaccinationStatus', 'purchasePrice'];
+    const requiredFields = ['type', 'purchaseStage', 'purchaseAgeDays', 'quantity', 'vaccinationStatus', 'purchasePrice'];
     const newErrors = {};
     requiredFields.forEach(field => {
       if (!formData[field] || formData[field].toString().trim() === '') {
@@ -201,9 +204,11 @@ const PoultryPage = () => {
     });
 
     if (!formData.purchaseDate) {
-      newErrors.purchaseDate = 'Either purchase date or age in weeks/days is required';
-      // if (!formData.ageInWeeks) newErrors.ageInWeeks = 'Enter age in weeks or days';
-      // if (!formData.ageInDays) newErrors.ageInDays = 'Enter age in weeks or days';
+      newErrors.purchaseDate = 'Purchase date is required';
+    }
+
+    if (!Number.isInteger(Number(formData.purchaseAgeDays)) || Number(formData.purchaseAgeDays) < 0) {
+      newErrors.purchaseAgeDays = 'Enter a non-negative whole age in days';
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -224,7 +229,8 @@ const PoultryPage = () => {
         setFormData({
           batchId: '',
           type: '',
-          startingStage: 'starter',
+          purchaseStage: 'starter',
+          purchaseAgeDays: '1',
           quantity: '',
           vaccinationStatus: '',
           purchaseDate: '',
@@ -435,22 +441,33 @@ const PoultryPage = () => {
             />
             <div>
               <Select
-                label="Starting Feed Stage"
-                name="startingStage"
+                label="Purchase Stage"
+                name="purchaseStage"
                 options={[
-                  { value: 'starter', label: 'Starter' },
-                  { value: 'grower', label: 'Grower' },
-                  { value: 'finisher', label: 'Finisher' },
+                  { value: 'starter', label: formData.type === 'layer' ? 'Starter Mash' : 'Starter' },
+                  { value: 'grower', label: formData.type === 'layer' ? 'Grower Mash' : 'Grower' },
+                  { value: 'finisher', label: formData.type === 'layer' ? 'Layer Mash' : 'Finisher' },
                 ]}
-                value={formData.startingStage}
+                value={formData.purchaseStage}
                 onChange={handleChange}
-                error={errors.startingStage}
+                error={errors.purchaseStage}
                 required
               />
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Select the feed stage when you purchased/acquired this batch.
               </p>
             </div>
+            <Input
+              label="Purchase Age (Days)"
+              type="number"
+              name="purchaseAgeDays"
+              min="0"
+              step="1"
+              value={formData.purchaseAgeDays}
+              onChange={handleChange}
+              error={errors.purchaseAgeDays}
+              required
+            />
             <Input
               label="Quantity"
               type="number"

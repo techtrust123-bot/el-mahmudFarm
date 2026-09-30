@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiMenu, FiX, FiBell, FiUser, FiLogOut, FiMoon, FiSun, FiCpu } from 'react-icons/fi';
+import { FiMenu, FiX, FiChevronLeft, FiChevronRight, FiBell, FiUser, FiLogOut, FiMoon, FiSun, FiCpu } from 'react-icons/fi';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
 import axios from 'axios';
@@ -11,7 +11,7 @@ import axiosInstance from '../../utils/axiosInstance';
 /**
  * Top Navigation Bar Component
  */
-const Navbar = ({ toggleSidebar, sidebarOpen, onOpenCalculator }) => {
+const Navbar = ({ toggleSidebar, sidebarOpen, sidebarCollapsed = false, toggleSidebarCollapsed, onOpenCalculator }) => {
   const navigate = useNavigate();
   const { isDark, toggleTheme } = useTheme();
   const { logout } = useAuth();
@@ -75,17 +75,31 @@ const Navbar = ({ toggleSidebar, sidebarOpen, onOpenCalculator }) => {
   };
 
   return (
-    <nav className="fixed top-0 right-0 left-0 md:left-64 h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md z-30">
+    <nav className={`fixed top-0 right-0 left-0 ${sidebarCollapsed ? 'md:left-20' : 'md:left-64'} z-30 h-16 border-b border-gray-200 bg-white shadow-md transition-[left] duration-200 dark:border-gray-700 dark:bg-gray-800`}>
       <div className="h-full px-6 flex items-center justify-between">
         {/* Left side - Menu button */}
         <div className="md:hidden">
           <button
             onClick={toggleSidebar}
             className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+            aria-label={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={sidebarOpen}
+            aria-controls="cloudfarm-sidebar"
           >
             {sidebarOpen ? <FiX size={24} /> : <FiMenu size={24} />}
           </button>
         </div>
+        <button
+          type="button"
+          onClick={toggleSidebarCollapsed}
+          className="hidden md:inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!sidebarCollapsed}
+          aria-controls="cloudfarm-sidebar"
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {sidebarCollapsed ? <FiChevronRight size={20} /> : <FiChevronLeft size={20} />}
+        </button>
 
         {/* Right side - Icons and Profile */}
         <div className="ml-auto flex items-center gap-6">

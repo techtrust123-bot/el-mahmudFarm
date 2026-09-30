@@ -45,6 +45,20 @@ const livestockValidation = [
 
 // Poultry validation
 const poultryValidation = [
+  body('purchaseStage')
+    .notEmpty().withMessage('Purchase stage is required')
+    .isIn(['starter', 'grower', 'finisher'])
+    .withMessage('Purchase stage must be starter, grower, or finisher'),
+
+  body('purchaseAgeDays')
+    .notEmpty().withMessage('Purchase age is required')
+    .isInt({ min: 0 })
+    .withMessage('Purchase age must be a non-negative whole number of days'),
+
+  body('purchaseDate')
+    .notEmpty().withMessage('Purchase date is required')
+    .isISO8601().withMessage('Purchase date must be a valid date'),
+
   body('startingStage')
     .optional({ values: 'undefined' })
     .isIn(['starter', 'grower', 'finisher'])
@@ -86,7 +100,22 @@ const feedValidation = [
   body('quantity')
     .notEmpty().withMessage('Quantity is required')
     .isFloat({ min: 0, max: 999999999.99 })
+    .custom((value) => Number(value) > 0)
     .withMessage('Quantity must be a valid positive number'),
+
+  body('unit')
+    .optional({ checkFalsy: true })
+    .customSanitizer((value) => String(value).toLowerCase())
+    .isIn(['kg', 'bag'])
+    .withMessage('Unit must be kg or bag'),
+
+  body('bagWeightKg')
+    .custom((value, { req }) => {
+      if (String(req.body.unit || 'kg').toLowerCase() !== 'bag') return true
+      return value !== undefined && value !== null && value !== '' &&
+        Number.isFinite(Number(value)) && Number(value) > 0
+    })
+    .withMessage('Bag weight must be a valid number greater than zero'),
   
   body('cost')
     .notEmpty().withMessage('Cost is required')
@@ -123,10 +152,36 @@ const feedValidation = [
     .isFloat({ min: 0, max: 999999999.99 })
     .withMessage('Total poultry feed consumed per day must be a valid positive number'),
 
+  body('poultryFeedUnit')
+    .optional({ checkFalsy: true })
+    .customSanitizer((value) => String(value).toLowerCase())
+    .isIn(['kg', 'bag'])
+    .withMessage('Poultry feed unit must be kg or bag'),
+
+  body('poultryBagWeightKg')
+    .custom((value, { req }) => {
+      if (String(req.body.poultryFeedUnit || 'kg').toLowerCase() !== 'bag' || Number(req.body.totalPoultryFeedConsumedPerday) === 0) return true
+      return value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value)) && Number(value) > 0
+    })
+    .withMessage('Poultry bag weight must be a valid number greater than zero'),
+
   body('totalLivestockFeedConsumedPerday')
     .optional({ checkFalsy: true })
     .isFloat({ min: 0, max: 999999999.99 })
-    .withMessage('Total livestock feed consumed per day must be a valid positive number')
+    .withMessage('Total livestock feed consumed per day must be a valid positive number'),
+
+  body('livestockFeedUnit')
+    .optional({ checkFalsy: true })
+    .customSanitizer((value) => String(value).toLowerCase())
+    .isIn(['kg', 'bag'])
+    .withMessage('Livestock feed unit must be kg or bag'),
+
+  body('livestockBagWeightKg')
+    .custom((value, { req }) => {
+      if (String(req.body.livestockFeedUnit || 'kg').toLowerCase() !== 'bag' || Number(req.body.totalLivestockFeedConsumedPerday) === 0) return true
+      return value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value)) && Number(value) > 0
+    })
+    .withMessage('Livestock bag weight must be a valid number greater than zero')
 ];
 
 // Sales validation - support both order batches and single sale updates

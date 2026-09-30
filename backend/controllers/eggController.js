@@ -45,9 +45,9 @@ exports.addEgg = async(req,res)=>{
             return res.status(400).json({message:'this field has to be positive number..'})
         }
 
-        if(salePrice < 0 || salePrice === 0 || salePrice === ''){
-            return res.status(400).json({message:' this field has to be positive number..'})
-        }
+        // if(salePrice < 0 || salePrice === 0 || salePrice === ''){
+        //     return res.status(400).json({message:' this field has to be positive number..'})
+        // }
 
          if(!Number.isFinite(Number(damageEggs)) || Number(damageEggs) < 0){
             return res.status(400).json({success:false,message:'Damage eggs must be zero or a positive number.'})
@@ -77,7 +77,7 @@ exports.addEgg = async(req,res)=>{
         if (feedCost <= 0) {
             return res.status(400).json({success:false, message: 'The layer finisher feed has no valid cost.'})
         }
-        const feedQuantity = Number(feedType.quantity || 0);
+        const feedQuantity = Number(feedType.quantityKg ?? feedType.quantity ?? 0);
         if (feedQuantity <= 0) {
             return res.status(400).json({success:false, message: 'The layer finisher feed has no available quantity.'})
         }
@@ -192,7 +192,7 @@ exports.editEgg = async(req,res)=>{
         })
         
         const feedCost = Number(feedType.cost || 0);
-        const feedQuantity = Number(feedType.quantity || 0);
+        const feedQuantity = Number(feedType.quantityKg ?? feedType.quantity ?? 0);
         const feedConsuptionPerDay = Number(feedType.totalPoultryFeedConsumedPerday || 0);
         
         const recalculatedEgg = await recalculateEggs(

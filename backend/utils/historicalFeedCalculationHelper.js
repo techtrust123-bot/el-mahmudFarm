@@ -1,6 +1,8 @@
 const {
     getFeedForStage,
     getFeedStagePeriodsFromStartingStage,
+    calculatePoultryAge,
+    resolvePoultryPurchaseAgeDays,
 } = require('./feedStageHelper.js')
 const ApiError = require('./ApiError')
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -12,6 +14,8 @@ const calculateHistoricalPoultryFeed = async ({
     purchasePrice,
     quantity,
     startingStage = 'starter',
+    purchaseAgeDays,
+    skipMissingFeed = false,
 }) => {
     const safeQuantity = Math.max(Number(quantity) || 0, 0)
 
@@ -28,6 +32,7 @@ const calculateHistoricalPoultryFeed = async ({
     const purchase = new Date(purchaseDate)
     const today = new Date()
     const purchasePriceNum = Number(purchasePrice) || 0
+    const resolvedPurchaseAgeDays = resolvePoultryPurchaseAgeDays(animalType, startingStage, purchaseAgeDays)
 
     if (purchasePriceNum < 0) {
         throw new Error('Invalid poultry purchasePrice.')
@@ -42,14 +47,12 @@ const calculateHistoricalPoultryFeed = async ({
     }
 
     // Calculate how many days the poultry has been in the farm.
-    const elapsedDays = Math.max(
-        Math.floor((today - purchase) / MS_PER_DAY),
-        0
-    )
+    const { elapsedDays } = calculatePoultryAge(purchase, resolvedPurchaseAgeDays, today)
     const stagePeriods = getFeedStagePeriodsFromStartingStage(
         animalType,
         elapsedDays,
-        startingStage
+        startingStage,
+        resolvedPurchaseAgeDays
     )
    
 
@@ -79,6 +82,7 @@ const calculateHistoricalPoultryFeed = async ({
     )
 
     if (!feed) {
+        if (skipMissingFeed) continue
         throw new ApiError(
             404,
             `No ${animalType} ${feedStage} feed is configured for this farm.`,
@@ -90,15 +94,14 @@ const calculateHistoricalPoultryFeed = async ({
         )
     }
 
-    const totalDailyFeed = Math.max(
-        Number(feed.totalPoultryFeedConsumedPerday) || 0,
+    const configuredDailyRate = Number(feed.poultryDailyConsumption)
+    const legacyDailyFeed = Number(feed.totalPoultryFeedConsumedPerday) || 0
+    const dailyFeedPerBird = Math.max(
+        Number.isFinite(configuredDailyRate) && configuredDailyRate > 0
+            ? configuredDailyRate
+            : safeQuantity > 0 ? legacyDailyFeed / safeQuantity : 0,
         0
     )
-
-    const dailyFeedPerBird =
-            safeQuantity > 0
-                ? totalDailyFeed / safeQuantity
-                : 0
 
 
     const pricePerKg = Math.max(
@@ -139,6 +142,10 @@ const calculateHistoricalPoultryFeed = async ({
         totalFeedConsumed:
             stageTotalFeedConsumed,
 
+        bagWeightKg: Number(feed.poultryBagWeightKg || feed.bagWeightKg) > 0
+            ? Number(feed.poultryBagWeightKg || feed.bagWeightKg)
+            : undefined,
+
         feedCostPerPoultry:
             stageFeedCostPerBird,
 
@@ -158,6 +165,10 @@ const calculateHistoricalPoultryFeed = async ({
             period.days,
 
         recordedAt: today,
+        startDate: new Date(Date.UTC(purchase.getUTCFullYear(), purchase.getUTCMonth(), purchase.getUTCDate())
+            + (period.startAgeInDays - resolvedPurchaseAgeDays) * MS_PER_DAY),
+        endDate: new Date(Date.UTC(purchase.getUTCFullYear(), purchase.getUTCMonth(), purchase.getUTCDate())
+            + (period.endAgeInDays - resolvedPurchaseAgeDays - (period.days > 0 ? 1 : 0)) * MS_PER_DAY),
     })
 }
 
@@ -189,6 +200,8 @@ const calculateHistoricalLivestockFeed = async ({
     quantity,
     purchasePrice,
     startingStage = 'starter',
+    purchaseAgeDays,
+    skipMissingFeed = false,
 }) => {
     const safeQuantity = Math.max(Number(quantity) || 0, 0)
 
@@ -228,7 +241,8 @@ const calculateHistoricalLivestockFeed = async ({
    const stagePeriods = getFeedStagePeriodsFromStartingStage(
         animalType,
         elapsedDays,
-        startingStage
+        startingStage,
+        purchaseAgeDays
     )
 
     if (stagePeriods.length === 0) {
@@ -257,6 +271,7 @@ const calculateHistoricalLivestockFeed = async ({
     )
 
     if (!feed) {
+        if (skipMissingFeed) continue
         throw new ApiError(
             404,
             `No ${animalType} ${feedStage} feed is configured for this farm.`,
@@ -268,15 +283,14 @@ const calculateHistoricalLivestockFeed = async ({
         )
     }
 
-    const totalDailyFeed = Math.max(
-        Number(feed.totalLivestockFeedConsumedPerday) || 0,
+    const configuredDailyRate = Number(feed.livestockDailyConsumption)
+    const legacyDailyFeed = Number(feed.totalLivestockFeedConsumedPerday) || 0
+    const dailyFeedforLivestock = Math.max(
+        Number.isFinite(configuredDailyRate) && configuredDailyRate > 0
+            ? configuredDailyRate
+            : safeQuantity > 0 ? legacyDailyFeed / safeQuantity : 0,
         0
     )
-
-    const dailyFeedforLivestock =
-            safeQuantity > 0
-                ? totalDailyFeed / safeQuantity
-                : 0
     
 
     const pricePerKg = Math.max(
@@ -310,6 +324,10 @@ const calculateHistoricalLivestockFeed = async ({
 
         livestockFeedConsumed:
             stageFeedConsumedforLivestock,
+
+        bagWeightKg: Number(feed.livestockBagWeightKg || feed.bagWeightKg) > 0
+            ? Number(feed.livestockBagWeightKg || feed.bagWeightKg)
+            : undefined,
 
         feedCostPerLivestock:
             stageFeedCostforLivestock,

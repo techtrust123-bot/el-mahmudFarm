@@ -134,7 +134,7 @@ const SalesPage = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm(`Are you show you want to delete ${id}?`)) return;
+    if (!window.confirm(`Are you sure you want to delete ${id}?`)) return;
     try {
     const response =  await axiosInstance.delete(`/api/sell/del/${id}`);
       setSales((prev) => prev.filter((item) => item._id !== id));

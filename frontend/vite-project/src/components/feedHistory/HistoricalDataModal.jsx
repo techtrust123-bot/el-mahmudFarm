@@ -40,6 +40,8 @@ const HistoricalDataModal = ({
         { label: 'Poultry Type', value: formatSummaryValue(data?.type) },
         { label: 'Current Feed Stage', value: formatSummaryValue(data?.currentFeedStage || data?.feedStage) },
         { label: 'Purchase Date', value: formatDate(data?.purchaseDate) },
+        { label: 'Purchase Stage', value: formatSummaryValue(data?.purchaseStage || data?.startingStage || 'Starter') },
+        { label: 'Purchase Age', value: `${formatSummaryValue(data?.purchaseAgeDays ?? 0)} days` },
         { label: 'Quantity', value: formatSummaryValue(data?.quantity) },
       ]
     : [

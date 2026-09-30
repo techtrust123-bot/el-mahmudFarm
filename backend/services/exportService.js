@@ -303,11 +303,19 @@ const expensesMapping = {
 const feedMapping = {
   'Feed Type': 'feedType',
   'Animal Type': 'animalType',
-  'Current Quantity': (record) => formatMeasurement(record.quantity, 'kg'),
+  'Quantity Entered': (record) => {
+    const quantity = Number(record.quantityEntered ?? record.quantity ?? 0);
+    if (record.unit === 'bag' && Number(record.bagWeightKg) > 0) {
+      return `${formatMeasurement(quantity)} bags (${formatMeasurement(quantity * Number(record.bagWeightKg), 'kg')})`;
+    }
+    return formatMeasurement(quantity, 'kg');
+  },
+  'Current Quantity': (record) => formatMeasurement(record.quantityKg ?? record.quantity, 'kg'),
+  'Bag Weight': (record) => record.unit === 'bag' ? formatMeasurement(record.bagWeightKg, 'kg') : '',
   'Unit Cost': (record) => formatCurrency(record.unitCost ?? record.cost),
   'Daily Consumption': (record) => formatMeasurement(record.dailyConsumption ?? record.consumption, 'kg'),
   'Total Cost': (record) => {
-    const quantity = Number(record.quantity ?? 0);
+    const quantity = Number(record.quantityKg ?? record.quantity ?? 0);
     const unitCost = Number(record.unitCost ?? record.cost ?? 0);
     return formatCurrency(quantity * unitCost);
   },

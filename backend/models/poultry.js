@@ -6,7 +6,6 @@ const poultrySchema = new mongoose.Schema({
     batchId:{
         type:String,
         required:true,
-        unique:true,
         trim:true
     },
     type:{
@@ -25,12 +24,20 @@ const poultrySchema = new mongoose.Schema({
      },
       startingStage:{
           type:String,
-          enum:['starter','grower','finisher'],
+          enum:['starter','grower','finisher', 'starter mash', 'grower mash', 'layer mash'],
           default:'starter'
       },
+    purchaseStage:{
+        type:String,
+        enum:['starter','grower','finisher', 'starter mash', 'grower mash', 'layer mash']
+    },
+    purchaseAgeDays:{
+        type:Number,
+        min:0
+    },
      feedStage:{
         type:String,
-        enum:['Starter','Grower','Finisher'],
+        enum:['Starter','Grower','Finisher', 'Starter Mash', 'Grower Mash', 'Layer Mash'],
      },
      mortality:{
         type:Number,
@@ -123,6 +130,7 @@ const poultrySchema = new mongoose.Schema({
             feedType: String,
             feedCategory: String,
             poultryConsumePerBird: Number,
+            bagWeightKg: Number,
             feedCostPerPoultry: Number,
             totalFeedConsumed:Number,
             totalFeedCost: Number,
@@ -130,13 +138,17 @@ const poultrySchema = new mongoose.Schema({
             costPerPoultry: Number,
             totalCostPerPoultry: Number,
             quantity:Number,
+            startAgeInDays: Number,
+            endAgeInDays: Number,
+            days: Number,
+            startDate: Date,
+            endDate: Date,
             recordedAt: { type: Date, default: Date.now }
         }
     ],
 },{timestamps:true})
 
-poultrySchema.index({ farmId: 1 });
-// poultrySchema.index({ batchId: 1 }); // Removed: batchId already has unique:true which creates index
+poultrySchema.index({ farmId: 1, batchId: 1 }, { unique: true, name: 'farmId_1_batchId_1' });
 poultrySchema.index({ type: 1 });
 poultrySchema.index({ status: 1 });
 

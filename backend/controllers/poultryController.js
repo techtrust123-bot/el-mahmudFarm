@@ -1,37 +1,37 @@
 
-const { recalculatePoultry } = require('../services/feedConsumptionService.js')
+const { recalculatePoultry, recalculateFeedDependents } = require('../services/feedConsumptionService.js')
 const { calculateBatchConsumption } = require('../utils/feedCalculator')
 const ApiError = require('../utils/ApiError')
 const {
     getFeedStageFromStartingStage,
-  calculateAge,
-  getBirthDateFromAge,
+    calculatePoultryAge,
+    resolvePoultryPurchaseAgeDays,
   getFeedForStage,
 } = require('../utils/feedStageHelper')
 const logger = require('../utils/logger')
 const {calculateHistoricalPoultryFeed} = require('../utils/historicalFeedCalculationHelper.js')
 const { sendNotification } = require('../services/emailService')
 const { generateBatchId } = require('../utils/generateBatchId')
+const { assertUniquePoultryBatchId } = require('../utils/poultryBatchValidation')
 
 exports.createPoultry = async (req, res) => {
     const { Poultry, Feed, Counter } = req.farmModels
+    const farmId = req.farmContext?.farmId || req.user?.farmId
     const { type, quantity, purchaseDate, vaccinationStatus, mortality, purchasePrice, ageInWeeks, ageInDays, poultrySalePrice } = req.body
-    const startingStage = req.body.startingStage || 'starter'
+    const purchaseStage = req.body.purchaseStage || req.body.startingStage || 'starter'
+    const purchaseAgeDays = req.body.purchaseAgeDays == null ? 0 : Number(req.body.purchaseAgeDays)
     if (!type || !quantity || (!purchaseDate && ageInWeeks == null && ageInDays == null) || !vaccinationStatus || !purchasePrice) {
         return res.status(400).json({ message: 'All fields are required. Provide purchaseDate or ageInWeeks/ageInDays for age calculation.' })
     }
     try {
         const sequenceId = await generateBatchId(Counter, 'poultryBatch')
         const batchId = `Batch-${sequenceId}`
-        const exist = await Poultry.findOne({ batchId })
-        if (exist) {
-            return res.status(400).json({ success: false, message: 'Batch ID already exists...' })
-        }
+        await assertUniquePoultryBatchId(Poultry, { farmId, batchId })
 
-        const { ageInDays: resolvedAgeInDays, ageInWeeks: resolvedAgeInWeeks } =
-        calculateAge(purchaseDate)
+        const { ageInDays: resolvedAgeInDays, ageInWeeks: resolvedAgeInWeeks, elapsedDays } =
+        calculatePoultryAge(purchaseDate, purchaseAgeDays)
 
-        const currentFeedStage = getFeedStageFromStartingStage(resolvedAgeInDays, type, startingStage)
+        const currentFeedStage = getFeedStageFromStartingStage(elapsedDays, type, purchaseStage, purchaseAgeDays)
 
         const currentFeed = await getFeedForStage(
              Feed,
@@ -61,7 +61,8 @@ exports.createPoultry = async (req, res) => {
             animalType: type,
             purchaseDate,
             quantity: adjustedQuantity,
-            startingStage,
+            startingStage: purchaseStage,
+            purchaseAgeDays,
         })
 
         const totalPurchaseCost = Number(purchasePrice) || 0
@@ -69,12 +70,15 @@ exports.createPoultry = async (req, res) => {
         const totalCost =  totalPurchaseCost + historicalFeed.totalFeedCost
         const costPerPoultry = totalCost / adjustedQuantity
         const newPoultry = new Poultry({
+            farmId,
             batchId,
             type,
             status: 'available',
             quantity: adjustedQuantity,
             purchaseDate: new Date(purchaseDate || new Date()),
-            startingStage,
+            startingStage: purchaseStage,
+            purchaseStage,
+            purchaseAgeDays,
             lastFeedUpdate: new Date(),
             vaccinationStatus,
             mortality: mortality || 0,
@@ -123,7 +127,12 @@ exports.createPoultry = async (req, res) => {
         res.status(201).json({ success: true, message: 'Poultry created successfully...' })
     } catch (error) {
         console.log(error)
-        res.status(500).json({ success: false, message: error.message })
+        const duplicateBatchId = error.code === 11000
+            && (error.keyPattern?.batchId || error.keyValue?.batchId)
+        res.status(duplicateBatchId ? 400 : error.statusCode || 500).json({
+            success: false,
+            message: duplicateBatchId ? 'Batch ID already exists in this farm.' : error.message
+        })
     }
 }
 
@@ -134,10 +143,14 @@ exports.getPoultry = async (req, res) => {
 
         const data = poultryList.map((bird) => {
             const birthDate = bird.purchaseDate || new Date()
-            const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-            const currentFeedStage = getFeedStageFromStartingStage(ageInDays, bird.type, bird.startingStage)
+            const purchaseStage = bird.purchaseStage || bird.startingStage || 'starter'
+            const purchaseAgeDays = resolvePoultryPurchaseAgeDays(bird.type, purchaseStage, bird.purchaseAgeDays)
+            const { ageInDays, ageInWeeks, elapsedDays } = calculatePoultryAge(birthDate, purchaseAgeDays)
+            const currentFeedStage = getFeedStageFromStartingStage(elapsedDays, bird.type, purchaseStage, purchaseAgeDays)
             return {
                 ...bird.toObject(),
+                purchaseStage,
+                purchaseAgeDays,
                 ageInDays,
                 ageInWeeks,
                 currentFeedStage,
@@ -157,10 +170,14 @@ exports.getAvailablePoultry = async (req, res) => {
 
         const data = poultryList.map((bird) => {
             const birthDate = bird.purchaseDate || new Date()
-            const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-            const currentFeedStage = getFeedStageFromStartingStage(ageInDays, bird.type, bird.startingStage)
+            const purchaseStage = bird.purchaseStage || bird.startingStage || 'starter'
+            const purchaseAgeDays = resolvePoultryPurchaseAgeDays(bird.type, purchaseStage, bird.purchaseAgeDays)
+            const { ageInDays, ageInWeeks, elapsedDays } = calculatePoultryAge(birthDate, purchaseAgeDays)
+            const currentFeedStage = getFeedStageFromStartingStage(elapsedDays, bird.type, purchaseStage, purchaseAgeDays)
             return {
                 ...bird.toObject(),
+                purchaseStage,
+                purchaseAgeDays,
                 ageInDays,
                 ageInWeeks,
                 currentFeedStage,
@@ -180,10 +197,14 @@ exports.getSoldPoultry = async (req, res) => {
 
         const data = poultryList.map((bird) => {
             const birthDate = bird.purchaseDate || new Date()
-            const { ageInDays, ageInWeeks } = calculateAge(birthDate)
-            const currentFeedStage = getFeedStageFromStartingStage(ageInDays, bird.type, bird.startingStage)
+            const purchaseStage = bird.purchaseStage || bird.startingStage || 'starter'
+            const purchaseAgeDays = resolvePoultryPurchaseAgeDays(bird.type, purchaseStage, bird.purchaseAgeDays)
+            const { ageInDays, ageInWeeks, elapsedDays } = calculatePoultryAge(birthDate, purchaseAgeDays)
+            const currentFeedStage = getFeedStageFromStartingStage(elapsedDays, bird.type, purchaseStage, purchaseAgeDays)
             return {
                 ...bird.toObject(),
+                purchaseStage,
+                purchaseAgeDays,
                 ageInDays,
                 ageInWeeks,
                 currentFeedStage,
@@ -215,6 +236,7 @@ exports.getPoultryById = async (req, res) => {
 exports.editPoultry = async (req, res) => {
     const { Poultry, Feed } = req.farmModels
     const id = req.params.id
+    const farmId = req.farmContext?.farmId || req.user?.farmId
 
     try {
         const existingPoultry = await Poultry.findById(id)
@@ -225,6 +247,11 @@ exports.editPoultry = async (req, res) => {
                 message: 'Poultry not found.'
             })
         }
+
+        const batchId = req.body.batchId == null
+            ? existingPoultry.batchId
+            : String(req.body.batchId).trim()
+        await assertUniquePoultryBatchId(Poultry, { farmId, batchId, excludeId: id })
 
         // ---------------------------------------------------------
         // 1. Resolve editable values
@@ -252,9 +279,19 @@ exports.editPoultry = async (req, res) => {
             req.body.type ||
             existingPoultry.type
 
-        const startingStage = req.body.startingStage != null
-            ? req.body.startingStage
-            : existingPoultry.startingStage || 'starter'
+        const purchaseStage = req.body.purchaseStage != null
+            ? req.body.purchaseStage
+            : req.body.startingStage != null
+                ? req.body.startingStage
+                : existingPoultry.purchaseStage || existingPoultry.startingStage || 'starter'
+
+        const purchaseAgeDays = req.body.purchaseAgeDays != null
+            ? Number(req.body.purchaseAgeDays)
+            : resolvePoultryPurchaseAgeDays(type, purchaseStage, existingPoultry.purchaseAgeDays)
+
+        if (!Number.isInteger(purchaseAgeDays) || purchaseAgeDays < 0) {
+            return res.status(400).json({ success: false, message: 'Purchase age must be a non-negative whole number of days.' })
+        }
 
         const poultrySalePrice =
             req.body.poultrySalePrice != null
@@ -323,7 +360,10 @@ exports.editPoultry = async (req, res) => {
             existingPoultry.type !== type
 
         const startingStageChanged =
-            (existingPoultry.startingStage || 'starter') !== startingStage
+            (existingPoultry.purchaseStage || existingPoultry.startingStage || 'starter') !== purchaseStage
+
+        const purchaseAgeChanged =
+            Number(existingPoultry.purchaseAgeDays || 0) !== purchaseAgeDays
 
         const mortalityChanged =
             Number(existingPoultry.mortality || 0) !==
@@ -334,7 +374,8 @@ exports.editPoultry = async (req, res) => {
             quantityChanged ||
             typeChanged ||
             mortalityChanged ||
-            startingStageChanged
+            startingStageChanged ||
+            purchaseAgeChanged
 
         // ---------------------------------------------------------
         // 3. Calculate current age from purchaseDate ONLY
@@ -342,14 +383,16 @@ exports.editPoultry = async (req, res) => {
 
         const {
             ageInDays,
-            ageInWeeks
-        } = calculateAge(purchaseDate)
+            ageInWeeks,
+            elapsedDays
+        } = calculatePoultryAge(purchaseDate, purchaseAgeDays)
 
         const currentFeedStage =
             getFeedStageFromStartingStage(
-                ageInDays,
+                elapsedDays,
                 type,
-                startingStage
+                purchaseStage,
+                purchaseAgeDays
             )
 
         const currentFeed =
@@ -401,7 +444,8 @@ exports.editPoultry = async (req, res) => {
                     animalType: type,
                     purchaseDate,
                     quantity: adjustedQuantity,
-                    startingStage,
+                    startingStage: purchaseStage,
+                    purchaseAgeDays,
                 })
 
             totalFeedConsumed =
@@ -463,9 +507,14 @@ exports.editPoultry = async (req, res) => {
         const updateData = {
             ...req.body,
 
+            farmId,
+            batchId,
+
             type,
 
-            startingStage,
+            startingStage: purchaseStage,
+            purchaseStage,
+            purchaseAgeDays,
 
             quantity: adjustedQuantity,
 
@@ -552,12 +601,13 @@ exports.editPoultry = async (req, res) => {
             }
         )
 
-        return res.status(
-            error.statusCode || 500
-        ).json({
+        const duplicateBatchId = error.code === 11000
+            && (error.keyPattern?.batchId || error.keyValue?.batchId)
+        return res.status(duplicateBatchId ? 400 : error.statusCode || 500).json({
             success: false,
-            message:
-                error.message ||
+            message: duplicateBatchId
+                ? 'Batch ID already exists in this farm.'
+                : error.message ||
                 'Error while updating poultry.'
         })
     }
@@ -567,16 +617,40 @@ exports.editPoultry = async (req, res) => {
 exports.removePoultry = async(req,res)=>{
     const { Poultry, Feed } = req.farmModels
     const id = req.params.id
+    let deletedPoultry
+    let affectedFeeds = []
+    let didDelete = false
+    let recalculationCompleted = false
     try {
         const getPoultry = await Poultry.findOne({ _id: id })
         if(!getPoultry){
             return res.status(404).json({success:false,message:"poultry not found.."})
         }
-        const del = await Poultry.findByIdAndDelete(getPoultry)
-        const feed = await getFeedForStage(Feed, getPoultry.type, getPoultry.currentFeedStage || getPoultry.feedStage)
-        if (feed) await recalculatePoultry(feed, req.farmModels)
+        deletedPoultry = getPoultry.toObject ? getPoultry.toObject() : { ...getPoultry }
+        affectedFeeds = await Feed.find({
+            $or: [
+                { animalType: getPoultry.type },
+                { feedType: { $regex: new RegExp(`^${getPoultry.type}`, 'i') } },
+            ],
+        })
+        await Poultry.findByIdAndDelete(getPoultry._id)
+        didDelete = true
+        await recalculateFeedDependents(affectedFeeds, req.farmModels)
+        recalculationCompleted = true
         res.status(200).json({success:true,message:"Poultry deleted sucessfull.."})
     } catch (error) {
+        if (deletedPoultry && didDelete && !recalculationCompleted) {
+            try {
+                await Poultry.create(deletedPoultry)
+                await recalculateFeedDependents(affectedFeeds, req.farmModels)
+            } catch (rollbackError) {
+                logger.error('Failed to restore poultry after feed recalculation failure.', {
+                    poultryId: deletedPoultry._id,
+                    error: rollbackError.message,
+                    stack: rollbackError.stack,
+                })
+            }
+        }
         console.log(error)
         res.status(500).json({message:error.message || "error while deleting poultry"})
     }

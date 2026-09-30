@@ -10,7 +10,7 @@ const feedSchema = new mongoose.Schema({
     },
     animalType:{
         type:String,
-        enum:['broiler','layer','cattle','cow','sheep','goat','horse','ram','bool'],
+        enum:['broiler','layer','cattle','sheep','goat','horse'],
         required:true
     },
     poultryType:{
@@ -41,13 +41,33 @@ const feedSchema = new mongoose.Schema({
         type:Number,
         default:0
     },
+    totalPoultryFeedConsumedPerdayEntered:{ type:Number },
+    poultryFeedUnit:{ type:String, enum:['kg','bag'], default:'kg' },
+    poultryBagWeightKg:{ type:Number },
     totalLivestockFeedConsumedPerday:{
         type:Number,
         default:0
     },
+    totalLivestockFeedConsumedPerdayEntered:{ type:Number },
+    livestockFeedUnit:{ type:String, enum:['kg','bag'], default:'kg' },
+    livestockBagWeightKg:{ type:Number },
     quantity:{
         type:Number,
         required:true
+    },
+    quantityKg:{
+        type:Number,
+    },
+    quantityEntered:{
+        type:Number,
+    },
+    unit:{
+        type:String,
+        enum:['kg','bag'],
+        default:'kg',
+    },
+    bagWeightKg:{
+        type:Number,
     },
     cost:{
         type:Number,

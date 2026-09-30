@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
-import { FiMenu, FiX, FiHome, FiPackage, FiUsers, FiSettings, FiDatabase, FiMessageCircle } from 'react-icons/fi';
+import { FiHome, FiPackage, FiUsers, FiSettings, FiDatabase, FiMessageCircle } from 'react-icons/fi';
 import { GiCow, GiChicken, GiPayMoney } from 'react-icons/gi';
 import { TbCurrencyNaira } from 'react-icons/tb';
 import cloudFarmLogo from '../../assets/CloudFarm_logo.png';
@@ -11,7 +11,7 @@ import { canAccessFeature } from '../../data/subscriptionPlans';
 /**
  * Sidebar Navigation Component
  */
-const Sidebar = ({ isOpen }) => {
+const Sidebar = ({ isOpen, isCollapsed = false, onClose = () => {} }) => {
   const location = useLocation();
   const { user } = useAuth();
   const normalizedRole = user?.role?.toLowerCase();
@@ -48,15 +48,12 @@ const Sidebar = ({ isOpen }) => {
 
   return (
     <aside
-      className={`
-        fixed left-0 top-0 h-screen w-64 bg-gradient-to-b from-emerald-800 to-emerald-900
-        text-white p-6 transition-transform duration-300 z-40
-        ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-      `}
+      id="cloudfarm-sidebar"
+      className={`fixed left-0 top-0 z-40 h-screen ${isCollapsed ? 'w-64 md:w-20' : 'w-64'} bg-gradient-to-b from-emerald-800 to-emerald-900 p-6 text-white transition-all duration-200 ${isCollapsed ? 'md:px-3' : ''} ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
     >
-      <div className="mb-8 flex items-center gap-3">
+      <div className={`mb-8 flex items-center gap-3 ${isCollapsed ? 'md:justify-center' : ''}`}>
         <img src={cloudFarmLogo} alt="CloudFarm logo" className="h-10 w-10 object-contain rounded-lg bg-white/10 p-1 shadow-sm" />
-        <div>
+        <div className={isCollapsed ? 'md:hidden' : ''}>
           <h1 className="text-lg font-bold leading-none">CloudFarm</h1>
         </div>
       </div>
@@ -96,21 +93,26 @@ const Sidebar = ({ isOpen }) => {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={onClose}
+                title={isCollapsed ? item.label : undefined}
+                aria-label={item.label}
+                aria-current={isActive ? 'page' : undefined}
                 className={`
-                flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
+                flex items-center gap-3 rounded-lg py-3 transition-all duration-200
+                ${isCollapsed ? 'px-4 md:justify-center md:px-2' : 'px-4'}
                 ${isActive 
                   ? 'bg-emerald-600 shadow-lg' 
                   : 'hover:bg-emerald-700'}
               `}
               >
                 <Icon size={20} />
-                <span>{item.label}</span>
+                <span className={isCollapsed ? 'md:hidden' : ''}>{item.label}</span>
               </Link>
             );
           })}
       </nav>
 
-      <div className="pt-6 border-t border-emerald-700">
+      <div className={`pt-6 border-t border-emerald-700 ${isCollapsed ? 'md:hidden' : ''}`}>
         <p className="text-emerald-200 text-xs font-semibold uppercase mb-2">Farm Info</p>
         <p className="text-emerald-100 text-sm">CloudFarm</p>
         <p className="text-emerald-200 text-xs">Premium Member</p>

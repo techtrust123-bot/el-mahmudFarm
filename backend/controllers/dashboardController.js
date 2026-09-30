@@ -92,8 +92,8 @@ const getDashboardOverview = asyncHandler(async (req, res) => {
       {
         $group: {
           _id: '$animalType',
-          totalQuantity: { $sum: '$quantity' },
-          totalCost: { $sum: { $multiply: ['$quantity', '$cost'] } }
+          totalQuantity: { $sum: { $ifNull: ['$quantityKg', '$quantity'] } },
+          totalCost: { $sum: { $multiply: [{ $ifNull: ['$quantityKg', '$quantity'] }, '$cost'] } }
         }
       }
     ]);
@@ -191,7 +191,7 @@ const getKPI = asyncHandler(async (req, res) => {
           dailyConsumption: { $sum: { $ifNull: ['$dailyConsumption', '$consumption'] } },
           daysSupply: {
             $avg: {
-              $divide: ['$quantity', { $max: [{ $ifNull: ['$dailyConsumption', '$consumption'] }, 1] }]
+              $divide: [{ $ifNull: ['$quantityKg', '$quantity'] }, { $max: [{ $ifNull: ['$dailyConsumption', '$consumption'] }, 1] }]
             }
           }
         }

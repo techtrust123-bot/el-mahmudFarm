@@ -112,6 +112,7 @@ const liveStockSchema = new mongoose.Schema({
             feedType: String,
             feedCategory: String,
             livestockFeedConsumed: Number,
+            bagWeightKg: Number,
             feedCostPerLivestock: Number,
             totalFeedCost: Number,
             totalCost: Number,

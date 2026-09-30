@@ -145,6 +145,7 @@ const AdminDashboardPage = () => {
         throw new Error(response.data?.message || 'Unable to deactivate this user.');
       }
       setUsers((currentUsers) => currentUsers.filter((user) => String(user._id || user.id) !== String(deleteTarget.id)));
+      setStats((currentStats) => ({ ...currentStats, totalUsers: Math.max(0, currentStats.totalUsers - 1) }));
       setDeleteTarget(null);
       toast.success(response.data.message || 'Staff access deactivated.');
     } catch (error) {

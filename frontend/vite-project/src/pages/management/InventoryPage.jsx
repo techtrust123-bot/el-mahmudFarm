@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { FiAlertTriangle, FiTrendingDown } from 'react-icons/fi';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
+import { AuthContext } from '../../context/AuthContext';
 import MainLayout from '../../components/layout/MainLayout';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -12,6 +15,11 @@ import Badge from '../../components/ui/Badge';
  * Inventory & Feed Management Page
  */
 const InventoryPage = () => {
+  const [feedStock, setFeedStock] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { axiosInstance } = useContext(AuthContext);
+  const navigate = useNavigate();
+
   const consumptionData = [
     { date: 'Mon', maize: 120, pellets: 85, supplements: 45 },
     { date: 'Tue', maize: 135, pellets: 90, supplements: 48 },
@@ -22,14 +30,39 @@ const InventoryPage = () => {
     { date: 'Sun', maize: 95, pellets: 65, supplements: 35 },
   ];
 
-  const feedStock = [
-    { id: 1, type: 'Maize Meal', quantity: 850, unit: 'kg', reorderLevel: 200, lastRestocked: '2024-02-20', supplier: 'Farm Supplies Co' },
-    { id: 2, type: 'Layer Pellets', quantity: 450, unit: 'kg', reorderLevel: 150, lastRestocked: '2024-02-18', supplier: 'Premium Feed Inc' },
-    { id: 3, type: 'Premix Supplements', quantity: 75, unit: 'kg', reorderLevel: 50, lastRestocked: '2024-02-15', supplier: 'Nutra Feed' },
-    { id: 4, type: 'Grower Mash', quantity: 120, unit: 'kg', reorderLevel: 100, lastRestocked: '2024-02-10', supplier: 'Farm Supplies Co' },
-  ];
+  useEffect(() => {
+    const fetchFeedStock = async () => {
+      try {
+        const response = await axiosInstance.get('/api/feed/feed');
+        setFeedStock((response.data.data || []).map((feed) => ({
+          ...feed,
+          id: feed._id,
+          type: feed.feedName || feed.feedType,
+          quantityKg: Number(feed.quantityKg ?? feed.quantity) || 0,
+          reorderLevel: 100,
+          lastRestocked: feed.purchaseDate,
+        })));
+      } catch (error) {
+        toast.error(error.response?.data?.message || 'Failed to fetch feed inventory');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFeedStock();
+  }, [axiosInstance]);
 
-  const lowStockItems = feedStock.filter(item => item.quantity <= item.reorderLevel * 1.5);
+  const lowStockItems = feedStock.filter(item => item.quantityKg <= item.reorderLevel * 1.5);
+  const totalFeedKg = feedStock.reduce((sum, item) => sum + item.quantityKg, 0);
+  const dailyConsumptionKg = feedStock.reduce((sum, item) => sum + Number(item.totalDailyConsumption || 0), 0);
+  const daysSupply = dailyConsumptionKg > 0 ? totalFeedKg / dailyConsumptionKg : 0;
+  const formatQuantity = (value) => new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(Number(value) || 0);
+  const formatStock = (item) => {
+    if (item.unit === 'bag' && Number(item.bagWeightKg) > 0) {
+      const remainingBags = item.quantityKg / Number(item.bagWeightKg);
+      return `${formatQuantity(remainingBags)} ${remainingBags === 1 ? 'bag' : 'bags'} (${formatQuantity(item.quantityKg)} kg)`;
+    }
+    return `${formatQuantity(item.quantityKg)} kg`;
+  };
 
   return (
     <MainLayout>
@@ -40,15 +73,15 @@ const InventoryPage = () => {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Feed & Inventory</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">Track feed stock and consumption</p>
           </div>
-          <Button variant="primary" size="lg">+ Add Stock</Button>
+          <Button variant="primary" size="lg" onClick={() => navigate('/feed')}>+ Add Stock</Button>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Total Feed (kg)" value="1,495" color="green" />
-          <StatCard label="Weekly Consumption" value="745 kg" color="blue" change="+5%" trend="up" />
+          <StatCard label="Total Feed (kg)" value={formatQuantity(totalFeedKg)} color="green" />
+          <StatCard label="Weekly Consumption" value={`${formatQuantity(dailyConsumptionKg * 7)} kg`} color="blue" />
           <StatCard label="Low Stock Items" value={lowStockItems.length} color="orange" />
-          <StatCard label="Est. Days Supply" value="12 days" color="purple" />
+          <StatCard label="Est. Days Supply" value={`${formatQuantity(daysSupply)} days`} color="purple" />
         </div>
 
         {/* Low Stock Alert */}
@@ -98,10 +131,10 @@ const InventoryPage = () => {
           <Table
             columns={[
               { key: 'type', label: 'Feed Type' },
-              { key: 'quantity', label: 'Quantity', render: (val, row) => `${val} ${row.unit}` },
-              { key: 'reorderLevel', label: 'Reorder Level' },
+              { key: 'quantityKg', label: 'Available Feed', render: (_, row) => formatStock(row) },
+              { key: 'reorderLevel', label: 'Reorder Level (kg)' },
               {
-                key: 'quantity',
+                key: 'quantityKg',
                 label: 'Status',
                 render: (val, row) => {
                   const status = val <= row.reorderLevel ? 'low' : val <= row.reorderLevel * 1.5 ? 'medium' : 'good';
@@ -114,8 +147,9 @@ const InventoryPage = () => {
               { key: 'lastRestocked', label: 'Last Restocked' },
             ]}
             data={feedStock}
+            loading={loading}
             actions={(row) => [
-              <Button key="restock" variant="outline" size="sm">Restock</Button>,
+              <Button key="restock" variant="outline" size="sm" onClick={() => navigate('/feed')}>Restock</Button>,
               <Button key="history" variant="ghost" size="sm">History</Button>,
             ]}
           />
@@ -130,7 +164,7 @@ const InventoryPage = () => {
                 <div>
                   <p className="font-semibold text-gray-900 dark:text-white">{item.type}</p>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Current: {item.quantity} {item.unit} | Supplier: {item.supplier}
+                    Current: {formatStock(item)} | Supplier: {item.supplier}
                   </p>
                 </div>
                 <Button variant="primary" size="sm">Place Order</Button>

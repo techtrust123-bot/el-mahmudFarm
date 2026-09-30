@@ -131,7 +131,7 @@ const LivestockPage = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm(`Are you show you want to delete ${id}?`)) return;
+    if (!window.confirm(`Are you sure you want to delete ${id}?`)) return;
     try {
       await axiosInstance.delete(`/api/livestock/${id}`);
       setLivestockList((prev) => prev.filter((item) => item._id !== id));

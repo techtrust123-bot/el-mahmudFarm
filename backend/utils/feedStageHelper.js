@@ -15,9 +15,9 @@ const getBroilerFeedStage = (ageInDays) => {
 }
 
 const getLayerFeedStage = (ageInDays)=>{
-  if (ageInDays <= 56) return 'Starter'
-  if (ageInDays <= 126) return 'Grower'
-  return 'Finisher'
+  if (ageInDays <= 56) return 'Starter Mash'
+  if (ageInDays <= 126) return 'Grower Mash'
+  return 'Layer Mash'
 }
 
 // This function determines the feed stage for livestock based on age in days. It categorizes livestock into 'Starter', 'Grower', or 'Finisher' stages using different thresholds compared to poultry.
@@ -47,6 +47,22 @@ const calculateAge = (purchaseDate) => {
   const ageInDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
   const ageInWeeks = Math.floor(ageInDays / 7)
   return { ageInDays, ageInWeeks }
+}
+
+const calculatePoultryAge = (purchaseDate, purchaseAgeDays = 0, asOf = new Date()) => {
+  const purchase = new Date(purchaseDate)
+  const today = new Date(asOf)
+  if (Number.isNaN(purchase.getTime()) || Number.isNaN(today.getTime())) {
+    return { ageInDays: 0, ageInWeeks: 0, elapsedDays: 0 }
+  }
+
+  const purchaseDay = Date.UTC(purchase.getUTCFullYear(), purchase.getUTCMonth(), purchase.getUTCDate())
+  const currentDay = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  const elapsedDays = Math.max(Math.floor((currentDay - purchaseDay) / MS_PER_DAY), 0)
+  const initialAge = Math.max(Math.floor(Number(purchaseAgeDays) || 0), 0)
+  const ageInDays = initialAge + elapsedDays
+
+  return { ageInDays, ageInWeeks: Math.floor(ageInDays / 7), elapsedDays }
 }
 
 const getBirthDateFromAge = ({ ageInDays, ageInWeeks, purchaseDate }) => {
@@ -103,7 +119,15 @@ const getFeedForStage = async (Feed, animalType, feedStage, options = {}) => {
     return null
   }
 
-  const stageRegex = STAGE_PATTERNS[normalizedStage] || new RegExp(normalizedStage, 'i')
+  const stageKey = normalizedStage.toLowerCase().includes('starter')
+    ? 'Starter'
+    : normalizedStage.toLowerCase().includes('grower')
+      ? 'Grower'
+      : normalizedStage.toLowerCase().includes('finisher') || normalizedStage.toLowerCase().includes('layer')
+        ? 'Finisher'
+        : normalizedStage
+  const canonicalCategory = stageKey.toLowerCase()
+  const stageRegex = STAGE_PATTERNS[stageKey] || new RegExp(normalizedStage, 'i')
 
   const exactFeed = await Feed.findOne({
     $and: [
@@ -115,7 +139,7 @@ const getFeedForStage = async (Feed, animalType, feedStage, options = {}) => {
       },
       {
         $or: [
-          { feedCategory: { $regex: new RegExp(`^${normalizedStage}$`, 'i') } },
+          { feedCategory: { $regex: new RegExp(`^${canonicalCategory}$`, 'i') } },
           { feedType: stageRegex },
         ],
       },
@@ -193,17 +217,17 @@ const getLayerFeedStagePeriods = (startAgeInDays, endAgeInDays) => {
 
     const stages = [
         {
-            stage: 'Starter',
+            stage: 'Starter Mash',
             startDay: 0,
             endDay: 56,
         },
         {
-            stage: 'Grower',
+            stage: 'Grower Mash',
             startDay: 56,
             endDay: 126,
         },
         {
-            stage: 'Finisher',
+            stage: 'Layer Mash',
             startDay: 126,
             endDay: Infinity,
         },
@@ -275,10 +299,10 @@ const getLivestockFeedStagePeriods = (startAgeInDays, endAgeInDays) => {
 }
 
   const normalizeStartingStage = (startingStage) => {
-    const normalizedStage = String(startingStage || 'starter').trim().toLowerCase()
-    return ['starter', 'grower', 'finisher'].includes(normalizedStage)
+    const normalizedStage = String(startingStage || 'starter'||'starter mash').trim().toLowerCase()
+    return ['starter', 'grower', 'finisher', 'starter mash', 'grower mash', 'layer mash'].includes(normalizedStage)
       ? normalizedStage
-      : 'starter'
+      : 'starter'|| 'starter mash'
   }
 
   const getStagePeriodsForAnimal = (animalType) => {
@@ -288,49 +312,100 @@ const getLivestockFeedStagePeriods = (startAgeInDays, endAgeInDays) => {
     return getBroilerFeedStagePeriods
   }
 
-  const getStartingStageAgeInDays = (animalType, startingStage = 'starter') => {
+  const getStartingStageAgeInDays = (animalType, startingStage = 'starter' || 'starter mash') => {
     const getStagePeriods = getStagePeriodsForAnimal(animalType)
     const stage = normalizeStartingStage(startingStage)
+    const stageKey = (value) => {
+      const normalizedValue = String(value || '').trim().toLowerCase()
+      if (normalizedValue.includes('starter')) return 'starter'
+      if (normalizedValue.includes('grower')) return 'grower'
+      if (normalizedValue.includes('finisher') || normalizedValue.includes('layer')) return 'finisher'
+      return normalizedValue
+    }
     const startingPeriod = getStagePeriods(0, Infinity).find(
-      (period) => period.stage.toLowerCase() === stage
+      (period) => stageKey(period.stage) === stageKey(stage)
     )
     return startingPeriod?.startAgeInDays || 0
   }
 
-  const getFeedStageFromStartingStage = (elapsedDays, animalType, startingStage = 'starter') => {
+  const resolvePoultryPurchaseAgeDays = (animalType, purchaseStage, purchaseAgeDays) => {
+    if (purchaseAgeDays != null && purchaseAgeDays !== '') {
+      return Math.max(Math.floor(Number(purchaseAgeDays) || 0), 0)
+    }
+    return getStartingStageAgeInDays(animalType, purchaseStage)
+  }
+
+  const getFeedStageFromStartingStage = (elapsedDays, animalType, startingStage = 'starter', purchaseAgeDays) => {
     const normalizedStartingStage = normalizeStartingStage(startingStage)
     const normalizedType = String(animalType || '').toLowerCase()
-    const stageAgeOffset = getStartingStageAgeInDays(animalType, normalizedStartingStage)
-    const adjustedAgeInDays = stageAgeOffset
-      + (normalizedStartingStage === 'starter' ? 0 : 1)
-      + Math.max(Number(elapsedDays) || 0, 0)
-    const calculatedStage = LIVESTOCK_TYPES.has(normalizedType)
-      ? getLivestockFeedStage(adjustedAgeInDays)
+    const initialAge = purchaseAgeDays == null
+      ? getStartingStageAgeInDays(animalType, normalizedStartingStage) + (normalizedStartingStage === 'starter' ? 0 : 1)
+      : Math.max(Math.floor(Number(purchaseAgeDays) || 0), 0)
+    const ageInDays = initialAge + Math.max(Number(elapsedDays) || 0, 0)
+    const stagePeriods = purchaseAgeDays == null
+      ? []
+      : getStagePeriodsForAnimal(animalType)(ageInDays, ageInDays + 1)
+    const calculatedStage = stagePeriods[0]?.stage || (LIVESTOCK_TYPES.has(normalizedType)
+      ? getLivestockFeedStage(ageInDays)
       : normalizedType === 'layer'
-        ? getLayerFeedStage(adjustedAgeInDays)
-        : getBroilerFeedStage(adjustedAgeInDays)
-    const stageOrder = ['starter', 'grower', 'finisher']
+        ? getLayerFeedStage(ageInDays)
+        : getBroilerFeedStage(ageInDays))
+    const stageOrder = ['starter', 'grower', 'finisher', 'starter mash', 'grower mash', 'layer mash']
 
     return stageOrder.indexOf(calculatedStage.toLowerCase()) < stageOrder.indexOf(normalizedStartingStage)
       ? normalizedStartingStage[0].toUpperCase() + normalizedStartingStage.slice(1)
       : calculatedStage
   }
 
-  const getFeedStagePeriodsFromStartingStage = (animalType, elapsedDays, startingStage = 'starter') => {
+  const getFeedStagePeriodsFromStartingStage = (animalType, elapsedDays, startingStage = 'starter' || 'starter mash', purchaseAgeDays) => {
     const getStagePeriods = getStagePeriodsForAnimal(animalType)
-    const startAgeInDays = getStartingStageAgeInDays(animalType, startingStage)
+    const startAgeInDays = purchaseAgeDays == null
+      ? getStartingStageAgeInDays(animalType, startingStage)
+      : Math.max(Math.floor(Number(purchaseAgeDays) || 0), 0)
     const durationInDays = Math.max(Number(elapsedDays) || 0, 0)
-    return getStagePeriods(startAgeInDays, startAgeInDays + durationInDays)
+    const selectedStage = normalizeStartingStage(startingStage)
+    const selectedStageIndex = ['starter', 'grower', 'finisher', 'starter mash', 'grower mash', 'layer mash'].indexOf(selectedStage)
+    const periods = getStagePeriods(startAgeInDays, startAgeInDays + durationInDays)
+    const normalizedPeriods = []
+
+    if (durationInDays === 0 && purchaseAgeDays != null) {
+      const currentStage = getFeedStageFromStartingStage(0, animalType, selectedStage, purchaseAgeDays)
+      return [{
+        stage: currentStage,
+        startAgeInDays,
+        endAgeInDays: startAgeInDays,
+        days: 0,
+      }]
+    }
+
+    for (const period of periods) {
+      const periodIndex = ['starter', 'grower', 'finisher', 'starter mash', 'grower mash', 'layer mash'].indexOf(period.stage.toLowerCase())
+      const stage = periodIndex < selectedStageIndex
+        ? selectedStage[0].toUpperCase() + selectedStage.slice(1)
+        : period.stage
+      const previousPeriod = normalizedPeriods[normalizedPeriods.length - 1]
+
+      if (previousPeriod && previousPeriod.stage === stage && previousPeriod.endAgeInDays === period.startAgeInDays) {
+        previousPeriod.endAgeInDays = period.endAgeInDays
+        previousPeriod.days += period.days
+      } else {
+        normalizedPeriods.push({ ...period, stage })
+      }
+    }
+
+    return normalizedPeriods
   }
 
   module.exports = {
     getFeedStage,
     calculateAge,
+    calculatePoultryAge,
     getBirthDateFromAge,
     getFeedForStage,
     parseFeedType,
     normalizeFeedCategory,
     normalizeStartingStage,
+    resolvePoultryPurchaseAgeDays,
     getFeedStageFromStartingStage,
     getFeedStagePeriodsFromStartingStage,
     getBroilerFeedStagePeriods,

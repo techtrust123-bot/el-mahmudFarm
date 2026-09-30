@@ -205,7 +205,7 @@ const exportFarmReport = asyncHandler(async (req, res) => {
       {
         $group: {
           _id: null,
-          totalQuantity: { $sum: '$quantity' }
+          totalQuantity: { $sum: { $ifNull: ['$quantityKg', '$quantity'] } }
         }
       }
     ]);

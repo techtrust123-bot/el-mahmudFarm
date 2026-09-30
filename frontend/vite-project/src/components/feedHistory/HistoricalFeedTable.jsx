@@ -31,6 +31,20 @@ const formatValue = (value) => {
   return value;
 };
 
+const formatFeedConsumption = (value, bagWeightKg) => {
+  if (value === null || value === undefined || value === '') return '—';
+
+  const kilograms = Number(value);
+  if (!Number.isFinite(kilograms)) return value;
+
+  const formattedKilograms = `${kilograms.toFixed(2)} kg`;
+  const weight = Number(bagWeightKg);
+  if (!Number.isFinite(weight) || weight <= 0) return formattedKilograms;
+
+  const bags = Number((kilograms / weight).toFixed(2));
+  return `${formattedKilograms} (${bags} Bags)`;
+};
+
 const getDetailFields = (record, type) => {
   if (type === 'poultry') {
     return [
@@ -39,11 +53,16 @@ const getDetailFields = (record, type) => {
       { label: 'Feed Type', value: formatValue(record.feedType) },
       { label: 'Feed Category', value: formatValue(record.feedCategory) },
       { label: 'Feed Consumed / Bird', value: record.poultryConsumePerBird === undefined || record.poultryConsumePerBird === null || record.poultryConsumePerBird === '' ? '—' : `${Number(record.poultryConsumePerBird).toFixed(2)} kg` },
-      {label: 'Total Feed Consumed', value: record.totalFeedConsumed === undefined || record.totalFeedConsumed === null || record.totalFeedConsumed === '' ? '—' : `${Number(record.totalFeedConsumed).toFixed(2)} kg`},
+      {label: 'Total Feed Consumed', value: formatFeedConsumption(record.totalFeedConsumed, record.bagWeightKg)},
       { label: 'Feed Cost / Bird', value: formatCurrency(record.feedCostPerPoultry) },
       { label: 'Total Feed Cost', value: formatCurrency(record.totalFeedCost) },
       { label: 'Cost / Bird', value: formatCurrency(record.costPerPoultry) },
-      { label: 'Date', value: formatDate(record.recordedAt) },
+      { label: 'Stage Dates', value: record.startDate || record.endDate
+        ? `${formatDate(record.startDate)} - ${formatDate(record.endDate)}`
+        : formatDate(record.recordedAt) },
+      ...(record.startAgeInDays != null || record.endAgeInDays != null
+        ? [{ label: 'Age Range', value: `Day ${formatValue(record.startAgeInDays)} - Day ${formatValue(record.days > 0 ? record.endAgeInDays - 1 : record.endAgeInDays)}` }]
+        : []),
     ];
   }
 
@@ -52,7 +71,7 @@ const getDetailFields = (record, type) => {
     { label: 'Feed Name', value: formatValue(record.feedName) },
     { label: 'Feed Type', value: formatValue(record.feedType) },
     { label: 'Feed Category', value: formatValue(record.feedCategory) },
-    { label: 'Feed Consumed', value: record.livestockFeedConsumed === undefined || record.livestockFeedConsumed === null || record.livestockFeedConsumed === '' ? '—' : `${Number(record.livestockFeedConsumed).toFixed(2)} kg` },
+    { label: 'Feed Consumed', value: formatFeedConsumption(record.livestockFeedConsumed, record.bagWeightKg) },
     { label: 'Feed Cost / Animal', value: formatCurrency(record.feedCostPerLivestock) },
     { label: 'Total Feed Cost', value: formatCurrency(record.totalFeedCost) },
     { label: 'Cost Price', value: formatCurrency(record.costPrice) },

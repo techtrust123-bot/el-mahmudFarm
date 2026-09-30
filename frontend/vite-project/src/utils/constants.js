@@ -3,11 +3,8 @@
  */
 
 export const LIVESTOCK_TYPES = [
-  { value: 'cow', label: 'cow' },
-  { value: 'bull', label: 'bull' },
   { value: 'goat', label: 'goat' },
   { value: 'sheep', label: 'sheep' },
-  { value: 'ram', label: 'ram' },
   { value: 'cattle', label: 'cattle' },
   { value: 'horse', label: 'horse' },
 ];
@@ -56,7 +53,6 @@ export const STAFF_ROLES = [
 export const ANIMAL_TYPES =[
   { value: 'broiler', label: 'broiler' },
   { value: 'layer', label: 'layer' },
-  { value: 'cow', label: 'cow' },
   { value: 'goat', label: 'goat' },
   { value: 'sheep', label: 'sheep' },
   { value: 'cattle', label: 'cattle' },
@@ -67,6 +63,9 @@ export const FEED_CATEGORY = [
   { value: 'Starter', label: 'Starter' },
   { value: 'Grower', label: 'Grower' },
   { value: 'Finisher', label: 'Finisher' },
+  { value: 'Starter Mash', label: 'Starter Mash' },
+  { value: 'Grower Mash', label: 'Grower Mash' },
+  { value: 'Layer Mash', label: 'Layer Mash' },
   
 ]
 

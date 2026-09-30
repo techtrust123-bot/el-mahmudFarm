@@ -1,6 +1,17 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Skeleton } from '../common/Skeletons';
 
+const getColumnSizing = (column) => {
+  const identity = `${column.key || ''} ${column.label || ''}`.toLowerCase();
+  const compact = /(^|[\s_-])(id|date|qty|quantity|amount|price|status|unit|actions?|number|count)([\s_-]|$)/.test(identity);
+  const descriptive = /name|description|notes?|feed|customer|animal|reference|address|supplier|breed/.test(identity);
+
+  return {
+    minWidth: column.minWidth || (compact ? '5.5rem' : descriptive ? '12rem' : '8rem'),
+    compact: column.nowrap ?? compact,
+  };
+};
+
 /**
  * Data table component with sorting and pagination
  */
@@ -83,24 +94,29 @@ const Table = ({
   return (
     <div className="w-full rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div className="w-full overflow-x-auto bg-white dark:bg-gray-900">
-        <table className="hidden md:table w-full table-fixed text-left">
+        <table className="hidden md:table w-full min-w-full table-auto text-left">
           <thead className="bg-gray-100 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
             <tr>
               {columns.map((column, colIdx) => (
-                <th
-                  key={`${column.key}-${colIdx}`}
-                  className={`px-4 py-3 font-semibold text-gray-900 dark:text-white text-sm whitespace-normal break-words max-w-[120px] ${column.sortable ? 'cursor-pointer select-none' : ''}`}
-                  style={{ width: column.width || 'auto' }}
-                  onClick={() => handleSort(column.key, column.sortable)}
-                >
-                  <div className="flex items-center gap-1">
-                    {column.label}
-                    {renderSortIcon(column)}
-                  </div>
-                </th>
+                (() => {
+                  const sizing = getColumnSizing(column);
+                  return (
+                    <th
+                      key={`${column.key}-${colIdx}`}
+                      className={`px-4 py-3 align-top font-semibold text-gray-900 dark:text-white text-sm ${sizing.compact ? 'whitespace-nowrap' : 'whitespace-normal'} ${column.sortable ? 'cursor-pointer select-none' : ''}`}
+                      style={{ width: column.width, minWidth: sizing.minWidth }}
+                      onClick={() => handleSort(column.key, column.sortable)}
+                    >
+                      <div className="flex items-center gap-1">
+                        {column.label}
+                        {renderSortIcon(column)}
+                      </div>
+                    </th>
+                  );
+                })()
               ))}
               {actions && (
-                <th className="px-3 py-2 font-semibold text-gray-900 dark:text-white text-sm whitespace-normal break-words max-w-[120px]">
+                <th className="w-32 min-w-32 whitespace-nowrap px-3 py-3 font-semibold text-gray-900 dark:text-white text-sm">
                   Actions
                 </th>
               )}
@@ -127,16 +143,22 @@ const Table = ({
               displayData.map((row, idx) => (
                 <tr key={idx} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                   {columns.map((column, colIdx) => (
-                    <td
-                      key={`${idx}-${colIdx}-${column.key}`}
-                      className="px-3 py-2 text-gray-700 dark:text-gray-300 text-sm whitespace-normal break-words"
-                    >
-                      {column.render ? column.render(row[column.key], row) : row[column.key]}
-                    </td>
+                    (() => {
+                      const sizing = getColumnSizing(column);
+                      return (
+                        <td
+                          key={`${idx}-${colIdx}-${column.key}`}
+                          className={`px-3 py-2 align-top text-gray-700 dark:text-gray-300 text-sm ${sizing.compact ? 'whitespace-nowrap' : 'whitespace-normal [overflow-wrap:anywhere]'}`}
+                          style={{ minWidth: sizing.minWidth }}
+                        >
+                          {column.render ? column.render(row[column.key], row) : row[column.key]}
+                        </td>
+                      );
+                    })()
                   ))}
                   {actions && (
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-2">{actions(row)}</div>
+                    <td className="min-w-32 whitespace-nowrap px-3 py-2">
+                      <div className="flex flex-nowrap items-center gap-1">{actions(row)}</div>
                     </td>
                   )}
                 </tr>

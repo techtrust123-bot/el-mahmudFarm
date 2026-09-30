@@ -35,11 +35,17 @@ const FeedPage = () => {
     animalType: '',
     feedCategory: '',
     quantity: '',
+    unit: 'kg',
+    bagWeightKg: '',
     cost: '',
     supplier: '',
     purchaseDate: '',
     totalPoultryFeedConsumedPerday: '',
+    poultryFeedUnit: 'kg',
+    poultryBagWeightKg: '',
     totalLivestockFeedConsumedPerday: '',
+    livestockFeedUnit: 'kg',
+    livestockBagWeightKg: '',
     feedPricePerkg: '',
     feedName:'',
   });
@@ -65,7 +71,7 @@ const FeedPage = () => {
 );
 
   const lowStockFeeds = feeds.filter((item) => {
-    const remaining = Number(item.quantity) || 0;
+    const remaining = Number(item.quantityKg ?? item.quantity) || 0;
     return remaining < 100;
   });
 
@@ -97,7 +103,7 @@ const FeedPage = () => {
 // }));
 
   const handleAddNew = () => {
-    setFormData({ feedType: '', poultryType: '', feedCategory: '', quantity: '', cost: '', supplier: '', purchaseDate: '', totalPoultryFeedConsumedPerday: '', totalLivestockFeedConsumedPerday: '', feedPricePerkg: '', feedName:'' });
+    setFormData({ feedType: '', poultryType: '', feedCategory: '', quantity: '', unit: 'kg', bagWeightKg: '', cost: '', supplier: '', purchaseDate: '', totalPoultryFeedConsumedPerday: '', poultryFeedUnit: 'kg', poultryBagWeightKg: '', totalLivestockFeedConsumedPerday: '', livestockFeedUnit: 'kg', livestockBagWeightKg: '', feedPricePerkg: '', feedName:'' });
     setEditingId(null);
     setErrors({});
     setIsModalOpen(true);
@@ -144,12 +150,20 @@ const FeedPage = () => {
       feedType: item.feedType || '',
       animalType: item.poultryType || parsePoultryType(item.feedType || ''),
       feedCategory: item.feedCategory || parseFeedCategory(item.feedType || ''),
-      quantity: item.quantity || '',
+      quantity: item.unit === 'bag' && Number(item.bagWeightKg) > 0
+        ? Number(item.quantityKg ?? item.quantity) / Number(item.bagWeightKg)
+        : item.quantityKg ?? item.quantity ?? '',
+      unit: item.unit || 'kg',
+      bagWeightKg: item.bagWeightKg || '',
       cost: item.cost || '',
       supplier: item.supplier || '',
       purchaseDate: item.purchaseDate?.split('T')[0] || '',
-      totalPoultryFeedConsumedPerday: item.totalPoultryFeedConsumedPerday || '',
-      totalLivestockFeedConsumedPerday: item.totalLivestockFeedConsumedPerday || '',
+      totalPoultryFeedConsumedPerday: item.totalPoultryFeedConsumedPerdayEntered ?? item.totalPoultryFeedConsumedPerday ?? '',
+      poultryFeedUnit: item.poultryFeedUnit || 'kg',
+      poultryBagWeightKg: item.poultryBagWeightKg || '',
+      totalLivestockFeedConsumedPerday: item.totalLivestockFeedConsumedPerdayEntered ?? item.totalLivestockFeedConsumedPerday ?? '',
+      livestockFeedUnit: item.livestockFeedUnit || 'kg',
+      livestockBagWeightKg: item.livestockBagWeightKg || '',
       feedPricePerkg: item.feedPricePerkg || '',
       feedName: item.feedName || '',
     });
@@ -159,6 +173,7 @@ const FeedPage = () => {
     setIsModalOpen(true);
   };
   const handleDelete = async (id) => {
+    if (!window.confirm(`Are you sure you want to delete ${id}?`)) return;
     try {
      const response= await axiosInstance.delete(`/api/feed/del-feed/${id}`);
      if (response?.data?.success) {
@@ -216,7 +231,7 @@ const FeedPage = () => {
       if (response?.data?.success) {
         toast.success(response.data.message || (editingId ? 'Feed updated successfully!' : 'Feed added successfully!'));
         
-        setFormData({ feedType: '', poultryType: '', feedCategory: '', quantity: '', cost: '', supplier: '', purchaseDate: '', averageDailyConsumption: '', feedPricePerkg: '', feedName:'' });
+        setFormData({ feedType: '', poultryType: '', feedCategory: '', quantity: '', unit: 'kg', bagWeightKg: '', cost: '', supplier: '', purchaseDate: '', totalPoultryFeedConsumedPerday: '', poultryFeedUnit: 'kg', poultryBagWeightKg: '', totalLivestockFeedConsumedPerday: '', livestockFeedUnit: 'kg', livestockBagWeightKg: '', averageDailyConsumption: '', feedPricePerkg: '', feedName:'' });
         setIsModalOpen(false);
         // Refresh data
         const fetchResponse = await axiosInstance.get('/api/feed/feed');
@@ -282,16 +297,50 @@ const FeedPage = () => {
     currency: 'NGN'
   }).format(amount);
 
+  const formatQuantity = (value) => new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 2,
+  }).format(Number(value) || 0);
+
+  const getFeedQuantityKg = (feed) => Number(feed.quantityKg ?? feed.quantity) || 0;
+
+  const formatFeedQuantity = (feed, quantityKg = getFeedQuantityKg(feed)) => {
+    if (feed.unit === 'bag' && Number(feed.bagWeightKg) > 0) {
+      const bags = Number(feed.quantityEntered ?? feed.quantity) || 0;
+      return `${formatQuantity(bags)} ${bags === 1 ? 'bag' : 'bags'} (${formatQuantity(bags * Number(feed.bagWeightKg))} KG)`;
+    }
+    return `${formatQuantity(quantityKg)} KG`;
+  };
+
+  const formatRemainingQuantity = (feed) => {
+    const remainingKg = getFeedQuantityKg(feed);
+    if (feed.unit === 'bag' && Number(feed.bagWeightKg) > 0) {
+      const remainingBags = remainingKg / Number(feed.bagWeightKg);
+      return `${formatQuantity(remainingBags)} ${remainingBags === 1 ? 'bag' : 'bags'} (${formatQuantity(remainingKg)} KG)`;
+    }
+    return `${formatQuantity(remainingKg)} KG`;
+  };
+
+  const formatDailyFeedInput = (feed, type) => {
+    const rate = Number(feed[`total${type}FeedConsumedPerday`] || 0);
+    const unit = feed[type.toLowerCase() === 'poultry' ? 'poultryFeedUnit' : 'livestockFeedUnit'];
+    const bagWeight = Number(feed[type.toLowerCase() === 'poultry' ? 'poultryBagWeightKg' : 'livestockBagWeightKg']);
+    const entered = feed[`total${type}FeedConsumedPerdayEntered`];
+    if (unit === 'bag' && bagWeight > 0) {
+      return `${formatQuantity(entered ?? rate / bagWeight)} bags/day (${formatQuantity(rate)} KG/day)`;
+    }
+    return `${formatQuantity(rate)} KG/day`;
+  };
+
 
   const tableColumns = [
     {key:'purchaseDate', label:'P/Date', render: (value) => value ? new Date(value).toLocaleDateString() : 'N/A' },
     { key: 'feedType', label: 'Feed Type' },
     { key: 'animalType', label: 'Animal Type', render: (value, row) => value || parseanimalType(row.feedType) },
     { key: 'feedCategory', label: 'Feed Category', render: (value, row) => value || parseFeedCategory(row.feedType) },
-    { key: 'quantity', label: 'Quantity (kg)' },
+    { key: 'quantityEntered', label: 'Quantity', render: (_, row) => formatFeedQuantity(row) },
     // { key: 'feedPricePerkg', label: 'pricePer kg (₦)', render: (value) => formatCurrency(Number(value || 0)) },
-    { key: 'totalPoultryFeedConsumedPerday', label: 'Poultry daily Consum',style:{fontSize: 'small'} },
-    { key: 'totalLivestockFeedConsumedPerday', label: 'Livestock daily Consum',style:{fontSize: 'small'} },
+    { key: 'totalPoultryFeedConsumedPerday', label: 'Poultry daily Consum', render: (_, row) => formatDailyFeedInput(row, 'Poultry'), style:{fontSize: 'small'} },
+    { key: 'totalLivestockFeedConsumedPerday', label: 'Livestock daily Consum', render: (_, row) => formatDailyFeedInput(row, 'Livestock'), style:{fontSize: 'small'} },
     { key: 'poultryDailyConsumption', label: 'per poultry Consume' },
     { key: 'livestockDailyConsumption', label: 'per Livestock Consume' },
     { key: 'consumption', label: 'Consumed (kg)' },
@@ -301,11 +350,11 @@ const FeedPage = () => {
       key: 'quantity',
       label: 'Remain',
       render: (_, row) => {
-        const remaining = Number(row.quantity) || 0;
+        const remaining = getFeedQuantityKg(row);
         const isLow = remaining < 100;
         return (
           <Badge variant={isLow ? 'error' : 'success'}>
-            {remaining} kg {isLow && '⚠️'}
+            {formatRemainingQuantity(row)} {isLow && '⚠️'}
           </Badge>
         );
       },
@@ -338,7 +387,7 @@ const FeedPage = () => {
 
         {/* Statistics */}
         {initialLoading ? <SkeletonStats count={3} className="grid grid-cols-1 gap-4 md:grid-cols-3" /> : <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard label="Total Feed (kg)" value={feeds.reduce((sum, item) => sum + Number(item.quantity || 0), 0).toLocaleString()} />
+          <StatCard label="Total Feed (kg)" value={feeds.reduce((sum, item) => sum + getFeedQuantityKg(item), 0).toLocaleString()} />
           <StatCard label="Total Consumption (kg)" value={totalConsumption.toLocaleString()} />
           <StatCard label="Inventory Value" value={formatCurrency(Number(totalValue || 0).toFixed(2))} />
         </div>}
@@ -508,14 +557,39 @@ const FeedPage = () => {
           />
           
             <Input
-              label="Quantity (kg)"
+              label="Quantity"
               type="number"
               name="quantity"
               value={formData.quantity}
               onChange={handleChange}
               error={errors.quantity}
+              min="0"
+              step="any"
               required
             />
+            <Select
+              label="Unit"
+              name="unit"
+              options={[{ label: 'KG', value: 'kg' }, { label: 'Bag', value: 'bag' }]}
+              value={formData.unit || 'kg'}
+              onChange={handleChange}
+              error={errors.unit}
+              required
+            />
+            {formData.unit === 'bag' && (
+              <Input
+                label="Bag Weight (KG)"
+                type="number"
+                name="bagWeightKg"
+                value={formData.bagWeightKg}
+                onChange={handleChange}
+                error={errors.bagWeightKg}
+                min="0"
+                step="any"
+                placeholder="Enter the weight printed on the bag"
+                required
+              />
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
             <CurrencyInput
@@ -538,25 +612,51 @@ const FeedPage = () => {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
             {formData.animalType === 'broiler' || formData.animalType === 'layer' ? (
+              <div className="space-y-3">
                <Input
-              label="Total PoultryFeedConsumedPerday (kg)"
+              label="Total Poultry Feed Per Day"
               type="number"
               name="totalPoultryFeedConsumedPerday"
               value={formData.totalPoultryFeedConsumedPerday}
               onChange={handleChange}
               error={errors.totalPoultryFeedConsumedPerday}
+              min="0"
+              step="any"
               required
             />
+                <Select
+                  label="Consumption Unit"
+                  name="poultryFeedUnit"
+                  options={[{ label: 'KG', value: 'kg' }, { label: 'Bag', value: 'bag' }]}
+                  value={formData.poultryFeedUnit || 'kg'}
+                  onChange={handleChange}
+                  required
+                />
+                {formData.poultryFeedUnit === 'bag' && <Input label="Bag Weight (KG)" type="number" name="poultryBagWeightKg" value={formData.poultryBagWeightKg} onChange={handleChange} error={errors.poultryBagWeightKg} min="0" step="any" required />}
+              </div>
             ) : (
+              <div className="space-y-3">
               <Input
-              label="Total LivestockFeedConsumedPerday (kg)"
+              label="Total Livestock Feed Per Day"
               type="number"
               name="totalLivestockFeedConsumedPerday"
               value={formData.totalLivestockFeedConsumedPerday}
               onChange={handleChange}
               error={errors.totalLivestockFeedConsumedPerday}
+              min="0"
+              step="any"
               required
             />
+                <Select
+                  label="Consumption Unit"
+                  name="livestockFeedUnit"
+                  options={[{ label: 'KG', value: 'kg' }, { label: 'Bag', value: 'bag' }]}
+                  value={formData.livestockFeedUnit || 'kg'}
+                  onChange={handleChange}
+                  required
+                />
+                {formData.livestockFeedUnit === 'bag' && <Input label="Bag Weight (KG)" type="number" name="livestockBagWeightKg" value={formData.livestockBagWeightKg} onChange={handleChange} error={errors.livestockBagWeightKg} min="0" step="any" required />}
+              </div>
             )}
            
             <Input
