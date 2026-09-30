@@ -229,7 +229,7 @@ const PoultryPage = () => {
         setFormData({
           batchId: '',
           type: '',
-          purchaseStage: 'starter',
+          purchaseStage: 'starter' || 'starter mash',
           purchaseAgeDays: '1',
           quantity: '',
           vaccinationStatus: '',

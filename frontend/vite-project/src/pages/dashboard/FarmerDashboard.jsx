@@ -219,7 +219,7 @@ const FarmerDashboardPage = () => {
   useEffect(() => {
     const fetchDashboardMetrics = async () => {
       try {
-        const [poultryResponse, livestockResponse, salesResponse, expenseResponse, feedResponse] = await Promise.all([
+        const [poultryResponse, livestockResponse, salesResponse, expenseResponse, feedResponse] = await Promise.allSettled([
           axios.get(`${backendUrl}/api/poultry/list`, { withCredentials: true }),
           axios.get(`${backendUrl}/api/livestock/list`, { withCredentials: true }),
           axios.get(`${backendUrl}/api/sell/list`, { withCredentials: true }),
@@ -227,11 +227,11 @@ const FarmerDashboardPage = () => {
           axios.get(`${backendUrl}/api/feed/feed`, { withCredentials: true }),
         ]);
 
-        const poultry = safeArray(poultryResponse);
-        const livestock = safeArray(livestockResponse);
-        const sales = safeArray(salesResponse);
-        const expenses = safeArray(expenseResponse);
-        const feeds = safeArray(feedResponse);
+        const poultry = poultryResponse.status === 'fulfilled' ? safeArray(poultryResponse.value) : [];
+        const livestock = livestockResponse.status === 'fulfilled' ? safeArray(livestockResponse.value) : [];
+        const sales = salesResponse.status === 'fulfilled' ? safeArray(salesResponse.value) : [];
+        const expenses = expenseResponse.status === 'fulfilled' ? safeArray(expenseResponse.value) : [];
+        const feeds = feedResponse.status === 'fulfilled' ? safeArray(feedResponse.value) : [];
 
         const totalPoultry = poultry.reduce((sum, batch) => sum + Number(batch.quantity || 0), 0);
         const totalLivestock = livestock.reduce((sum, animal) => sum + (Number(animal.quantity) || 1), 0);
