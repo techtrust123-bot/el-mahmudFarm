@@ -60,13 +60,13 @@ exports.addEgg = async(req,res)=>{
         
         const feedType = await Feed.findOne({
             animalType: 'layer',
-            feedCategory: { $regex: /^finisher$/i },
+            feedCategory: { $regex: /^layer mash$/i },
             quantity: { $gt: 0 },
         })
 
 
         if(!feedType){
-            return res.status(404).json({message:`${poultryType} feed for finisher is not available in your farm pls add to proceed...`})
+            return res.status(404).json({message:`${poultryType} feed for layer mash is not available in your farm pls add to proceed...`})
         }
 
         if(String(feedType.feedCategory || '').toLowerCase() !== 'finisher'){
@@ -187,7 +187,7 @@ exports.editEgg = async(req,res)=>{
 
         const feedType = await Feed.findOne({
             animalType: 'layer',
-            feedCategory: { $regex: /^finisher$/i },
+            feedCategory: { $regex: /^layer mash$/i },
             quantity: { $gt: 0 },
         })
         
