@@ -69,8 +69,8 @@ exports.addEgg = async(req,res)=>{
             return res.status(404).json({message:`${poultryType} feed for layer mash is not available in your farm pls add to proceed...`})
         }
 
-        if(String(feedType.feedCategory || '').toLowerCase() !== 'finisher'){
-            return res.status(400).json({message: 'no available layer that has finisher feed..'})
+        if(String(feedType.feedCategory || 'layer mash').toLowerCase() !== 'finisher'&& String(feedType.feedCategory || 'layer mash').toLowerCase() !== 'grower'){
+            return res.status(400).json({message: 'no available layer that has finisher or grower feed..'})
         }
 
         const feedCost = Number(feedType.cost || 0);
