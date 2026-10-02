@@ -1,6 +1,6 @@
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const POULTRY_TYPES = new Set(['broiler', 'layer'])
-const LIVESTOCK_TYPES = new Set(['cow', 'cattle', 'sheep', 'goat', 'horse', 'ram', 'bull'])
+const LIVESTOCK_TYPES = new Set([ 'cattle', 'sheep', 'goat', 'horse',])
 const STAGE_PATTERNS = {
   Starter: /(super starter|starter|chick mash)/i,
   Grower: /(grower|grower mash)/i,

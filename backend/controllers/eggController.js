@@ -60,7 +60,7 @@ exports.addEgg = async(req,res)=>{
         
         const feedType = await Feed.findOne({
             animalType: 'layer',
-            feedCategory: { $regex: /^layer mash$/i },
+            feedCategory: { $regex: /^finisher || grower$/i },
             quantity: { $gt: 0 },
         })
 
@@ -187,7 +187,7 @@ exports.editEgg = async(req,res)=>{
 
         const feedType = await Feed.findOne({
             animalType: 'layer',
-            feedCategory: { $regex: /^layer mash$/i },
+            feedCategory: { $regex: /^finisher || grower$/i },
             quantity: { $gt: 0 },
         })
         
