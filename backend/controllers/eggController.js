@@ -30,8 +30,8 @@ exports.addEgg = async(req,res)=>{
             type: 'layer',
             status: 'available',
             $or: [
-                { currentFeedStage: 'Layer Mash' },
-                { feedStage: 'Layer Mash' }
+                { currentFeedStage: 'Grower Mash' || 'Layer Mash' },
+                { feedStage: 'Layer Mash' || 'Grower Mash' }
             ]
         });
         if(!poultryExist){

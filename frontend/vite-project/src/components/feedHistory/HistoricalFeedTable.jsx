@@ -56,7 +56,7 @@ const getDetailFields = (record, type) => {
       {label: 'Total Feed Consumed', value: formatFeedConsumption(record.totalFeedConsumed, record.bagWeightKg)},
       { label: 'Feed Cost / Bird', value: formatCurrency(record.feedCostPerPoultry) },
       { label: 'Total Feed Cost', value: formatCurrency(record.totalFeedCost) },
-      { label: 'Cost / Bird', value: formatCurrency(record.costPerPoultry) },
+      // { label: 'Cost / Bird', value: formatCurrency(record.costPerPoultry) },
       { label: 'Stage Dates', value: record.startDate || record.endDate
         ? `${formatDate(record.startDate)} - ${formatDate(record.endDate)}`
         : formatDate(record.recordedAt) },
@@ -74,7 +74,7 @@ const getDetailFields = (record, type) => {
     { label: 'Feed Consumed', value: formatFeedConsumption(record.livestockFeedConsumed, record.bagWeightKg) },
     { label: 'Feed Cost / Animal', value: formatCurrency(record.feedCostPerLivestock) },
     { label: 'Total Feed Cost', value: formatCurrency(record.totalFeedCost) },
-    { label: 'Cost Price', value: formatCurrency(record.costPrice) },
+    // { label: 'Cost Price', value: formatCurrency(record.costPrice) },
     { label: 'Date', value: formatDate(record.timestamp) },
   ];
 };

@@ -152,8 +152,8 @@ const calculateHistoricalPoultryFeed = async ({
         totalFeedCost:
             stageTotalFeedCost,
 
-        costPerPoultry:
-            totalFeedCostPerBird + stagePurchasePricePerBird,
+        // costPerPoultry:
+        //     totalFeedCostPerBird + stagePurchasePricePerBird,
 
         startAgeInDays:
             period.startAgeInDays,
@@ -335,8 +335,8 @@ const calculateHistoricalLivestockFeed = async ({
         totalFeedCost:
             stageTotalFeedCost,
 
-            costPrice:
-            stageTotalFeedCost + stagePurchasePriceforLivestock,
+            // costPrice:
+            // stageTotalFeedCost + stagePurchasePriceforLivestock,
 
         startAgeInDays:
             period.startAgeInDays,
