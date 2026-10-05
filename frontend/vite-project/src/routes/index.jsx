@@ -177,7 +177,7 @@ export const AppRoutes = () => {
         <Route
           path="/support"
           element={
-            <ProtectedRoute requiredPermission="support">
+            <ProtectedRoute>
               <SupportPage />
             </ProtectedRoute>
           }
@@ -185,7 +185,7 @@ export const AppRoutes = () => {
         <Route
           path="/subscription"
           element={
-            <ProtectedRoute requiredPermission="subscription">
+            <ProtectedRoute>
               <SubscriptionPage />
             </ProtectedRoute>
           }
@@ -193,7 +193,7 @@ export const AppRoutes = () => {
         <Route
           path="/subscription/manage"
           element={
-            <ProtectedRoute requiredPermission="subscription">
+            <ProtectedRoute>
               <SubscriptionPage />
             </ProtectedRoute>
           }

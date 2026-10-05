@@ -42,9 +42,9 @@ const Sidebar = ({ isOpen, isCollapsed = false, onClose = () => {} }) => {
     { path: '/feed', label: 'Feed', icon: FiPackage, permission: 'feed' },
     { path: '/sales', label: 'Sales', icon: TbCurrencyNaira, permission: 'sales' },
     { path: '/expenses', label: 'Expenses', icon: GiPayMoney, permission: 'expenses' },
-    { path: '/support', label: 'Support', icon: FiMessageCircle, permission: 'support' },
+    { path: '/support', label: 'Support', icon: FiMessageCircle, },
 
-    { path: '/subscription/manage', label: 'Subscriptions', icon: GiPayMoney, permission: 'subscription' },
+    { path: '/subscription/manage', label: 'Subscriptions', icon: GiPayMoney, },
     { path: '/admin/subscriptions', label: 'Admin Subscriptions', icon: GiPayMoney, adminOnly: true },
     { path: '/admin/notifications', label: 'Admin Notifications', icon: FiDatabase, adminOnly: true },
     { path: '/admin/support', label: 'Admin Support', icon: FiDatabase, adminOnly: true },
