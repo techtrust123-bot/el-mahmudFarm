@@ -82,8 +82,8 @@ exports.register = async (req, res) => {
     const role = userCount === 0 ? 'admin' : 'manager';
     const hashPassword = await bcrypt.hash(password, 12);
     const farmId = new mongoose.Types.ObjectId();
-    const defaultPermissions = ['dashboard', 'livestock', 'poultry', 'feed', 'eggInventory', 'sales', 'expenses', 'staff', 'reports', 'settings'];
-    const trialDays = role === 'admin' ? 3650 : role === 'manager' ? 14 : 0;
+    const defaultPermissions = ['dashboard', 'livestock', 'poultry', 'feed', 'eggInventory', 'sales', 'expenses', 'staff', 'reports', 'settings','subscription','support'];
+    const trialDays = role === 'admin' ? 3650 : role === 'manager' ? 7 : 0;
     const trialStart = trialDays > 0 ? new Date() : null;
     const trialEnd = trialDays > 0 ? new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000) : null;
     const isTrial = trialDays > 0;
