@@ -8,7 +8,8 @@ import Input from '../components/ui/Input';
 import Alert from '../components/ui/Alert';
 import cloudFarmLogo from '../assets/CloudFarm_logo.png';
 import { toast } from 'react-hot-toast';
-import axiosInstance from '../utils/axiosInstance.js'
+import axiosInstance from '../utils/axiosInstance.js';
+import { getDashboardRouteForUser } from '../utils/routeAccess';
 
 const VerifyOtpPage = () => {
   const navigate = useNavigate();
@@ -71,13 +72,11 @@ const VerifyOtpPage = () => {
 
       if (response?.success) {
         await getUserData(true);
+        const nextUser = userData || (await axiosInstance.get('/api/user/userData')).data?.userData || {};
+        const targetRoute = getDashboardRouteForUser(nextUser);
         setIsVerified(true);
-        toast.success( response?.message || 'Account verified successfully.');
-        navigate('/dashboard')
-
-        // setTimeout(() => {
-        //   navigate('/dashboard');
-        // }, 10000);
+        toast.success(response?.message || 'Account verified successfully.');
+        navigate(targetRoute);
       } else {
         setAlert({ type: 'error', message: response?.message || 'OTP verification failed.' });
       }
@@ -125,7 +124,7 @@ const VerifyOtpPage = () => {
             <div className="text-5xl mb-4">✅</div>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">Account Verified</h2>
             <p className="text-slate-600 mb-6">Your account has been verified successfully. Redirecting to your dashboard...</p>
-            <Button variant="primary" fullWidth onClick={() => navigate('/dashboard')}>
+            <Button variant="primary" fullWidth onClick={() => navigate(getDashboardRouteForUser(userData || {}))}>
               Continue to Dashboard
             </Button>
           </div>

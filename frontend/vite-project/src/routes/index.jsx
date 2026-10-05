@@ -10,11 +10,22 @@ import RegisterPage from '../pages/RegisterPage';
 // Dashboard Pages
 import FarmerDashboardPage from '../pages/dashboard/FarmerDashboard';
 import AdminDashboardPage from '../pages/admin/AdminDashboard';
+import StaffDashboardPage from '../pages/dashboard/StaffDashboard';
 
 // helper component to pick correct dashboard based on role
 const DashboardWrapper = () => {
   const { userData } = useContext(AuthContext);
-  return userData?.role?.toLowerCase() === 'admin' ? <AdminDashboardPage /> : <FarmerDashboardPage />;
+  const userType = String(userData?.userType || userData?.role || '').toLowerCase();
+
+  if (userType === 'admin') {
+    return <AdminDashboardPage />;
+  }
+
+  if (userType === 'staff') {
+    return <StaffDashboardPage />;
+  }
+
+  return <FarmerDashboardPage />;
 };
 
 // Management Pages
@@ -71,6 +82,15 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <DashboardWrapper />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/staff-dashboard"
+          element={
+            <ProtectedRoute requiredRole="staff">
+              <StaffDashboardPage />
             </ProtectedRoute>
           }
         />
@@ -141,7 +161,7 @@ export const AppRoutes = () => {
          <Route
           path="/settings"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission="settings">
               <SettingsPage />
             </ProtectedRoute>
           }
@@ -157,7 +177,7 @@ export const AppRoutes = () => {
         <Route
           path="/support"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission="support">
               <SupportPage />
             </ProtectedRoute>
           }
@@ -165,7 +185,7 @@ export const AppRoutes = () => {
         <Route
           path="/subscription"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission="subscription">
               <SubscriptionPage />
             </ProtectedRoute>
           }
@@ -173,7 +193,7 @@ export const AppRoutes = () => {
         <Route
           path="/subscription/manage"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission="subscription">
               <SubscriptionPage />
             </ProtectedRoute>
           }

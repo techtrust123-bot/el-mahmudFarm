@@ -19,7 +19,6 @@ const Sidebar = ({ isOpen, isCollapsed = false, onClose = () => {} }) => {
   const normalizedPermissions = Array.isArray(user?.permissions)
     ? user.permissions.map((perm) => (typeof perm === 'string' ? perm.toLowerCase() : perm))
     : [];
-    console.log(normalizedPermissions)
   const isManager =
     normalizedUserType === 'manager' ||
     normalizedUserType === 'admin' ||
@@ -29,21 +28,28 @@ const Sidebar = ({ isOpen, isCollapsed = false, onClose = () => {} }) => {
   const isStaff = normalizedUserType === 'staff' || normalizedRole === 'staff';
 
   const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: FiHome,managerOnly:true, permission: 'dashboard' },
+    {
+      path: isStaff ? '/staff-dashboard' : '/dashboard',
+      label: isStaff ? 'Staff Dashboard' : 'Dashboard',
+      icon: FiHome,
+      staffOnly: isStaff,
+      managerOnly: !isStaff,
+      permission: isStaff ? 'dashboard' : 'dashboard',
+    },
     { path: '/livestock', label: 'Livestock', icon: GiCow, permission: 'livestock' },
     { path: '/poultry', label: 'Poultry', icon: GiChicken, permission: 'poultry' },
     { path: '/eggInventory', label: 'Egg Inventory', icon: FiDatabase, permission: 'eggInventory' },
     { path: '/feed', label: 'Feed', icon: FiPackage, permission: 'feed' },
     { path: '/sales', label: 'Sales', icon: TbCurrencyNaira, permission: 'sales' },
     { path: '/expenses', label: 'Expenses', icon: GiPayMoney, permission: 'expenses' },
-    { path: '/support', label: 'Support', icon: FiMessageCircle},
+    { path: '/support', label: 'Support', icon: FiMessageCircle, permission: 'support' },
 
-    { path: '/subscription/manage', label: 'Subscriptions', icon: GiPayMoney },
+    { path: '/subscription/manage', label: 'Subscriptions', icon: GiPayMoney, permission: 'subscription' },
     { path: '/admin/subscriptions', label: 'Admin Subscriptions', icon: GiPayMoney, adminOnly: true },
     { path: '/admin/notifications', label: 'Admin Notifications', icon: FiDatabase, adminOnly: true },
     { path: '/admin/support', label: 'Admin Support', icon: FiDatabase, adminOnly: true },
     { path: '/staff', label: 'Staff', icon: FiUsers, managerOnly: true, permission: 'staff' },
-    { path: '/settings', label: 'Settings', icon: FiSettings },
+    { path: '/settings', label: 'Settings', icon: FiSettings, permission: 'settings' },
   ];
 
   return (
@@ -64,19 +70,28 @@ const Sidebar = ({ isOpen, isCollapsed = false, onClose = () => {} }) => {
             if (item.adminOnly && !isAdmin) {
               return false;
             }
+            if (item.staffOnly && !isStaff) {
+              return false;
+            }
             if (item.managerOnly && !isManager) {
+              return false;
+            }
+            if (item.path === '/dashboard' && isStaff) {
+              return false;
+            }
+            if (item.path === '/staff-dashboard' && !isStaff) {
               return false;
             }
             if (item.permission) {
               const featureKey = item.permission;
               const hasPermission = normalizedPermissions.includes(featureKey.toLowerCase());
               const hasPlanAccess = canAccessFeature(user, featureKey);
-              
-              if(!hasPlanAccess){
-                return false ;
+
+              if (!hasPlanAccess) {
+                return false;
               }
 
-              if(isStaff && !hasPermission){
+              if (isStaff && !hasPermission) {
                 return false;
               }
 

@@ -8,6 +8,7 @@ import { AuthContext } from '../context/AuthContext';
 import axiosInstance from '../utils/axiosInstance';
 import cloudFarmLogo from '../assets/CloudFarm_logo.png';
 import authService from '../services/authService';
+import { getDashboardRouteForUser } from '../utils/routeAccess';
 
 /**
  * Login Page
@@ -68,7 +69,7 @@ const LoginPage = () => {
         // Tabbatar an kafa login sannan a samoUserData
         setIsLogin(true);
         await getUserData(true);
-        navigate('/dashboard');
+        navigate(getDashboardRouteForUser(loggedInUser));
       }
     } else {
       setAlert({ type: 'error', message: response.data.message || 'Login failed' });

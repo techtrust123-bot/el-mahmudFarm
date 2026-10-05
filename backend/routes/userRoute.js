@@ -26,7 +26,7 @@ const router = express.Router()
 
 router.get('/userData', authMiddleware, asyncHandler(userData))
 router.get('/users', authMiddleware, checkSubscription, asyncHandler(getUsers))
-router.post('/staff', authMiddleware, checkSubscription, requireFeatureAccess('staff'), isManager, enforceBasicStaffLimit, checkPermission('staff'), asyncHandler(addUser))
+router.post('/staff',  authMiddleware, checkSubscription, requireFeatureAccess('staff'), isManager, enforceBasicStaffLimit, checkPermission('staff'), asyncHandler(addUser))
 router.get('/staff/list', authMiddleware, checkSubscription, requireFeatureAccess('staff'), isManager, checkPermission('staff'), asyncHandler(getStaff))
 router.get('/staff/:id', authMiddleware, checkSubscription, requireFeatureAccess('staff'), isManager, checkPermission('staff'), asyncHandler(getStaffById))
 router.put('/staff/:id', authMiddleware, checkSubscription, requireFeatureAccess('staff'), isManager, checkPermission('staff'), asyncHandler(updateStaff))

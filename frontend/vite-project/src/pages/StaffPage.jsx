@@ -16,7 +16,7 @@ import { STAFF_ROLES } from '../utils/constants';
 import { validateForm, staffSchema } from '../utils/validation';
 import axiosInstance from '../utils/axiosInstance';
 import { SkeletonStats } from '../components/common/Skeletons';
-
+import { toast } from 'react-hot-toast';
 /**
  * Staff Management Page
  */
@@ -50,13 +50,15 @@ const StaffPage = () => {
     normalizedUserType === 'admin';
 
   const PERMISSION_OPTIONS = [
-    { value: 'dashboard', label: 'Dashboard' },
+    // { value: 'dashboard', label: 'Dashboard' },
     { value: 'livestock', label: 'Livestock' },
     { value: 'poultry', label: 'Poultry' },
     { value: 'feed', label: 'Feed' },
     { value: 'sales', label: 'Sales' },
     { value: 'expenses', label: 'Expenses' },
     {value: 'eggInventory', label: 'Egg Inventory'},
+    { value: 'subscription', label: 'Subscription' },
+    { value: 'support', label: 'Support' },
     // { value: 'staff', label: 'Staff' },
     { value: 'settings', label: 'Settings' },
   ];
@@ -98,11 +100,11 @@ const StaffPage = () => {
       const response = await axiosInstance.delete(`/api/user/staff/${id}`);
       if (response.data.success) {
           setStaff((prev) => prev.filter((item) => item._id !== id));
-          setAlert({ type: 'success', message: 'Staff member deleted successfully!' });
+          toast.success('Staff member deleted successfully!');
       }
     } catch (error) {
       console.log(error)
-      setAlert({ type: 'error', message: error.response?.data?.message || 'Failed to delete staff member. Please try again.' });
+      toast.error(error.response?.data?.message || 'Failed to delete staff member. Please try again.');
     }
   };
 
@@ -161,7 +163,7 @@ const StaffPage = () => {
       if (editingId) {
         response = await axiosInstance.put(`/api/user/staff/${editingId}`, payload);
         if (response.data.success) {
-          setAlert({ type: 'success', message: response.data.message || 'Staff member updated successfully!' });
+          toast.success(response.data.message || 'Staff member updated successfully!');
           setFormData({ name: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [], });
           setEditingId(null);
           setIsModalOpen(false);
@@ -171,7 +173,7 @@ const StaffPage = () => {
       } else {
         response = await axiosInstance.post('/api/user/staff', payload);
         if (response.data.success) {
-          setAlert({ type: 'success', message: response.data.message });
+          toast.success(response.data.message || 'Staff member added successfully!');
           setFormData({ name: '', salary: '', contact: '', email: '', password: '', hireDate: '', permissions: [], });
           setEditingId(null);
           setIsModalOpen(false);
@@ -181,7 +183,7 @@ const StaffPage = () => {
       }
     } catch (error) {
       console.log(error);
-      setAlert({ type: 'error', message: error.response?.data?.message || 'An error occurred. Please try again.' });
+      toast.error(error.response?.data?.message || 'An error occurred. Please try again.');
     }
   };
 

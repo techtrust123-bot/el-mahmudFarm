@@ -3,6 +3,7 @@ import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { canAccessFeature } from '../data/subscriptionPlans';
 import CloudFarmLoader from '../components/common/CloudFarmLoader';
+import { canAccessDashboardRoute, getDashboardRouteForUser } from '../utils/routeAccess';
 
 /**
  * ProtectedRoute - Guard routes that require authentication
@@ -38,7 +39,12 @@ const ProtectedRoute = ({ children, requiredRole = null, requiredPermission = nu
   }
 
   const currentPath = window.location.pathname;
+  const isDashboardAccessPath = ['/dashboard', '/admin', '/staff-dashboard'].includes(currentPath);
   const isSubscriptionPath = currentPath === '/subscription' || currentPath === '/subscription/manage' || currentPath === '/sub';
+
+  if (isDashboardAccessPath && !canAccessDashboardRoute(user, currentPath)) {
+    return <Navigate to={getDashboardRouteForUser(user) || '/login'} replace />;
+  }
 
   if (!isSubscribed && !isSubscriptionPath && currentPath !== '/payment' && currentPath !== '/payment/verify') {
     return <Navigate to="/payment" replace />;

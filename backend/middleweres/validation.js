@@ -37,7 +37,8 @@ const validate = (validations) => {
 // Common validation rules
 const emailValidation = body('email')
   .isEmail()
-  .normalizeEmail()
+  .trim()
+  .toLowerCase()
   .withMessage('Please provide a valid email address');
 
 const passwordValidation = body('password')
