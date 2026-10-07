@@ -1,0 +1,23 @@
+User-agent: *
+Allow: /
+
+Disallow: /dashboard
+Disallow: /staff-dashboard
+Disallow: /livestock
+Disallow: /poultry
+Disallow: /eggInventory
+Disallow: /feed
+Disallow: /sales
+Disallow: /expenses
+Disallow: /staff
+Disallow: /settings
+Disallow: /profile
+Disallow: /support
+Disallow: /subscription
+Disallow: /subscription/manage
+Disallow: /payment
+Disallow: /payment/verify
+Disallow: /sub
+Disallow: /admin
+
+Sitemap: https://cloudfarm.ng/sitemap.xml
