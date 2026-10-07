@@ -30,14 +30,14 @@ exports.addEgg = async(req,res)=>{
             type: 'layer',
             status: 'available',
             $or: [
-                { currentFeedStage: 'Grower Mash' || 'Layer Mash' },
-                { feedStage: 'Layer Mash' || 'Grower Mash' }
+                { currentFeedStage: { $in: ['Grower Mash', 'Layer Mash'] } },
+                { feedStage: { $in: ['Grower Mash', 'Layer Mash'] } }
             ]
         });
         if(!poultryExist){
             return res.status(404).json({
                 success: false,
-                message: `Batch ${batchId} must belong to an available layer poultry record in the Finisher stage.`
+                message: ` ${batchId} must belong to an available layer poultry record in the Layer feed stage or grower feed stage.`
             });
         }
 
@@ -57,16 +57,28 @@ exports.addEgg = async(req,res)=>{
             return res.status(400).json({success:false,message:'Damage eggs must be less than total daily eggs.'})
         }
         const availableEgg = Math.max(Number(totalDailyEgg) - Number(damageEggs), 0);
-        
-        const feedType = await Feed.findOne({
+
+        const poultryFeedStage =
+        poultryExist.currentFeedStage || poultryExist.feedStage;
+
+        let feedType;
+        if(poultryFeedStage === 'Grower Mash'){
+            feedType = await Feed.findOne({
             animalType: 'layer',
-            feedCategory: { $regex: /^finisher || grower$/i },
+            feedCategory: { $regex: /^grower$/i },
             quantity: { $gt: 0 },
-        })
+            })
+        }else if(poultryFeedStage === 'Layer Mash'){
+            feedType = await Feed.findOne({
+            animalType: 'layer',
+            feedCategory: { $regex: /^finisher$/i },
+            quantity: { $gt: 0 },
+            })
+        }
 
 
         if(!feedType){
-            return res.status(404).json({message:`${poultryType} feed for layer mash is not available in your farm pls add to proceed...`})
+            return res.status(404).json({message:`${poultryFeedStage} feed is not available in your farm pls add to proceed...`})
         }
 
         if(String(feedType.feedCategory || 'layer mash').toLowerCase() !== 'finisher'&& String(feedType.feedCategory || 'layer mash').toLowerCase() !== 'grower'){
